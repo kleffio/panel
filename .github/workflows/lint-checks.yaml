@@ -13,5 +13,3 @@ concurrency:
 
 permissions:
   contents: read
-
-
