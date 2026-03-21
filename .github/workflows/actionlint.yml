@@ -1,10 +1,10 @@
 ---
 name: Action Lint
-"on":
+on:
   push:
     branches: ["**"]
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 concurrency:
@@ -17,4 +17,9 @@ permissions:
 jobs:
   actionlint:
     name: Action Lint
-    uses: kleffio/.github/.github/workflows/_actionlint.yml@main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: reviewdog/action-actionlint@v1
+        with:
+          actionlint_flags: "-color"
