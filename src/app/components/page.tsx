@@ -57,7 +57,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { Field, FieldTitle } from "@/components/ui/field";
+import { Field, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
 import { Item } from "@/components/ui/item";
@@ -147,15 +147,18 @@ const serverStatusConfig = {
 
 const MOCK_SERVER = {
   id: "srv-01",
+  organizationId: "org-001",
   name: "Minecraft Survival",
   gameType: "Minecraft Java",
   status: "running" as const,
   region: "us-east-1" as const,
   currentPlayers: 8,
-  plan: { tier: "pro" as const, maxPlayers: 20 },
+  plan: { id: "plan-pro", tier: "pro" as const, name: "Pro", vcpu: 4, memoryGb: 8, storageGb: 100, bandwidthGb: 2000, maxPlayers: 20, pricePerHour: 0.12 },
   ipAddress: "54.210.3.99",
   port: 25565,
-  resources: { cpuPercent: 42, memoryPercent: 67 },
+  resources: { cpuPercent: 42, memoryPercent: 67, diskPercent: 23, networkInMbps: 12, networkOutMbps: 8 },
+  createdAt: "2024-11-01T00:00:00Z",
+  updatedAt: "2024-11-01T00:00:00Z",
 };
 
 const MOCK_SERVER_STOPPED = {
@@ -166,7 +169,7 @@ const MOCK_SERVER_STOPPED = {
   status: "stopped" as const,
   region: "eu-central-1" as const,
   currentPlayers: 0,
-  plan: { tier: "starter" as const, maxPlayers: 10 },
+  plan: { id: "plan-starter", tier: "starter" as const, name: "Starter", vcpu: 2, memoryGb: 4, storageGb: 50, bandwidthGb: 500, maxPlayers: 10, pricePerHour: 0.05 },
   ipAddress: undefined,
   resources: undefined,
 };
@@ -604,10 +607,12 @@ export default function ComponentsPage() {
                     </SheetDescription>
                   </SheetHeader>
                   <div className="mt-6 flex flex-col gap-4">
-                    <Field label="Server Name">
+                    <Field>
+                      <FieldLabel>Server Name</FieldLabel>
                       <Input defaultValue="Survival World" />
                     </Field>
-                    <Field label="Max Players">
+                    <Field>
+                      <FieldLabel>Max Players</FieldLabel>
                       <Input type="number" defaultValue="20" />
                     </Field>
                     <Button className="mt-2">Save Changes</Button>
