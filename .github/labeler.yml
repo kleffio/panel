@@ -8,11 +8,7 @@ bugfix:
 
 chore:
   - changed-files:
-      - any-glob-to-any-file:
-          - ".github/**"
-          - "**/Dockerfile"
-          - "**/docker-compose*.yml"
-          - "package*.json"
+      - any-glob-to-any-file: [".github/**", "**/Dockerfile", "**/docker-compose*.yml", "package*.json"]
   - head-branch: ["^chore/", "^deps/"]
 
 docs:
@@ -29,9 +25,5 @@ security:
 
 tests:
   - changed-files:
-      - any-glob-to-any-file:
-          - "**/*.test.ts"
-          - "**/*.test.tsx"
-          - "**/*.spec.ts"
-          - "test/**"
+      - any-glob-to-any-file: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "test/**"]
   - head-branch: ["^test/", "^tests/"]
