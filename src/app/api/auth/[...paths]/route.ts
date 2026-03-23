@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 
+const PUBLIC_URL = process.env.PUBLIC_URL!;
+
 export async function GET(req: NextRequest) { return proxy(req); }
 export async function POST(req: NextRequest) { return proxy(req); }
 export async function PUT(req: NextRequest) { return proxy(req); }
@@ -9,9 +11,10 @@ export async function PATCH(req: NextRequest) { return proxy(req); }
 async function proxy(req: NextRequest) {
   try {
     const url = new URL(req.url);
-    const targetPath = url.pathname.replace("/api/.ory", "");
-    const targetUrl = new URL("https://auth.kleff.io" + targetPath + url.search);
+    const targetPath = url.pathname.replace("/api/auth", "")
+    const targetUrl = new URL(PUBLIC_URL + targetPath + url.search);
     
+
     const headers = new Headers();
     const allowedHeaders = ['accept', 'accept-language', 'content-type', 'cookie', 'user-agent'];
     req.headers.forEach((value, key) => {
@@ -20,9 +23,9 @@ async function proxy(req: NextRequest) {
       }
     });
 
-    // Spoof origin so Kratos believes the request is 100% internal and native
-    headers.set("origin", "https://auth.kleff.io");
-    headers.set("referer", "https://auth.kleff.io/");
+    // Spoof origin so the auth provider believes the request is internal
+    headers.set("origin", PUBLIC_URL);
+    headers.set("referer", `${PUBLIC_URL}/`);
 
     // Graceful body reading that fixes the 500 TypeError crashes in Next.js
     let bodyText = undefined;
@@ -44,9 +47,9 @@ async function proxy(req: NextRequest) {
     responseHeaders.delete("content-length");
     responseHeaders.delete("transfer-encoding");
 
-    // CRITICAL: Kratos sets cookies for `auth.kleff.io` or `.kleff.io`.
+    // CRITICAL: The auth provider sets cookies for its own domain.
     // Chrome on `localhost:3000` will silently REJECT them.
-    // We perfectly rewrite the Set-Cookie headers to drop the Domain lock!
+    // Rewrite Set-Cookie headers to drop the Domain lock.
     const setCookies = responseHeaders.getSetCookie();
     responseHeaders.delete("set-cookie");
     setCookies.forEach((cookieData) => {

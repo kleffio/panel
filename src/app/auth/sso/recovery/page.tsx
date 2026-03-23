@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Configuration, FrontendApi, RegistrationFlow, UiNode } from "@ory/client";
+import { Configuration, FrontendApi, RecoveryFlow, UiNode } from "@ory/client";
 import { isUiNodeInputAttributes, getNodeLabel } from "@ory/integrations/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,12 +10,12 @@ import { Label } from "@/components/ui/label";
 
 const frontend = new FrontendApi(
   new Configuration({
-    basePath: "/api/.ory",
+    basePath: "/api/auth",
     baseOptions: { withCredentials: true },
   })
 );
 
-function KratosNode({ node }: { node: UiNode }) {
+function SSONode({ node }: { node: UiNode }) {
   if (!isUiNodeInputAttributes(node.attributes)) return null;
   const attrs = node.attributes;
 
@@ -26,7 +26,7 @@ function KratosNode({ node }: { node: UiNode }) {
   if (attrs.type === "submit") {
     return (
       <Button type="submit" name={attrs.name} value={(attrs.value as string) ?? ""} className="w-full">
-        {getNodeLabel(node) || "Create account"}
+        {getNodeLabel(node) || "Send recovery link"}
       </Button>
     );
   }
@@ -41,7 +41,7 @@ function KratosNode({ node }: { node: UiNode }) {
         defaultValue={(attrs.value as string) ?? ""}
         required={attrs.required}
         disabled={attrs.disabled}
-        autoComplete={attrs.autocomplete ?? undefined}
+        autoComplete={attrs.name === "code" ? "one-time-code" : (attrs.autocomplete ?? undefined)}
       />
       {node.messages.map((msg) => (
         <p key={msg.id} className={`text-xs ${msg.type === "error" ? "text-red-400" : "text-muted-foreground"}`}>
@@ -52,25 +52,24 @@ function KratosNode({ node }: { node: UiNode }) {
   );
 }
 
-export default function KratosRegistrationPage() {
+export default function SSORecoveryPage() {
   const searchParams = useSearchParams();
   const flowId = searchParams.get("flow");
-  const [flow, setFlow] = useState<RegistrationFlow | null>(null);
+  const [flow, setFlow] = useState<RecoveryFlow | null>(null);
 
   useEffect(() => {
     if (!flowId) {
-      window.location.href = "/api/.ory/self-service/registration/browser";
+      window.location.href = "/api/auth/self-service/recovery/browser";
       return;
     }
     frontend
-      .getRegistrationFlow({ id: flowId })
+      .getRecoveryFlow({ id: flowId })
       .then(({ data }) => setFlow(data))
       .catch((err) => {
-        console.error("Fatal Error fetching Kratos registration flow:", err);
+        console.error("Fatal Error fetching SSO recovery flow:", err);
         document.body.innerHTML = `
           <div style="padding: 2rem; background: #220000; color: #ff9999; min-height: 100vh; font-family: monospace;">
-            <h1 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem;">Kratos Failed to Load the Registration Flow</h1>
-            <p style="margin-bottom: 2rem;">Something blocked the browser from fetching the registration fields. Check the F12 Network tab!</p>
+            <h1 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem;">SSO Failed to Load the Recovery Flow</h1>
             <pre style="background: rgba(0,0,0,0.5); padding: 1rem; border-radius: 0.5rem; overflow-x: auto;">${JSON.stringify(err.response?.data || err.message, null, 2)}</pre>
           </div>
         `;
@@ -83,16 +82,24 @@ export default function KratosRegistrationPage() {
     const submitter = (e.nativeEvent as SubmitEvent).submitter;
     const body = Object.fromEntries(new FormData(form, submitter).entries());
     try {
-      await frontend.updateRegistrationFlow({
+      const { data } = await frontend.updateRecoveryFlow({
         flow: String(flowId),
-        updateRegistrationFlowBody: body as any,
+        updateRecoveryFlowBody: body as any,
       });
-      window.location.href = "/dashboard";
+      setFlow(data);
     } catch (err: any) {
+      if (err.response?.status === 422) {
+        // Auth provider signals a browser redirect is required (e.g. to a settings flow to set new password)
+        const redirectTo = err.response?.data?.redirect_browser_to;
+        if (redirectTo) {
+          window.location.href = redirectTo;
+          return;
+        }
+      }
       if (err.response?.status === 400) {
         setFlow(err.response.data);
       } else {
-        console.error("Registration failed unexpectedly:", err);
+        console.error("Recovery failed unexpectedly:", err);
       }
     }
   };
@@ -100,7 +107,7 @@ export default function KratosRegistrationPage() {
   if (!flow) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-muted-foreground">Initializing secure session...</p>
+        <p className="text-muted-foreground">Loading...</p>
       </div>
     );
   }
@@ -111,25 +118,33 @@ export default function KratosRegistrationPage() {
       <div className="glass-panel relative w-full max-w-sm p-8 space-y-6">
 
         <div className="space-y-1 text-center">
-          <h1 className="text-lg font-semibold text-foreground">Create account</h1>
-          <p className="text-sm text-muted-foreground">Enter your details to get started</p>
+          <h1 className="text-lg font-semibold text-foreground">Reset password</h1>
+          <p className="text-sm text-muted-foreground">
+            Enter your email and we&apos;ll send you a recovery link
+          </p>
         </div>
 
         {flow.ui.messages?.map((msg) => (
-          <p key={msg.id} className={`text-sm text-center ${msg.type === "error" ? "text-red-400" : "text-muted-foreground"}`}>
+          <p
+            key={msg.id}
+            className={`text-sm text-center ${msg.type === "error" ? "text-red-400" : "text-green-400"}`}
+          >
             {msg.text}
           </p>
         ))}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {flow.ui.nodes.map((node, i) => (
-            <KratosNode key={i} node={node} />
+            <SSONode key={i} node={node} />
           ))}
         </form>
 
         <p className="text-center text-xs text-muted-foreground">
-          Already have an account?{" "}
-          <a href="/api/.ory/self-service/login/browser" className="text-primary underline underline-offset-4 hover:text-primary/80">
+          Remembered your password?{" "}
+          <a
+            href="/api/auth/self-service/login/browser"
+            className="text-primary underline underline-offset-4 hover:text-primary/80"
+          >
             Sign in
           </a>
         </p>

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const HYDRA_ADMIN_URL =
-  process.env.HYDRA_ADMIN_URL ?? "http://hydra-admin.ory.svc.cluster.local:4445";
+const ADMIN_URL = process.env.ADMIN_URL!;
 
 export async function GET(req: NextRequest) {
   const challenge = req.nextUrl.searchParams.get("consent_challenge");
@@ -11,7 +10,7 @@ export async function GET(req: NextRequest) {
 
   // Fetch the consent request to get requested scopes/audience
   const consentRes = await fetch(
-    `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent?consent_challenge=${challenge}`
+    `${ADMIN_URL}/admin/oauth2/auth/requests/consent?consent_challenge=${challenge}`
   );
   if (!consentRes.ok) {
     return NextResponse.json({ error: "failed to fetch consent request" }, { status: 502 });
@@ -20,7 +19,7 @@ export async function GET(req: NextRequest) {
 
   // Auto-accept with all requested scopes (first-party app — no user interaction needed)
   const acceptRes = await fetch(
-    `${HYDRA_ADMIN_URL}/admin/oauth2/auth/requests/consent/accept?consent_challenge=${challenge}`,
+    `${ADMIN_URL}/admin/oauth2/auth/requests/consent/accept?consent_challenge=${challenge}`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },

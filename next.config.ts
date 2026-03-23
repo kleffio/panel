@@ -7,15 +7,15 @@ const nextConfig: NextConfig = {
   
   async rewrites() {
     return [
-      // 1. Kratos public API proxy
+      // 1. Auth proxy
       {
-        source: "/api/.ory/:path*",
-        destination: `${process.env.NEXT_PUBLIC_KRATOS_PUBLIC_URL ?? "https://auth.kleff.io"}/:path*`,
+        source: "/api/auth/:path*",
+        destination: `${process.env.PUBLIC_URL}/:path*`,
       },
       // 2. Platform API proxy
       {
         source: "/api/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080"}/api/:path*`,
+        destination: `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/:path*`,
       },
     ];
   },
