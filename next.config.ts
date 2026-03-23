@@ -4,12 +4,18 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Produces a minimal Node.js server in .next/standalone — required for Docker.
   output: "standalone",
-  // Allow the panel to proxy /api/* requests to the platform API during development.
+  
   async rewrites() {
     return [
+      // 1. Auth proxy
+      {
+        source: "/api/auth/:path*",
+        destination: `${process.env.PUBLIC_URL}/:path*`,
+      },
+      // 2. Platform API proxy
       {
         source: "/api/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080"}/api/:path*`,
+        destination: `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/:path*`,
       },
     ];
   },

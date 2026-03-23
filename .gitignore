@@ -13,6 +13,7 @@ node_modules/
 # Build output
 dist/
 
+
 # Type checking
 *.tsbuildinfo
 
@@ -27,3 +28,6 @@ npm-debug.log*
 # Editor
 .vscode/
 .idea/
+
+# Local TLS certificates
+*.pem
