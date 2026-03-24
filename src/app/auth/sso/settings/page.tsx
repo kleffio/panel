@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 
 const frontend = new FrontendApi(
   new Configuration({
-    basePath: "/api/auth",
+    basePath: "/ory",
     baseOptions: { withCredentials: true },
   })
 );
@@ -59,7 +59,7 @@ export default function SSOSettingsPage() {
 
   useEffect(() => {
     if (!flowId) {
-      window.location.href = "/api/auth/self-service/settings/browser";
+      window.location.href = "/ory/self-service/settings/browser";
       return;
     }
     frontend
