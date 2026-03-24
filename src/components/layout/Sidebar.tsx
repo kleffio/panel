@@ -59,7 +59,7 @@ export function Sidebar() {
       <div className="border-t border-sidebar-border px-3 py-3">
         <button
           type="button"
-          onClick={() => auth.signoutRedirect()}
+          onClick={async () => { await fetch("/api/auth/logout"); auth.removeUser(); }}
           className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
         >
           <LogOut className="size-4 shrink-0" />
