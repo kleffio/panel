@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 
 const frontend = new FrontendApi(
   new Configuration({
-    basePath: "/api/auth",
+    basePath: "/ory",
     baseOptions: { withCredentials: true },
   })
 );
@@ -59,7 +59,7 @@ export default function SSOLoginPage() {
 
   useEffect(() => {
     if (!flowId) {
-      window.location.href = "/api/auth/self-service/login/browser";
+      window.location.href = "/ory/self-service/login/browser";
       return;
     }
     frontend
@@ -139,7 +139,7 @@ export default function SSOLoginPage() {
           <button
             onClick={() => {
               const returnTo = encodeURIComponent(window.location.origin + "/auth/login");
-              window.location.href = `/api/auth/self-service/recovery/browser?return_to=${returnTo}`;
+              window.location.href = `/ory/self-service/recovery/browser?return_to=${returnTo}`;
             }}
             className="text-primary underline underline-offset-4 hover:text-primary/80"
           >
@@ -147,7 +147,7 @@ export default function SSOLoginPage() {
           </button>
           <span>
             Don&apos;t have an account?{" "}
-            <a href="/api/auth/self-service/registration/browser" className="text-primary underline underline-offset-4 hover:text-primary/80">
+            <a href="/ory/self-service/registration/browser" className="text-primary underline underline-offset-4 hover:text-primary/80">
               Create one
             </a>
           </span>

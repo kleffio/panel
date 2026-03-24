@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 
 const frontend = new FrontendApi(
   new Configuration({
-    basePath: "/api/auth",
+    basePath: "/ory",
     baseOptions: { withCredentials: true },
   })
 );
@@ -59,7 +59,7 @@ export default function SSORecoveryPage() {
 
   useEffect(() => {
     if (!flowId) {
-      window.location.href = "/api/auth/self-service/recovery/browser";
+      window.location.href = "/ory/self-service/recovery/browser";
       return;
     }
     frontend
@@ -142,7 +142,7 @@ export default function SSORecoveryPage() {
         <p className="text-center text-xs text-muted-foreground">
           Remembered your password?{" "}
           <a
-            href="/api/auth/self-service/login/browser"
+            href="/ory/self-service/login/browser"
             className="text-primary underline underline-offset-4 hover:text-primary/80"
           >
             Sign in

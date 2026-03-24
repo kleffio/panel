@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 
 const frontend = new FrontendApi(
   new Configuration({
-    basePath: "/api/auth",
+    basePath: "/ory",
     baseOptions: { withCredentials: true },
   })
 );
@@ -59,7 +59,7 @@ export default function SSORegistrationPage() {
 
   useEffect(() => {
     if (!flowId) {
-      window.location.href = "/api/auth/self-service/registration/browser";
+      window.location.href = "/ory/self-service/registration/browser";
       return;
     }
     frontend
@@ -129,7 +129,7 @@ export default function SSORegistrationPage() {
 
         <p className="text-center text-xs text-muted-foreground">
           Already have an account?{" "}
-          <a href="/api/auth/self-service/login/browser" className="text-primary underline underline-offset-4 hover:text-primary/80">
+          <a href="/ory/self-service/login/browser" className="text-primary underline underline-offset-4 hover:text-primary/80">
             Sign in
           </a>
         </p>
