@@ -59,7 +59,11 @@ export default function SSOLoginPage() {
 
   useEffect(() => {
     if (!flowId) {
-      window.location.href = "/ory/self-service/login/browser";
+      const loginChallenge = searchParams.get("login_challenge");
+      const url = loginChallenge
+        ? `/ory/self-service/login/browser?login_challenge=${loginChallenge}`
+        : "/ory/self-service/login/browser";
+      window.location.href = url;
       return;
     }
     frontend
