@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useAuth } from "@/features/auth";
+import { useState, useEffect } from "react";
+import { useAuth, storeApiTokens, login } from "@/features/auth";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,23 +15,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  // Track whether a sign-in attempt is in flight so we can react to auth.error
-  const signingIn = useRef(false);
 
   useEffect(() => {
     if (auth.isAuthenticated) {
       router.replace("/dashboard");
+      return;
     }
-  }, [auth.isAuthenticated, router]);
-
-  // react-oidc-context catches navigator errors internally and puts them in auth.error
-  useEffect(() => {
-    if (signingIn.current && auth.error) {
-      setError("Invalid username or password.");
-      setLoading(false);
-      signingIn.current = false;
+    if (!auth.isLoading && process.env.NEXT_PUBLIC_AUTH_MODE === "redirect") {
+      auth.signinRedirect();
     }
-  }, [auth.error]);
+  }, [auth.isAuthenticated, auth.isLoading, router]);
 
   if (auth.isLoading && !loading) {
     return (
@@ -49,11 +42,14 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    signingIn.current = true;
-    await auth.signinResourceOwnerCredentials({ username, password });
-    // If successful, the auth.isAuthenticated useEffect above handles the redirect.
-    // If the provider doesn't support ROPC, fall back to redirect flow.
-    // We don't set loading=false here — either the redirect happens or auth.error fires.
+    try {
+      const tok = await login(username, password);
+      storeApiTokens(tok);
+      window.location.replace("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
+      setLoading(false);
+    }
   }
 
   return (
@@ -93,9 +89,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          {error && (
-            <p className="text-sm text-red-400">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-400">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Signing in…" : "Sign in"}
           </Button>
@@ -103,13 +97,9 @@ export default function LoginPage() {
 
         <p className="text-center text-xs text-muted-foreground">
           Don&apos;t have an account?{" "}
-          <button
-            type="button"
-            onClick={() => auth.signinRedirect({ extraQueryParams: { prompt: "create" } })}
-            className="text-primary underline underline-offset-4 hover:text-primary/80"
-          >
+          <a href="/auth/signup" className="text-primary underline underline-offset-4 hover:text-primary/80">
             Create one
-          </button>
+          </a>
         </p>
       </div>
     </div>

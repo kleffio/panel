@@ -14,7 +14,11 @@ export default function AuthenticatedLayout({ children }: { children: ReactNode 
   useEffect(() => {
     if (!auth.isLoading && !auth.error && !auth.isAuthenticated && !redirecting) {
       setRedirecting(true);
-      router.replace("/auth/login");
+      if (process.env.NEXT_PUBLIC_AUTH_MODE === "redirect") {
+        auth.signinRedirect();
+      } else {
+        router.replace("/auth/login");
+      }
     }
   }, [auth, redirecting]);
 

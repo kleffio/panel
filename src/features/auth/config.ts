@@ -5,6 +5,9 @@ export const oidcConfig = {
   // redirect_uri is evaluated lazily by react-oidc-context on the client.
   redirect_uri: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : "",
   post_logout_redirect_uri: typeof window !== "undefined" ? `${window.location.origin}/` : "",
+  // Auto-renew access tokens using the refresh token before they expire.
+  automaticSilentRenew: true,
+  useRefreshTokens: true,
   onSigninCallback: () => {
     // Replace the URL so the auth code/state params don't linger.
     if (typeof window !== "undefined") {
