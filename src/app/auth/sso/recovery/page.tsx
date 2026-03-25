@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Configuration, FrontendApi, RecoveryFlow, UiNode } from "@ory/client";
 import { isUiNodeInputAttributes, getNodeLabel } from "@ory/integrations/ui";
@@ -52,7 +52,7 @@ function SSONode({ node }: { node: UiNode }) {
   );
 }
 
-export default function SSORecoveryPage() {
+function SSORecoveryContent() {
   const searchParams = useSearchParams();
   const flowId = searchParams.get("flow");
   const [flow, setFlow] = useState<RecoveryFlow | null>(null);
@@ -151,5 +151,17 @@ export default function SSORecoveryPage() {
 
       </div>
     </div>
+  );
+}
+
+export default function SSORecoveryPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    }>
+      <SSORecoveryContent />
+    </Suspense>
   );
 }

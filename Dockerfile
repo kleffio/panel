@@ -16,6 +16,15 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# NEXT_PUBLIC_* vars are baked into the JS bundle at build time.
+# They must be declared as ARGs here so docker compose can pass them in.
+ARG NEXT_PUBLIC_OIDC_AUTHORITY
+ARG NEXT_PUBLIC_OIDC_CLIENT_ID
+ARG NEXT_PUBLIC_API_BASE_URL
+ENV NEXT_PUBLIC_OIDC_AUTHORITY=$NEXT_PUBLIC_OIDC_AUTHORITY
+ENV NEXT_PUBLIC_OIDC_CLIENT_ID=$NEXT_PUBLIC_OIDC_CLIENT_ID
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+
 RUN pnpm build
 
 # ── Stage 3: Runtime ──────────────────────────────────────────────────────────

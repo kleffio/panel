@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Configuration, FrontendApi, LoginFlow, UiNode } from "@ory/client";
 import { isUiNodeInputAttributes, getNodeLabel } from "@ory/integrations/ui";
@@ -52,7 +52,7 @@ function SSONode({ node }: { node: UiNode }) {
   );
 }
 
-export default function SSOLoginPage() {
+function SSOLoginContent() {
   const searchParams = useSearchParams();
   const flowId = searchParams.get("flow");
   const [flow, setFlow] = useState<LoginFlow | null>(null);
@@ -159,5 +159,17 @@ export default function SSOLoginPage() {
 
       </div>
     </div>
+  );
+}
+
+export default function SSOLoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-muted-foreground">Initializing secure session...</p>
+      </div>
+    }>
+      <SSOLoginContent />
+    </Suspense>
   );
 }
