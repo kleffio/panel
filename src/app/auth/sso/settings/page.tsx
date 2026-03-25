@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Configuration, FrontendApi, SettingsFlow, UiNode } from "@ory/client";
 import { isUiNodeInputAttributes, getNodeLabel } from "@ory/integrations/ui";
@@ -52,7 +52,7 @@ function SSONode({ node }: { node: UiNode }) {
   );
 }
 
-export default function SSOSettingsPage() {
+function SSOSettingsContent() {
   const searchParams = useSearchParams();
   const flowId = searchParams.get("flow");
   const [flow, setFlow] = useState<SettingsFlow | null>(null);
@@ -145,5 +145,17 @@ export default function SSOSettingsPage() {
 
       </div>
     </div>
+  );
+}
+
+export default function SSOSettingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    }>
+      <SSOSettingsContent />
+    </Suspense>
   );
 }

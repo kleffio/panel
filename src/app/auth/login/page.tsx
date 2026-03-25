@@ -1,14 +1,22 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/features/auth";
 import { useRouter } from "next/navigation";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LoginPage() {
   const auth = useAuth();
   const router = useRouter();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  // Track whether a sign-in attempt is in flight so we can react to auth.error
+  const signingIn = useRef(false);
 
   useEffect(() => {
     if (auth.isAuthenticated) {
@@ -16,7 +24,16 @@ export default function LoginPage() {
     }
   }, [auth.isAuthenticated, router]);
 
-  if (auth.isLoading) {
+  // react-oidc-context catches navigator errors internally and puts them in auth.error
+  useEffect(() => {
+    if (signingIn.current && auth.error) {
+      setError("Invalid username or password.");
+      setLoading(false);
+      signingIn.current = false;
+    }
+  }, [auth.error]);
+
+  if (auth.isLoading && !loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="w-48 space-y-3">
@@ -26,6 +43,17 @@ export default function LoginPage() {
         </div>
       </div>
     );
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    signingIn.current = true;
+    await auth.signinResourceOwnerCredentials({ username, password });
+    // If successful, the auth.isAuthenticated useEffect above handles the redirect.
+    // If the provider doesn't support ROPC, fall back to redirect flow.
+    // We don't set loading=false here — either the redirect happens or auth.error fires.
   }
 
   return (
@@ -43,14 +71,41 @@ export default function LoginPage() {
           <p className="text-sm text-muted-foreground">Sign in to manage your game servers</p>
         </div>
 
-        <Button className="w-full" onClick={() => auth.signinRedirect()}>
-          Sign in
-        </Button>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="username">Username or email</Label>
+            <Input
+              id="username"
+              autoComplete="username"
+              required
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          {error && (
+            <p className="text-sm text-red-400">{error}</p>
+          )}
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Signing in…" : "Sign in"}
+          </Button>
+        </form>
 
         <p className="text-center text-xs text-muted-foreground">
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <button
-            onClick={() => auth.signinRedirect({ extraQueryParams: { prompt: "registration" } })}
+            type="button"
+            onClick={() => auth.signinRedirect({ extraQueryParams: { prompt: "create" } })}
             className="text-primary underline underline-offset-4 hover:text-primary/80"
           >
             Create one

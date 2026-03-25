@@ -2,17 +2,19 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@/features/auth";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AuthenticatedLayout({ children }: { children: ReactNode }) {
   const auth = useAuth();
+  const router = useRouter();
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
     if (!auth.isLoading && !auth.error && !auth.isAuthenticated && !redirecting) {
       setRedirecting(true);
-      auth.signinRedirect();
+      router.replace("/auth/login");
     }
   }, [auth, redirecting]);
 

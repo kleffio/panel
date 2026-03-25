@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Configuration, FrontendApi, RegistrationFlow, UiNode } from "@ory/client";
 import { isUiNodeInputAttributes, getNodeLabel } from "@ory/integrations/ui";
@@ -52,7 +52,7 @@ function SSONode({ node }: { node: UiNode }) {
   );
 }
 
-export default function SSORegistrationPage() {
+function SSORegistrationContent() {
   const searchParams = useSearchParams();
   const flowId = searchParams.get("flow");
   const [flow, setFlow] = useState<RegistrationFlow | null>(null);
@@ -136,5 +136,17 @@ export default function SSORegistrationPage() {
 
       </div>
     </div>
+  );
+}
+
+export default function SSORegistrationPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-muted-foreground">Initializing secure session...</p>
+      </div>
+    }>
+      <SSORegistrationContent />
+    </Suspense>
   );
 }
