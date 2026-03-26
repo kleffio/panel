@@ -4,8 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  Network,
+  FolderKanban,
   Server,
   CreditCard,
+  Shield,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -14,13 +17,17 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/overview",  label: "Overview",  icon: Network },
+  { href: "/projects",  label: "Projects",  icon: FolderKanban },
+  { href: "/architecture", label: "Architecture", icon: Shield },
   { href: "/servers",   label: "Servers",   icon: Server },
   { href: "/billing",   label: "Billing",   icon: CreditCard },
   { href: "/settings",  label: "Settings",  icon: Settings },
+  { href: "/admin",     label: "Admin",     icon: Shield },
 ];
 
 export function Sidebar() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const auth = useAuth();
 
   return (

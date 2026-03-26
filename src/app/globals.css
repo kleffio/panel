@@ -63,6 +63,25 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.8 0.17 90 / 0.45);
+
+  --test-background: linear-gradient(180deg, #090b14 0%, #0b0d18 100%);
+  --test-foreground: #f5f7ff;
+  --test-panel: rgba(25, 22, 38, 0.96);
+  --test-panel-soft: rgba(255, 255, 255, 0.06);
+  --test-panel-muted: rgba(255, 255, 255, 0.03);
+  --test-border: rgba(203, 213, 225, 0.12);
+  --test-line: rgba(246, 193, 119, 0.18);
+  --test-muted: #9ca4c3;
+  --test-accent: #f6c177;
+  --test-accent-soft: rgba(246, 193, 119, 0.16);
+  --test-success: #47d9a3;
+  --test-success-soft: rgba(71, 217, 163, 0.12);
+  --test-warning: #f6c177;
+  --test-warning-soft: rgba(246, 193, 119, 0.12);
+  --test-overlay-dot: rgba(255, 255, 255, 0.08);
+  --test-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+  --test-panel-card: linear-gradient(180deg, rgba(26, 23, 39, 0.98), rgba(24, 21, 36, 0.96));
+  --test-panel-card-warning: linear-gradient(180deg, rgba(57, 44, 19, 0.82), rgba(34, 27, 16, 0.86));
 }
 
 /* ─── Semantic tokens — light ────────────────────────────────────────────────*/
@@ -101,6 +120,25 @@
   --sidebar-accent-foreground: oklch(0.22 0.01 260);
   --sidebar-border: oklch(0.9 0 0);
   --sidebar-ring: oklch(0.72 0.16 85 / 0.35);
+
+  --test-background: linear-gradient(180deg, #f6f7fb 0%, #eef2f7 100%);
+  --test-foreground: #111827;
+  --test-panel: rgba(255, 255, 255, 0.94);
+  --test-panel-soft: rgba(0, 0, 0, 0.05);
+  --test-panel-muted: rgba(0, 0, 0, 0.02);
+  --test-border: rgba(15, 23, 42, 0.09);
+  --test-line: rgba(217, 119, 6, 0.18);
+  --test-muted: #64748b;
+  --test-accent: #d97706;
+  --test-accent-soft: rgba(217, 119, 6, 0.12);
+  --test-success: #059669;
+  --test-success-soft: rgba(5, 150, 105, 0.12);
+  --test-warning: #d97706;
+  --test-warning-soft: rgba(217, 119, 6, 0.12);
+  --test-overlay-dot: rgba(15, 23, 42, 0.06);
+  --test-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+  --test-panel-card: rgba(255, 255, 255, 0.8);
+  --test-panel-card-warning: rgba(255, 251, 235, 0.95);
 }
 
 /* ─── Tailwind theme mapping ─────────────────────────────────────────────────*/

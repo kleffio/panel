@@ -54,7 +54,7 @@ function SSONode({ node }: { node: UiNode }) {
 
 function SSORegistrationContent() {
   const searchParams = useSearchParams();
-  const flowId = searchParams.get("flow");
+  const flowId = searchParams?.get("flow") ?? null;
   const [flow, setFlow] = useState<RegistrationFlow | null>(null);
 
   useEffect(() => {

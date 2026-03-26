@@ -54,12 +54,12 @@ function SSONode({ node }: { node: UiNode }) {
 
 function SSOLoginContent() {
   const searchParams = useSearchParams();
-  const flowId = searchParams.get("flow");
+  const flowId = searchParams?.get("flow") ?? null;
   const [flow, setFlow] = useState<LoginFlow | null>(null);
 
   useEffect(() => {
     if (!flowId) {
-      const loginChallenge = searchParams.get("login_challenge");
+      const loginChallenge = searchParams?.get("login_challenge") ?? null;
       const url = loginChallenge
         ? `/ory/self-service/login/browser?login_challenge=${loginChallenge}`
         : "/ory/self-service/login/browser";
@@ -79,7 +79,7 @@ function SSOLoginContent() {
           </div>
         `;
       });
-  }, [flowId]);
+  }, [flowId, searchParams]);
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();

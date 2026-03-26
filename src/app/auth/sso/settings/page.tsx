@@ -54,7 +54,7 @@ function SSONode({ node }: { node: UiNode }) {
 
 function SSOSettingsContent() {
   const searchParams = useSearchParams();
-  const flowId = searchParams.get("flow");
+  const flowId = searchParams?.get("flow") ?? null;
   const [flow, setFlow] = useState<SettingsFlow | null>(null);
 
   useEffect(() => {
