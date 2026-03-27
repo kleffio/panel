@@ -8,8 +8,9 @@ export interface ApiTokenResponse {
   scope?: string;
 }
 
-/** Authenticated user info returned by GET /api/v1/identity/me. */
+/** Authenticated user info returned by GET /api/v1/auth/me. */
 export interface CurrentUser {
   userId: string;
+  email: string;
   roles: string[];
 }

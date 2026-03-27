@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useAuth, storeApiTokens, login } from "@/features/auth";
+import { useState, useEffect, useContext } from "react";
+import { useAuth, storeApiTokens, login, broadcastSignin } from "@/features/auth";
+import { AuthConfigContext } from "@/features/auth/context";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LoginPage() {
   const auth = useAuth();
+  const authConfig = useContext(AuthConfigContext);
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -21,10 +23,11 @@ export default function LoginPage() {
       router.replace("/dashboard");
       return;
     }
-    if (!auth.isLoading && process.env.NEXT_PUBLIC_AUTH_MODE === "redirect") {
+    // Redirect mode: hand off to the IDP login page instead of the headless form.
+    if (!auth.isLoading && authConfig?.enabled && authConfig.auth_mode === "redirect") {
       auth.signinRedirect();
     }
-  }, [auth.isAuthenticated, auth.isLoading, router]);
+  }, [auth.isAuthenticated, auth.isLoading, authConfig?.enabled, authConfig?.auth_mode, router]);
 
   if (auth.isLoading && !loading) {
     return (
@@ -44,7 +47,10 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const tok = await login(username, password);
-      storeApiTokens(tok);
+      // Use the dynamic authority/client_id so the sessionStorage key matches
+      // what OidcProvider will look up on the next page load.
+      storeApiTokens(tok, authConfig?.authority ?? "", authConfig?.client_id ?? "");
+      broadcastSignin();
       window.location.replace("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");

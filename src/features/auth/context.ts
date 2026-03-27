@@ -1,11 +1,13 @@
 import { createContext } from "react";
 import type { CurrentUser } from "./models";
+import type { AuthConfig } from "./api";
 
 export { type CurrentUser };
 
-/**
- * Provides the authenticated user's ID and roles, resolved via
- * GET /api/v1/identity/me after the OIDC session is established.
- * null while loading or unauthenticated.
- */
 export const CurrentUserContext = createContext<CurrentUser | null>(null);
+
+/**
+ * Provides the resolved auth config from GET /api/v1/auth/config.
+ * null while the initial fetch is in-flight.
+ */
+export const AuthConfigContext = createContext<AuthConfig | null>(null);

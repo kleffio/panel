@@ -31,14 +31,31 @@ export async function register(params: {
   return data.data as { user_id: string };
 }
 
-/**
- * GET /api/v1/identity/me — fetches the current user's ID and roles.
- * Roles are resolved server-side from token introspection, so this works
- * identically regardless of which identity provider is configured.
- */
+/** GET /api/v1/auth/me — returns the current user's ID and roles from the JWT. */
 export async function fetchCurrentUser(): Promise<CurrentUser> {
-  const res = await apiClient.get<{ data: { user_id: string; roles: string[] } }>(
-    "/api/v1/identity/me"
+  const res = await apiClient.get<{ data: { user_id: string; email: string; roles: string[] } }>(
+    "/api/v1/auth/me"
   );
-  return { userId: res.data.data.user_id, roles: res.data.data.roles ?? [] };
+  return { userId: res.data.data.user_id, email: res.data.data.email, roles: res.data.data.roles ?? [] };
+}
+
+export interface AuthConfig {
+  enabled: boolean;
+  authority?: string;
+  client_id?: string;
+  jwks_uri?: string;
+  scopes?: string[];
+  /** "headless" = Kleff login form (default). "redirect" = OIDC Authorization Code flow via IDP. */
+  auth_mode?: "headless" | "redirect";
+}
+
+/**
+ * GET /api/v1/auth/config — returns OIDC settings from the active IDP plugin.
+ * Call this on app load to bootstrap the OIDC client dynamically instead of
+ * relying on build-time NEXT_PUBLIC_* env vars.
+ */
+export async function fetchAuthConfig(): Promise<AuthConfig> {
+  const res = await fetch("/api/v1/auth/config");
+  const data = await res.json().catch(() => ({}));
+  return (data.data ?? { enabled: false }) as AuthConfig;
 }

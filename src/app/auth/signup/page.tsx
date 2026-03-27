@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useAuth, storeApiTokens, login, register } from "@/features/auth";
+import { useState, useContext } from "react";
+import { useAuth, storeApiTokens, login, register, broadcastSignin } from "@/features/auth";
+import { AuthConfigContext } from "@/features/auth/context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SignupPage() {
   const auth = useAuth();
+  const authConfig = useContext(AuthConfigContext);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
@@ -18,7 +20,8 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  if (!auth.isLoading && process.env.NEXT_PUBLIC_AUTH_MODE === "redirect") {
+  // Redirect mode: send to IDP's registration page instead of the headless form.
+  if (!auth.isLoading && authConfig?.enabled && authConfig.auth_mode === "redirect") {
     auth.signinRedirect({ extraQueryParams: { prompt: "create" } });
   }
 
@@ -45,7 +48,8 @@ export default function SignupPage() {
     try {
       await register({ username, email, password, firstName, lastName });
       const tok = await login(username, password);
-      storeApiTokens(tok);
+      storeApiTokens(tok, authConfig?.authority ?? "", authConfig?.client_id ?? "");
+      broadcastSignin();
       window.location.replace("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed. Please try again.");

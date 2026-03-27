@@ -1,43 +1,29 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { useAuth } from "@/features/auth";
+import { useContext, useEffect, useState, type ReactNode } from "react";
+import { useAuth, AuthConfigContext } from "@/features/auth";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AuthenticatedLayout({ children }: { children: ReactNode }) {
   const auth = useAuth();
+  const authConfig = useContext(AuthConfigContext);
   const router = useRouter();
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
-    if (!auth.isLoading && !auth.error && !auth.isAuthenticated && !redirecting) {
+    if (!auth.isLoading && !auth.isAuthenticated && !redirecting) {
       setRedirecting(true);
-      if (process.env.NEXT_PUBLIC_AUTH_MODE === "redirect") {
+      if (authConfig?.auth_mode === "redirect") {
         auth.signinRedirect();
       } else {
         router.replace("/auth/login");
       }
     }
-  }, [auth, redirecting]);
+  }, [auth.isLoading, auth.isAuthenticated, authConfig?.auth_mode, redirecting]);
 
-  if (auth.isLoading || redirecting) {
-    return <AuthLoadingScreen />;
-  }
-
-  if (auth.error) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="space-y-2 text-center">
-          <p className="text-sm font-medium text-red-400">Authentication error</p>
-          <p className="text-xs text-zinc-500">{auth.error.message}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!auth.isAuthenticated) {
+  if (auth.isLoading || redirecting || !auth.isAuthenticated) {
     return <AuthLoadingScreen />;
   }
 

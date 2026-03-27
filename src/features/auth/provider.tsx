@@ -2,21 +2,68 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { AuthProvider as OidcProvider, useAuth as useOidcAuth } from "react-oidc-context";
+import { WebStorageStateStore } from "oidc-client-ts";
 import { setApiAccessToken, clearApiAccessToken } from "@/lib/api";
-import { oidcConfig } from "./config";
-import { CurrentUserContext, type CurrentUser } from "./context";
-import { fetchCurrentUser } from "./api";
+import { CurrentUserContext, AuthConfigContext, type CurrentUser } from "./context";
+import { fetchCurrentUser, fetchAuthConfig, type AuthConfig } from "./api";
 
-/**
- * Syncs the OIDC session with:
- *   1. The in-memory bearer token used by apiClient.
- *   2. The CurrentUserContext (userId + roles from GET /api/v1/identity/me).
- *
- * Roles are fetched server-side so the frontend has no IDP-specific logic.
- */
+// Non-OIDC fields that are always the same regardless of IDP.
+const oidcStaticConfig = {
+  // redirect_uri is required by oidc-client-ts even in headless mode.
+  redirect_uri: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : "",
+  // post_logout_redirect_uri tells Keycloak where to send the user after logout.
+  // When id_token_hint is present (which oidc-client-ts sends automatically),
+  // Keycloak skips its own "You are logged out" page and redirects silently.
+  post_logout_redirect_uri: typeof window !== "undefined" ? `${window.location.origin}/auth/login` : "",
+  automaticSilentRenew: true,
+  useRefreshTokens: true,
+} as const;
+
+// Channel name used to broadcast sign-out across tabs.
+const AUTH_CHANNEL = "kleff:auth";
+
+/** Posts a sign-out event to all other open tabs. */
+export function broadcastSignout() {
+  if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+    new BroadcastChannel(AUTH_CHANNEL).postMessage("signout");
+  }
+}
+
+/** Posts a sign-in event to all other open tabs. */
+export function broadcastSignin() {
+  if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+    new BroadcastChannel(AUTH_CHANNEL).postMessage("signin");
+  }
+}
+
+/** Syncs the OIDC session with the in-memory bearer token and CurrentUserContext. */
 function CurrentUserProvider({ children }: { children: ReactNode }) {
   const auth = useOidcAuth();
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+
+  // Listen for sign-out events broadcast from other tabs and clear the local
+  // session so the layout redirects to login without waiting for a page refresh.
+  useEffect(() => {
+    if (typeof window === "undefined" || !("BroadcastChannel" in window)) return;
+    const channel = new BroadcastChannel(AUTH_CHANNEL);
+    channel.onmessage = (e) => {
+      if (e.data === "signout") auth.removeUser();
+      // Another tab signed in (possibly as a different user) — navigate to
+      // dashboard so this tab picks up the new token from localStorage.
+      if (e.data === "signin") window.location.replace("/dashboard");
+    };
+    return () => channel.close();
+  }, [auth.removeUser]);
+
+  // When silent renew fails (expired refresh token, server-side logout detected
+  // by monitorSession, etc.) clear the stale session so the layout redirects to
+  // login instead of showing an error screen.
+  useEffect(() => {
+    if (auth.error) {
+      clearApiAccessToken();
+      auth.removeUser();
+    }
+  }, [auth.error]);
 
   useEffect(() => {
     if (auth.isAuthenticated && auth.user?.access_token) {
@@ -24,14 +71,19 @@ function CurrentUserProvider({ children }: { children: ReactNode }) {
       fetchCurrentUser()
         .then(setCurrentUser)
         .catch(() => {
-          // Fallback: user is authenticated but /me failed — grant no roles.
-          setCurrentUser({ userId: auth.user?.profile?.sub ?? "", roles: [] });
+          setCurrentUser({ userId: auth.user?.profile?.sub ?? "", email: auth.user?.profile?.email ?? "", roles: [] });
         });
-    } else {
+    } else if (!auth.isLoading) {
+      // Only clear once OIDC has finished loading — avoids wiping the token
+      // during the brief session-restore window before isAuthenticated becomes true.
       clearApiAccessToken();
       setCurrentUser(null);
     }
-  }, [auth.isAuthenticated, auth.user?.access_token]);
+  }, [auth.isAuthenticated, auth.isLoading, auth.user?.access_token]);
+
+  // Hold rendering while OIDC session is being restored so child components
+  // don't fire API calls before the bearer token is available.
+  if (auth.isLoading) return null;
 
   return (
     <CurrentUserContext.Provider value={currentUser}>
@@ -40,10 +92,61 @@ function CurrentUserProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Bootstraps auth dynamically from GET /api/v1/auth/config.
+ * - If the active IDP plugin returns enabled:true, wraps children in OidcProvider.
+ * - If no IDP plugin is active (enabled:false), renders children directly — auth is disabled.
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
+
+  useEffect(() => {
+    fetchAuthConfig().then(setAuthConfig).catch(() => setAuthConfig({ enabled: false }));
+  }, []);
+
+  // Still loading — render nothing to avoid a flash of unauthenticated state.
+  if (authConfig === null) return null;
+
+  if (!authConfig.enabled || !authConfig.authority || !authConfig.client_id) {
+    // No IDP configured — pass children through without OIDC context.
+    return (
+      <AuthConfigContext.Provider value={authConfig}>
+        <CurrentUserContext.Provider value={null}>
+          {children}
+        </CurrentUserContext.Provider>
+      </AuthConfigContext.Provider>
+    );
+  }
+
+  const isRedirect = authConfig.auth_mode === "redirect";
+  const oidcConfig = {
+    authority: authConfig.authority,
+    client_id: authConfig.client_id,
+    scope: authConfig.scopes?.join(" ") ?? "openid profile email",
+    ...oidcStaticConfig,
+    // Headless mode: store tokens in localStorage so all tabs share the session.
+    // Redirect mode: keep the default sessionStorage (cross-tab logout is handled
+    // by the IDP browser cookie + monitorSession instead).
+    ...(!isRedirect && {
+      userStore: new WebStorageStateStore({ store: window.localStorage }),
+    }),
+    // Redirect mode: monitor the IDP session so cross-tab logouts are detected
+    // instantly, and clean up the URL after the OIDC callback redirect.
+    ...(isRedirect && {
+      monitorSession: true,
+      onSigninCallback: () => {
+        if (typeof window !== "undefined") {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      },
+    }),
+  };
+
   return (
-    <OidcProvider {...oidcConfig}>
-      <CurrentUserProvider>{children}</CurrentUserProvider>
-    </OidcProvider>
+    <AuthConfigContext.Provider value={authConfig}>
+      <OidcProvider {...oidcConfig}>
+        <CurrentUserProvider>{children}</CurrentUserProvider>
+      </OidcProvider>
+    </AuthConfigContext.Provider>
   );
 }

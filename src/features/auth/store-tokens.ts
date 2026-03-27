@@ -18,10 +18,14 @@ function decodeJwtPayload(jwt: string): Record<string, unknown> {
  * Persists an API token response into the sessionStorage slot that
  * oidc-client-ts reads on startup: `oidc.user:{authority}:{client_id}`.
  *
- * After calling this, do a hard navigation (window.location.replace) so that
- * the OidcProvider initialises fresh and loads the user from storage.
+ * Pass the authority and client_id from the fetched AuthConfig so the key
+ * matches what the OidcProvider will look up on the next hard navigation.
  */
-export function storeApiTokens(tok: ApiTokenResponse): void {
+export function storeApiTokens(
+  tok: ApiTokenResponse,
+  authority: string,
+  clientId: string,
+): void {
   const rawProfile = decodeJwtPayload(tok.id_token ?? tok.access_token);
   const profile = {
     sub: (rawProfile.sub as string) ?? "",
@@ -40,6 +44,8 @@ export function storeApiTokens(tok: ApiTokenResponse): void {
     profile,
   });
 
-  const key = `oidc.user:${process.env.NEXT_PUBLIC_OIDC_AUTHORITY}:${process.env.NEXT_PUBLIC_OIDC_CLIENT_ID}`;
-  sessionStorage.setItem(key, user.toStorageString());
+  // Use localStorage so the session is shared across tabs.
+  // OidcProvider is configured with the same store for headless mode.
+  const key = `oidc.user:${authority}:${clientId}`;
+  localStorage.setItem(key, user.toStorageString());
 }

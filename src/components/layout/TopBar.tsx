@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Settings, LogOut } from "lucide-react";
-import { useAuth } from "@/features/auth";
+import { useAuth, broadcastSignout } from "@/features/auth";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,7 +38,7 @@ export function TopBar() {
             Settings
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => auth.signoutRedirect()}>
+          <DropdownMenuItem variant="destructive" onClick={() => { broadcastSignout(); auth.signoutRedirect(); }}>
             <LogOut className="size-4" />
             Sign out
           </DropdownMenuItem>

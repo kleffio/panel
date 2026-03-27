@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Users, Building2, ShieldAlert } from "lucide-react";
+import { get, post } from "@/lib/api";
 import { MetricCard } from "@/components/domain/MetricCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,8 +16,8 @@ export default function AdminPage() {
   const [orgs, setOrgs] = useState<AdminOrg[]>([]);
 
   useEffect(() => {
-    fetch("/api/v1/admin/users").then(r => r.json()).then(d => setUsers(d.data ?? []));
-    fetch("/api/v1/admin/organizations").then(r => r.json()).then(d => setOrgs(d.data ?? []));
+    get<{ data: AdminUser[] }>("/api/v1/admin/users").then(d => setUsers(d.data ?? []));
+    get<{ data: AdminOrg[] }>("/api/v1/admin/organizations").then(d => setOrgs(d.data ?? []));
   }, []);
 
   const suspendedUsers = users.filter(u => u.status === "suspended").length;
@@ -60,7 +61,7 @@ export default function AdminPage() {
                       size="sm"
                       className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
                       onClick={() =>
-                        fetch(`/api/v1/admin/users/${user.id}/suspend`, { method: "POST" })
+                        post(`/api/v1/admin/users/${user.id}/suspend`)
                           .then(() => setUsers(u => u.map(x => x.id === user.id ? { ...x, status: "suspended" } : x)))
                       }
                     >
@@ -94,7 +95,7 @@ export default function AdminPage() {
                       size="sm"
                       className="text-red-400 hover:text-red-300 hover:bg-red-400/10"
                       onClick={() =>
-                        fetch(`/api/v1/admin/organizations/${org.id}/suspend`, { method: "POST" })
+                        post(`/api/v1/admin/organizations/${org.id}/suspend`)
                           .then(() => setOrgs(o => o.map(x => x.id === org.id ? { ...x, status: "suspended" } : x)))
                       }
                     >
