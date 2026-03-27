@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   Area,
@@ -15,6 +15,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  ArrowUpRight,
   Bell,
   Check,
   CheckCircle2,
@@ -206,6 +207,111 @@ export default function ComponentsPage() {
   const [sliderValue, setSliderValue] = useState([40]);
   const [checked, setChecked] = useState(true);
   const [switchOn, setSwitchOn] = useState(true);
+  const [advancedOptionsOpen, setAdvancedOptionsOpen] = useState(false);
+  const [logsPanelSize, setLogsPanelSize] = useState({ width: 720, height: 220 });
+  const logsWindowRef = useRef<Window | null>(null);
+  const logEntries = Array.from({ length: 12 }, (_, i) =>
+    `[2026-03-20 12:${String(i).padStart(2, "0")}:00] Server tick ${i * 100 + 1}ms - ${i % 2 === 0 ? "OK" : "players: 8"}`
+  );
+
+  const openLogsWindow = () => {
+    if (typeof window === "undefined") return;
+
+    const popup = logsWindowRef.current && !logsWindowRef.current.closed
+      ? logsWindowRef.current
+      : window.open("", "kleff-logs-popout", "popup=yes,width=920,height=640,resizable=yes,scrollbars=yes");
+
+    if (!popup) {
+      toast.error("Popup blocked", { description: "Allow popups to open logs in a separate window." });
+      return;
+    }
+
+    logsWindowRef.current = popup;
+
+    const escapedLogs = logEntries
+      .map((entry) => entry.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"))
+      .map((entry) => `<div class="log-line">${entry}</div>`)
+      .join("");
+
+    popup.document.title = "Runtime Logs";
+    popup.document.body.innerHTML = `
+      <style>
+        :root { color-scheme: dark; }
+        body {
+          margin: 0;
+          background: #09090b;
+          color: #fafafa;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+        .shell {
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          padding: 20px;
+          box-sizing: border-box;
+          gap: 16px;
+        }
+        .header {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .title {
+          font: 600 18px/1.2 system-ui, sans-serif;
+        }
+        .subtitle {
+          color: #a1a1aa;
+          font: 400 13px/1.4 system-ui, sans-serif;
+        }
+        .panel {
+          flex: 1;
+          overflow: auto;
+          border: 1px solid #27272a;
+          border-radius: 14px;
+          background: rgba(39, 39, 42, 0.28);
+          padding: 14px;
+        }
+        .log-line {
+          font-size: 12px;
+          line-height: 1.6;
+          color: #d4d4d8;
+          white-space: pre-wrap;
+        }
+      </style>
+      <div class="shell">
+        <div class="header">
+          <div class="title">Runtime Logs</div>
+          <div class="subtitle">Detached log stream window for scanning output side by side.</div>
+        </div>
+        <div class="panel">${escapedLogs}</div>
+      </div>
+    `;
+    popup.focus();
+  };
+
+  const handleLogsResizeStart = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startWidth = logsPanelSize.width;
+    const startHeight = logsPanelSize.height;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setLogsPanelSize({
+        width: Math.min(960, Math.max(320, startWidth + (moveEvent.clientX - startX))),
+        height: Math.min(520, Math.max(140, startHeight + (moveEvent.clientY - startY))),
+      });
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
 
   return (
     <TooltipProvider>
@@ -380,10 +486,10 @@ export default function ComponentsPage() {
                 <Field>
                   <FieldTitle>Region</FieldTitle>
                   <Select defaultValue="us-east-1">
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select region" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" className="w-(--radix-select-trigger-width)">
                       <SelectItem value="us-east-1">US East (N. Virginia)</SelectItem>
                       <SelectItem value="us-west-2">US West (Oregon)</SelectItem>
                       <SelectItem value="eu-west-1">EU West (Ireland)</SelectItem>
@@ -489,7 +595,37 @@ export default function ComponentsPage() {
                 <p className="text-sm text-muted-foreground">Server overview content — metrics, uptime, player counts.</p>
               </TabsContent>
               <TabsContent value="logs" className="mt-4">
-                <ScrollArea className="h-24 rounded-lg border border-border bg-muted/30 p-3 font-mono text-xs text-muted-foreground">
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Resize the panel from the bottom-right corner or pop it out for a larger view.</p>
+                  <div
+                    className="relative max-w-full rounded-lg border border-border bg-muted/30 p-3"
+                    style={{ width: `${logsPanelSize.width}px`, height: `${logsPanelSize.height}px` }}
+                  >
+                    <button
+                      type="button"
+                      aria-label="Pop out logs"
+                      className="absolute top-2 right-2 text-muted-foreground transition-colors hover:text-foreground"
+                      onClick={openLogsWindow}
+                    >
+                      <ArrowUpRight className="size-4" />
+                    </button>
+                    <div className="h-full overflow-auto font-mono text-xs text-muted-foreground [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      {logEntries.map((entry) => (
+                        <p key={entry}>{entry}</p>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Resize logs panel"
+                      className="absolute right-2 bottom-2 size-5 cursor-se-resize bg-transparent"
+                      onPointerDown={handleLogsResizeStart}
+                    >
+                      <span className="absolute right-2 bottom-2 h-1.5 w-1.5 border-r border-b border-muted-foreground/70" />
+                      <span className="absolute right-0.5 bottom-0.5 h-2.5 w-2.5 border-r border-b border-muted-foreground" />
+                    </button>
+                  </div>
+                </div>
+                <ScrollArea className="hidden h-24 rounded-lg border border-border bg-muted/30 p-3 font-mono text-xs text-muted-foreground">
                   {Array.from({ length: 8 }, (_, i) => (
                     <p key={i}>[2026-03-20 12:0{i}:00] Server tick {i * 100 + 1}ms — {i % 2 === 0 ? "OK" : "players: 8"}</p>
                   ))}
@@ -500,7 +636,7 @@ export default function ComponentsPage() {
               </TabsContent>
             </Tabs>
 
-            <Accordion type="single" collapsible className="w-full">
+            <Accordion type="multiple" className="w-full">
               <AccordionItem value="network">
                 <AccordionTrigger>Network Settings</AccordionTrigger>
                 <AccordionContent>
@@ -521,15 +657,36 @@ export default function ComponentsPage() {
               </AccordionItem>
             </Accordion>
 
-            <Collapsible>
+            <Collapsible open={advancedOptionsOpen} onOpenChange={setAdvancedOptionsOpen}>
               <CollapsibleTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <ChevronRight className="size-3.5 transition-transform ui-open:rotate-90" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`relative z-10 gap-2 border-border bg-background transition-all ${
+                    advancedOptionsOpen
+                      ? "rounded-b-none rounded-t-xl px-4 shadow-none"
+                      : "rounded-xl"
+                  }`}
+                >
+                  <ChevronRight className={`size-3.5 transition-transform ${advancedOptionsOpen ? "rotate-90" : ""}`} />
                   Advanced Options
                 </Button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2 rounded-lg border border-border p-3 text-sm text-muted-foreground">
-                JVM flags, custom startup scripts, and environment variable overrides.
+              <CollapsibleContent className="-mt-px rounded-3xl rounded-tl-none border border-border bg-card p-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-border bg-background/80 p-4">
+                    <p className="text-sm font-medium text-foreground">Environment Variables</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Inject secrets, feature flags, and server-specific overrides before boot.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-background/80 p-4">
+                    <p className="text-sm font-medium text-foreground">Startup Overrides</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Tune JVM flags, launch arguments, and pre-start scripts for advanced runtimes.
+                    </p>
+                  </div>
+                </div>
               </CollapsibleContent>
             </Collapsible>
           </Section>
