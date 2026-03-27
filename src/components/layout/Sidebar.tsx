@@ -7,10 +7,10 @@ import {
   Server,
   CreditCard,
   Settings,
-  LogOut,
+  ShieldCheck,
 } from "lucide-react";
-import { useAuth } from "@/features/auth";
 import { cn } from "@/lib/utils";
+import { useHasRole } from "@/features/auth";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -21,7 +21,11 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const auth = useAuth();
+  const isAdmin = useHasRole("admin");
+
+  const items = isAdmin
+    ? [...NAV_ITEMS, { href: "/admin", label: "Admin", icon: ShieldCheck }]
+    : NAV_ITEMS;
 
   return (
     <aside className="flex h-full w-60 flex-col border-r border-sidebar-border bg-sidebar">
@@ -35,7 +39,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-0.5 px-3 py-4">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        {items.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link
@@ -55,17 +59,6 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Sign out */}
-      <div className="border-t border-sidebar-border px-3 py-3">
-        <button
-          type="button"
-          onClick={() => auth.signoutRedirect()}
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-        >
-          <LogOut className="size-4 shrink-0" />
-          Sign Out
-        </button>
-      </div>
     </aside>
   );
 }

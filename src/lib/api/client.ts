@@ -2,8 +2,11 @@ import axios from "axios";
 import { normalizeApiError } from "./error";
 import { getApiAccessToken } from "./token";
 
+// Use relative paths so browser requests go through the Next.js rewrite proxy
+// (/api/* → http://api:8080/api/*). The full API base URL is only needed in
+// next.config.ts for the server-side rewrite rule.
 export const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL ?? "",
+  baseURL: "",
   headers: {
     "Cache-Control": "no-cache, no-store, must-revalidate",
     Pragma: "no-cache",

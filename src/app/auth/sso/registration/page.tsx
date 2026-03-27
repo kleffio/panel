@@ -111,7 +111,13 @@ function SSORegistrationContent() {
       <div className="glass-panel relative w-full max-w-sm p-8 space-y-6">
 
         <div className="space-y-1 text-center">
-          <h1 className="text-lg font-semibold text-foreground">Create account</h1>
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <span className="text-gradient-kleff text-2xl font-bold tracking-tight">Kleff</span>
+            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+              Panel
+            </span>
+          </div>
+          <h1 className="text-lg font-semibold text-foreground">Create an account</h1>
           <p className="text-sm text-muted-foreground">Enter your details to get started</p>
         </div>
 
