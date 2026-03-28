@@ -15,13 +15,15 @@ export default function AuthenticatedLayout({ children }: { children: ReactNode 
   useEffect(() => {
     if (!auth.isLoading && !auth.isAuthenticated && !redirecting) {
       setRedirecting(true);
-      if (authConfig?.auth_mode === "redirect") {
+      if (authConfig?.setup_required) {
+        router.replace("/setup");
+      } else if (authConfig?.auth_mode === "redirect") {
         auth.signinRedirect();
       } else {
         router.replace("/auth/login");
       }
     }
-  }, [auth.isLoading, auth.isAuthenticated, authConfig?.auth_mode, redirecting]);
+  }, [auth.isLoading, auth.isAuthenticated, authConfig?.auth_mode, authConfig?.setup_required, redirecting]);
 
   if (auth.isLoading || redirecting || !auth.isAuthenticated) {
     return <AuthLoadingScreen />;
