@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AuthThemeShell } from "@/components/theme/AuthThemeShell";
 
 export default function LoginPage() {
   const auth = useAuth();
@@ -57,9 +58,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background bg-kleff-grid">
-      <div className="bg-kleff-spotlight pointer-events-none absolute inset-0" />
-      <div className="glass-panel relative w-full max-w-sm p-8 space-y-6">
+    <AuthThemeShell>
+      <div className="glass-panel relative mx-auto w-full max-w-sm space-y-6 p-8">
         <div className="space-y-1 text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
             <span className="text-gradient-kleff text-2xl font-bold tracking-tight">Kleff</span>
@@ -112,6 +112,6 @@ export default function LoginPage() {
           </button>
         </p>
       </div>
-    </div>
+    </AuthThemeShell>
   );
 }

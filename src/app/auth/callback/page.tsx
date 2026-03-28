@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useAuth } from "@/features/auth"; // TODO: change back to import { useAuth } from "react-oidc-context";
+import { useAuth } from "@/features/auth";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 

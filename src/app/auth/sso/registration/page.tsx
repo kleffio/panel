@@ -7,6 +7,7 @@ import { isUiNodeInputAttributes, getNodeLabel } from "@ory/integrations/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AuthThemeShell } from "@/components/theme/AuthThemeShell";
 
 const frontend = new FrontendApi(
   new Configuration({
@@ -106,9 +107,8 @@ function SSORegistrationContent() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background bg-kleff-grid">
-      <div className="bg-kleff-spotlight pointer-events-none absolute inset-0" />
-      <div className="glass-panel relative w-full max-w-sm p-8 space-y-6">
+    <AuthThemeShell>
+      <div className="glass-panel relative mx-auto w-full max-w-sm space-y-6 p-8">
 
         <div className="space-y-1 text-center">
           <h1 className="text-lg font-semibold text-foreground">Create account</h1>
@@ -135,7 +135,7 @@ function SSORegistrationContent() {
         </p>
 
       </div>
-    </div>
+    </AuthThemeShell>
   );
 }
 

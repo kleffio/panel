@@ -62,8 +62,10 @@ async function proxy(req: NextRequest) {
       headers: responseHeaders,
     });
     
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message, stack: err.stack }), { 
+  } catch (err) {
+    console.error("Auth proxy request failed", err);
+
+    return new Response(JSON.stringify({ error: "Authentication proxy request failed." }), {
       status: 500,
       headers: { "Content-Type": "application/json" }
     });

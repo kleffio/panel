@@ -1,8 +1,3 @@
-export const authDisabled =
-  process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === "true";
-
-// TODO: REMOVE CODE ABOVE THIS LINE AFTER AUTH IS READY
-
 export const oidcConfig = {
   authority: process.env.NEXT_PUBLIC_OIDC_AUTHORITY ?? "",
   client_id: process.env.NEXT_PUBLIC_OIDC_CLIENT_ID ?? "panel",

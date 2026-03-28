@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { AuthProvider as OidcProvider, useAuth as useOidcAuth } from "react-oidc-context";
 import { setApiAccessToken, clearApiAccessToken } from "@/lib/api";
-import { authDisabled, oidcConfig } from "./config";
+import { oidcConfig } from "./config";
 
 // Keeps the in-memory bearer token in sync with OIDC session state.
 function AuthTokenSync() {
@@ -21,13 +21,6 @@ function AuthTokenSync() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-
-  // TODO: remove this if statement when auth is ready
-  if (authDisabled) {
-    clearApiAccessToken();
-    return <>{children}</>;
-  }
-
   return (
     <OidcProvider {...oidcConfig}>
       <AuthTokenSync />
