@@ -4,7 +4,7 @@ import { useContext, useEffect, useState, type ReactNode } from "react";
 import { useAuth, AuthConfigContext } from "@/features/auth";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@kleffio/ui";
 
 export default function AuthenticatedLayout({ children }: { children: ReactNode }) {
   const auth = useAuth();

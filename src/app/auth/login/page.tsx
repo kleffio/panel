@@ -4,10 +4,10 @@ import { useState, useEffect, useContext } from "react";
 import { useAuth, storeApiTokens, login, broadcastSignin } from "@/features/auth";
 import { AuthConfigContext } from "@/features/auth/context";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@kleffio/ui";
+import { Input } from "@kleffio/ui";
+import { Label } from "@kleffio/ui";
+import { Skeleton } from "@kleffio/ui";
 
 export default function LoginPage() {
   const auth = useAuth();

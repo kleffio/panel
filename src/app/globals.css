@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@kleffio/ui/styles.css";
 @import "@fontsource-variable/geist";
 
 /* ─── Kleff raw brand tokens ─────────────────────────────────────────────────*/

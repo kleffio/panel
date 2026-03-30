@@ -2,8 +2,8 @@
 
 import { Plus } from "lucide-react";
 import { ServerCard } from "@/components/domain/ServerCard";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@kleffio/ui";
+import { Input } from "@kleffio/ui";
 import type { GameServer } from "@/types";
 
 // TODO: replace with useQuery + pagination

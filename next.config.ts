@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  transpilePackages: ["@kleffio/ui"],
   // Produces a minimal Node.js server in .next/standalone — required for Docker.
   output: "standalone",
   

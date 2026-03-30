@@ -4,8 +4,8 @@ import { Activity, Server, Users, AlertTriangle } from "lucide-react";
 import { BarChart, Bar, XAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { MetricCard } from "@/components/domain/MetricCard";
 import { ServerCard } from "@/components/domain/ServerCard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@kleffio/ui";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@kleffio/ui";
 import type { GameServer } from "@/types";
 
 // ─── Mock data — replace with useQuery hooks when the API is wired up ─────────

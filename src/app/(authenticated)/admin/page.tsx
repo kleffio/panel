@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { Users, Building2, ShieldAlert } from "lucide-react";
 import { get, post } from "@/lib/api";
 import { MetricCard } from "@/components/domain/MetricCard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@kleffio/ui";
+import { Badge } from "@kleffio/ui";
+import { Button } from "@kleffio/ui";
 
 type AdminUser = { id: string; username: string; email: string; roles: string[]; status: string };
 type AdminOrg = { id: string; name: string; plan: string; status: string; createdAt: string };

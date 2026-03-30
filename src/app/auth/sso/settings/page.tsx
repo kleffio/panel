@@ -4,9 +4,9 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Configuration, FrontendApi, SettingsFlow, UiNode } from "@ory/client";
 import { isUiNodeInputAttributes, getNodeLabel } from "@ory/integrations/ui";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@kleffio/ui";
+import { Input } from "@kleffio/ui";
+import { Label } from "@kleffio/ui";
 
 const frontend = new FrontendApi(
   new Configuration({

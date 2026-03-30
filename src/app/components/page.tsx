@@ -28,8 +28,8 @@ import {
 } from "lucide-react";
 
 // UI Primitives
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@kleffio/ui";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@kleffio/ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,14 +40,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+} from "@kleffio/ui";
+import { Avatar, AvatarFallback, AvatarImage } from "@kleffio/ui";
+import { Badge } from "@kleffio/ui";
+import { Button } from "@kleffio/ui";
+import { ButtonGroup } from "@kleffio/ui";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@kleffio/ui";
+import { Checkbox } from "@kleffio/ui";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@kleffio/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,20 +55,20 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { Field, FieldLabel, FieldTitle } from "@/components/ui/field";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Input } from "@/components/ui/input";
-import { Item } from "@/components/ui/item";
-import { Label } from "@/components/ui/label";
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Progress } from "@/components/ui/progress";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+} from "@kleffio/ui";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@kleffio/ui";
+import { Field, FieldLabel, FieldTitle } from "@kleffio/ui";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@kleffio/ui";
+import { Input } from "@kleffio/ui";
+import { Item } from "@kleffio/ui";
+import { Label } from "@kleffio/ui";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@kleffio/ui";
+import { Popover, PopoverContent, PopoverTrigger } from "@kleffio/ui";
+import { Progress } from "@kleffio/ui";
+import { RadioGroup, RadioGroupItem } from "@kleffio/ui";
+import { ScrollArea } from "@kleffio/ui";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@kleffio/ui";
+import { Separator } from "@kleffio/ui";
 import {
   Sheet,
   SheetContent,
@@ -76,15 +76,15 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { Toggle } from "@/components/ui/toggle";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+} from "@kleffio/ui";
+import { Skeleton } from "@kleffio/ui";
+import { Slider } from "@kleffio/ui";
+import { Switch } from "@kleffio/ui";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@kleffio/ui";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@kleffio/ui";
+import { Textarea } from "@kleffio/ui";
+import { Toggle } from "@kleffio/ui";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@kleffio/ui";
 
 // Charts
 import {
@@ -94,7 +94,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from "@/components/ui/chart";
+} from "@kleffio/ui";
 
 // Domain Components
 import { MetricCard } from "@/components/domain/MetricCard";

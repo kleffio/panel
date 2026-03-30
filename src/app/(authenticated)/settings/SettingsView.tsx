@@ -5,21 +5,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Upload, User } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@kleffio/ui";
+import { Button } from "@kleffio/ui";
+import { Input } from "@kleffio/ui";
+import { Label } from "@kleffio/ui";
+import { Separator } from "@kleffio/ui";
+import { Skeleton } from "@kleffio/ui";
+import { Textarea } from "@kleffio/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+} from "@kleffio/ui";
+import { Avatar, AvatarFallback, AvatarImage } from "@kleffio/ui";
 
 import { getMyProfile, updateMyProfile, uploadAvatar } from "@/lib/api/profiles";
 import type { ThemePreference, UpdateProfilePayload } from "@/types/user";

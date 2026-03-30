@@ -9,8 +9,8 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+} from "@kleffio/ui";
+import { Avatar, AvatarFallback } from "@kleffio/ui";
 
 export function TopBar() {
   const auth = useAuth();

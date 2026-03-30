@@ -1,9 +1,9 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@kleffio/ui";
+import { Badge } from "@kleffio/ui";
+import { Button } from "@kleffio/ui";
+import { Separator } from "@kleffio/ui";
 import {
   Table,
   TableBody,
@@ -11,7 +11,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@kleffio/ui";
 import { PlanBadge } from "@/components/domain/PlanBadge";
 import type { Invoice, Subscription } from "@/types";
 
