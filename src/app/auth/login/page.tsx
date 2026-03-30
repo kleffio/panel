@@ -19,6 +19,11 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // No IDP installed — send to setup wizard.
+    if (authConfig?.setup_required) {
+      router.replace("/setup");
+      return;
+    }
     if (auth.isAuthenticated) {
       router.replace("/dashboard");
       return;
@@ -27,7 +32,7 @@ export default function LoginPage() {
     if (!auth.isLoading && authConfig?.enabled && authConfig.auth_mode === "redirect") {
       auth.signinRedirect();
     }
-  }, [auth.isAuthenticated, auth.isLoading, authConfig?.enabled, authConfig?.auth_mode, router]);
+  }, [auth.isAuthenticated, auth.isLoading, authConfig?.enabled, authConfig?.auth_mode, authConfig?.setup_required, router]);
 
   if (auth.isLoading && !loading) {
     return (
