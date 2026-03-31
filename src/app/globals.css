@@ -3,6 +3,8 @@
 @import "@kleffio/ui/styles.css";
 @import "@fontsource-variable/geist";
 
+@source "../../node_modules/@kleffio/ui/src";
+
 /* ─── Kleff raw brand tokens ─────────────────────────────────────────────────*/
 @theme {
   --color-kleff-bg: 15 15 16;

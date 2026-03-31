@@ -17,7 +17,6 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # NEXT_PUBLIC_* vars are baked into the JS bundle at build time.
-# They must be declared as ARGs here so docker compose can pass them in.
 ARG NEXT_PUBLIC_OIDC_AUTHORITY
 ARG NEXT_PUBLIC_OIDC_CLIENT_ID
 ARG NEXT_PUBLIC_API_BASE_URL
@@ -34,13 +33,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Create a non-root user
 RUN addgroup --system --gid 1001 nodejs && \
     adduser  --system --uid 1001 nextjs
 
-# Copy public assets and the standalone server output
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
