@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Loader2, Upload, User } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@kleffio/ui";
+import { PluginSlot } from "@/components/plugin/PluginSlot";
+import { useBackendPlugins } from "@/lib/plugins/use-backend-plugins";
 import { Button } from "@kleffio/ui";
 import { Input } from "@kleffio/ui";
 import { Label } from "@kleffio/ui";
@@ -249,6 +251,8 @@ function ProfileCard() {
 // ─── Root view ────────────────────────────────────────────────────────────────
 
 export function SettingsView() {
+  const { settingsPages } = useBackendPlugins();
+
   return (
     <div className="space-y-6">
       <div>
@@ -281,6 +285,28 @@ export function SettingsView() {
           <Button size="sm">Save</Button>
         </CardContent>
       </Card>
+
+      {/* Frontend plugin sections */}
+      <PluginSlot name="settings.section" />
+
+      {/* Backend plugin settings pages (iframe-embedded) */}
+      {settingsPages
+        .filter((page) => page.iframe_url)
+        .map((page) => (
+          <Card key={page.path}>
+            <CardHeader>
+              <CardTitle>{page.label}</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 overflow-hidden rounded-b-xl">
+              <iframe
+                src={page.iframe_url}
+                title={page.label}
+                className="w-full border-0"
+                style={{ height: 600 }}
+              />
+            </CardContent>
+          </Card>
+        ))}
 
       {/* Danger zone */}
       <Card className="border-destructive/30">

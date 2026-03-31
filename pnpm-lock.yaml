@@ -11,6 +11,12 @@ importers:
       '@fontsource-variable/geist':
         specifier: ^5.2.8
         version: 5.2.8
+      '@kleff/plugin-components':
+        specifier: file:../plugin-components
+        version: file:../plugin-components(@kleffio/sdk@file:../plugin-sdk-js(react@19.2.4))(@kleffio/ui@https://codeload.github.com/kleffio/ui/tar.gz/d9f4ccf7eef59a2f8372c0fe2b2579933576caf8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(next@15.5.14(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)
+      '@kleffio/sdk':
+        specifier: file:../plugin-sdk-js
+        version: file:../plugin-sdk-js(react@19.2.4)
       '@kleffio/ui':
         specifier: git+https://github.com/kleffio/ui.git#main
         version: https://codeload.github.com/kleffio/ui/tar.gz/d9f4ccf7eef59a2f8372c0fe2b2579933576caf8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -383,6 +389,19 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@kleff/plugin-components@file:../plugin-components':
+    resolution: {directory: ../plugin-components, type: directory}
+    peerDependencies:
+      '@kleffio/sdk': '*'
+      '@kleffio/ui': '*'
+      next: '>=15.0.0'
+      react: ^18.0.0 || ^19.0.0
+
+  '@kleffio/sdk@file:../plugin-sdk-js':
+    resolution: {directory: ../plugin-sdk-js, type: directory}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
 
   '@kleffio/ui@https://codeload.github.com/kleffio/ui/tar.gz/d9f4ccf7eef59a2f8372c0fe2b2579933576caf8':
     resolution: {tarball: https://codeload.github.com/kleffio/ui/tar.gz/d9f4ccf7eef59a2f8372c0fe2b2579933576caf8}
@@ -3267,6 +3286,17 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@kleff/plugin-components@file:../plugin-components(@kleffio/sdk@file:../plugin-sdk-js(react@19.2.4))(@kleffio/ui@https://codeload.github.com/kleffio/ui/tar.gz/d9f4ccf7eef59a2f8372c0fe2b2579933576caf8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(next@15.5.14(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@kleffio/sdk': file:../plugin-sdk-js(react@19.2.4)
+      '@kleffio/ui': https://codeload.github.com/kleffio/ui/tar.gz/d9f4ccf7eef59a2f8372c0fe2b2579933576caf8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      next: 15.5.14(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react: 19.2.4
+
+  '@kleffio/sdk@file:../plugin-sdk-js(react@19.2.4)':
+    dependencies:
+      react: 19.2.4
 
   '@kleffio/ui@https://codeload.github.com/kleffio/ui/tar.gz/d9f4ccf7eef59a2f8372c0fe2b2579933576caf8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:

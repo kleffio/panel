@@ -3,7 +3,14 @@ FROM node:22-alpine AS deps
 RUN corepack enable pnpm
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml ./
+# Copy lockfile and full source of local file: packages so pnpm captures all
+# files into the virtual store during install (not just package.json).
+COPY panel/package.json panel/pnpm-lock.yaml ./panel/
+COPY plugin-components/ ./plugin-components/
+COPY plugin-sdk-js/ ./plugin-sdk-js/
+
+# pnpm install from the panel directory will follow file:../ sibling paths
+WORKDIR /app/panel
 RUN pnpm install --frozen-lockfile
 
 # ── Stage 2: Build ────────────────────────────────────────────────────────────
@@ -11,13 +18,17 @@ FROM node:22-alpine AS builder
 RUN corepack enable pnpm
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+# Copy all source code and the installed node_modules
+COPY --from=deps /app/panel/node_modules ./panel/node_modules
+COPY panel/ ./panel/
+COPY plugin-components/ ./plugin-components/
+COPY plugin-sdk-js/ ./plugin-sdk-js/
+
+WORKDIR /app/panel
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # NEXT_PUBLIC_* vars are baked into the JS bundle at build time.
-# They must be declared as ARGs here so docker compose can pass them in.
 ARG NEXT_PUBLIC_OIDC_AUTHORITY
 ARG NEXT_PUBLIC_OIDC_CLIENT_ID
 ARG NEXT_PUBLIC_API_BASE_URL
@@ -34,14 +45,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Create a non-root user
 RUN addgroup --system --gid 1001 nodejs && \
     adduser  --system --uid 1001 nextjs
 
-# Copy public assets and the standalone server output
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copy standalone output and static assets
+COPY --from=builder /app/panel/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/panel/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/panel/.next/static ./.next/static
 
 USER nextjs
 
@@ -49,4 +59,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
+# Standalone server structure puts the app folder inside.
 CMD ["node", "server.js"]

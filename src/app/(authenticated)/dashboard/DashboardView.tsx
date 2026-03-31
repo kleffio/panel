@@ -4,6 +4,7 @@ import { Activity, Server, Users, AlertTriangle } from "lucide-react";
 import { BarChart, Bar, XAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { MetricCard } from "@/components/domain/MetricCard";
 import { ServerCard } from "@/components/domain/ServerCard";
+import { PluginSlot } from "@/components/plugin/PluginSlot";
 import { Card, CardContent, CardHeader, CardTitle } from "@kleffio/ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@kleffio/ui";
 import type { GameServer } from "@/types";
@@ -120,6 +121,9 @@ export function DashboardView() {
           delta={{ value: "1 new", direction: "down" }}
         />
       </div>
+
+      {/* Plugin widgets */}
+      <PluginSlot name="dashboard.widget" />
 
       {/* Main content */}
       <Tabs defaultValue="servers">
