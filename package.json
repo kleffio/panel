@@ -12,9 +12,7 @@
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.8",
-    "@kleff/plugin-components": "file:../plugin-components",
-    "@kleffio/sdk": "file:../plugin-sdk-js",
-    "@kleffio/ui": "git+https://github.com/kleffio/ui.git#main",
+    "@kleffio/ui": "github:kleffio/ui#v0.1.0",
     "@ory/client": "^1.22.28",
     "@ory/integrations": "^1.3.1",
     "@tanstack/react-query": "^5.90.21",
