@@ -1,29 +1,9 @@
 import type { KleffPlugin, SlotName, SlotRegistration } from "@kleffio/sdk";
 
-// ─── Backend-driven nav items (from PluginUI gRPC manifests) ─────────────────
-
-export interface BackendNavItem {
-  pluginId: string;
-  label: string;
-  icon?: string;
-  path: string;
-  permission?: string;
-  children?: BackendNavItem[];
-}
-
-export interface BackendSettingsPage {
-  pluginId: string;
-  label: string;
-  path: string;
-  iframeUrl?: string;
-}
-
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
 class PluginRegistry {
   private _plugins: KleffPlugin[] = [];
-  private readonly _backendNavItems: BackendNavItem[] = [];
-  private readonly _backendSettingsPages: BackendSettingsPage[] = [];
   private readonly _listeners: Set<() => void> = new Set();
 
   /** Register a frontend plugin created with definePlugin(). */
@@ -45,16 +25,6 @@ class PluginRegistry {
   /** Stable snapshot reference for useSyncExternalStore. */
   getSnapshot(): readonly KleffPlugin[] {
     return this._plugins;
-  }
-
-  /** Register a nav item contributed by a backend plugin (from UIManifest). */
-  registerNavItem(item: BackendNavItem): void {
-    this._backendNavItems.push(item);
-  }
-
-  /** Register a settings page contributed by a backend plugin (from UIManifest). */
-  registerSettingsPage(page: BackendSettingsPage): void {
-    this._backendSettingsPages.push(page);
   }
 
   /**
@@ -88,16 +58,6 @@ class PluginRegistry {
     return undefined;
   }
 
-  /** All backend-driven nav items. */
-  get backendNavItems(): BackendNavItem[] {
-    return [...this._backendNavItems];
-  }
-
-  /** All backend-driven settings pages. */
-  get backendSettingsPages(): BackendSettingsPage[] {
-    return [...this._backendSettingsPages];
-  }
-
   /** All registered frontend plugins. */
   get plugins(): KleffPlugin[] {
     return [...this._plugins];
@@ -106,8 +66,6 @@ class PluginRegistry {
   /** Reset all registrations (used in tests / hot-reload). */
   reset(): void {
     this._plugins = [];
-    this._backendNavItems.length = 0;
-    this._backendSettingsPages.length = 0;
   }
 }
 
