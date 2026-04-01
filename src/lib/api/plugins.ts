@@ -30,8 +30,25 @@ export interface PluginUIManifestsResponse {
   plugins: BackendPluginUIManifest[];
 }
 
-// ─── API call ─────────────────────────────────────────────────────────────────
+// ─── Installed plugins ────────────────────────────────────────────────────────
+
+export interface InstalledPlugin {
+  id: string;
+  display_name: string;
+  frontend_url: string | null;
+  enabled: boolean;
+}
+
+export interface InstalledPluginsResponse {
+  plugins: InstalledPlugin[];
+}
+
+// ─── API calls ────────────────────────────────────────────────────────────────
 
 export function getPluginUIManifests() {
   return get<PluginUIManifestsResponse>("/api/v1/plugins/ui-manifests");
+}
+
+export function getInstalledPlugins() {
+  return get<{ data: InstalledPluginsResponse }>("/api/v1/admin/plugins").then((r) => r.data);
 }

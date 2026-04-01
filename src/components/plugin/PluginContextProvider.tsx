@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast as sonnerToast } from "sonner";
 import { PluginCtx, type PluginContext, type ToastOptions } from "@kleffio/sdk";
 import { useCurrentUser } from "@/features/auth";
-import { pluginRegistry } from "@/lib/plugins/registry";
-import type { KleffPlugin } from "@kleffio/sdk";
+import { initPluginGlobals } from "@/lib/plugins/globals";
+import { loadPluginScript } from "@/lib/plugins/loader";
+import { getInstalledPlugins } from "@/lib/api/plugins";
 
 // ─── API client ───────────────────────────────────────────────────────────────
 
@@ -88,18 +89,28 @@ function showToast(opts: ToastOptions): void {
 
 interface PluginContextProviderProps {
   children: ReactNode;
-  /** Static plugins loaded at build time from plugins.config.ts */
-  plugins: KleffPlugin[];
 }
 
-export function PluginContextProvider({ children, plugins }: PluginContextProviderProps) {
+export function PluginContextProvider({ children }: PluginContextProviderProps) {
   const router = useRouter();
   const currentUser = useCurrentUser();
 
-  // Register all static plugins once — pluginRegistry deduplicates by id
-  for (const plugin of plugins) {
-    pluginRegistry.register(plugin);
-  }
+  useEffect(() => {
+    initPluginGlobals();
+    getInstalledPlugins()
+      .then(({ plugins }) => {
+        const loads = plugins
+          .filter((p) => p.enabled && p.frontend_url)
+          .map((p) => loadPluginScript(p.frontend_url!).catch((err) => {
+            console.error(`[kleff] Failed to load plugin script for "${p.id}":`, err);
+          }));
+        return Promise.all(loads);
+      })
+      .catch((err) => {
+        console.error("[kleff] Failed to fetch installed plugins:", err);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Provide a shared, namespaced storage — use "panel" as the id since the context
   // is shared. Plugins should call usePluginContext().storage with their own IDs.

@@ -21,9 +21,10 @@ export interface BackendSettingsPage {
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
 class PluginRegistry {
-  private readonly _plugins: KleffPlugin[] = [];
+  private _plugins: KleffPlugin[] = [];
   private readonly _backendNavItems: BackendNavItem[] = [];
   private readonly _backendSettingsPages: BackendSettingsPage[] = [];
+  private readonly _listeners: Set<() => void> = new Set();
 
   /** Register a frontend plugin created with definePlugin(). */
   register(plugin: KleffPlugin): void {
@@ -31,7 +32,19 @@ class PluginRegistry {
       console.warn(`[kleff] Plugin "${plugin.manifest.id}" is already registered. Skipping.`);
       return;
     }
-    this._plugins.push(plugin);
+    this._plugins = [...this._plugins, plugin];
+    this._listeners.forEach((fn) => fn());
+  }
+
+  /** Subscribe to registry changes (for useSyncExternalStore). Returns unsubscribe fn. */
+  subscribe(fn: () => void): () => void {
+    this._listeners.add(fn);
+    return () => this._listeners.delete(fn);
+  }
+
+  /** Stable snapshot reference for useSyncExternalStore. */
+  getSnapshot(): readonly KleffPlugin[] {
+    return this._plugins;
   }
 
   /** Register a nav item contributed by a backend plugin (from UIManifest). */
@@ -92,7 +105,7 @@ class PluginRegistry {
 
   /** Reset all registrations (used in tests / hot-reload). */
   reset(): void {
-    this._plugins.length = 0;
+    this._plugins = [];
     this._backendNavItems.length = 0;
     this._backendSettingsPages.length = 0;
   }

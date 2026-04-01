@@ -3,14 +3,8 @@ FROM node:22-alpine AS deps
 RUN corepack enable pnpm
 WORKDIR /app
 
-# Copy lockfile and full source of local file: packages so pnpm captures all
-# files into the virtual store during install (not just package.json).
-COPY panel/package.json panel/pnpm-lock.yaml ./panel/
-COPY plugin-components/ ./plugin-components/
-COPY plugin-sdk-js/ ./plugin-sdk-js/
+COPY package.json pnpm-lock.yaml ./
 
-# pnpm install from the panel directory will follow file:../ sibling paths
-WORKDIR /app/panel
 RUN pnpm install --frozen-lockfile
 
 # ── Stage 2: Build ────────────────────────────────────────────────────────────
@@ -18,13 +12,8 @@ FROM node:22-alpine AS builder
 RUN corepack enable pnpm
 WORKDIR /app
 
-# Copy all source code and the installed node_modules
-COPY --from=deps /app/panel/node_modules ./panel/node_modules
-COPY panel/ ./panel/
-COPY plugin-components/ ./plugin-components/
-COPY plugin-sdk-js/ ./plugin-sdk-js/
-
-WORKDIR /app/panel
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
@@ -58,5 +47,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# Standalone server structure puts the app folder inside.
 CMD ["node", "server.js"]

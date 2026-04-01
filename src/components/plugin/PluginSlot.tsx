@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, useSyncExternalStore, type ErrorInfo, type ReactNode } from "react";
 import type { SlotName } from "@kleffio/sdk";
 import { pluginRegistry } from "@/lib/plugins/registry";
 
@@ -52,6 +52,11 @@ interface PluginSlotProps {
  * ```
  */
 export function PluginSlot({ name, slotProps }: PluginSlotProps) {
+  useSyncExternalStore(
+    pluginRegistry.subscribe.bind(pluginRegistry),
+    pluginRegistry.getSnapshot.bind(pluginRegistry),
+    pluginRegistry.getSnapshot.bind(pluginRegistry),
+  );
   const registrations = pluginRegistry.getSlotRegistrations(name);
 
   if (registrations.length === 0) return null;
