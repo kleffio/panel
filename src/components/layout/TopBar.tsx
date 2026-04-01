@@ -1,8 +1,10 @@
 "use client";
 
+import { useContext } from "react";
 import { useRouter } from "next/navigation";
 import { Settings, LogOut } from "lucide-react";
 import { useAuth, broadcastSignout } from "@/features/auth";
+import { AuthConfigContext } from "@/features/auth/context";
 import { PluginSlot } from "@/components/plugin/PluginSlot";
 import {
   DropdownMenu,
@@ -15,7 +17,20 @@ import { Avatar, AvatarFallback } from "@kleffio/ui";
 
 export function TopBar() {
   const auth = useAuth();
+  const authConfig = useContext(AuthConfigContext);
   const router = useRouter();
+
+  function handleSignOut() {
+    broadcastSignout();
+    if (authConfig?.auth_mode === "redirect") {
+      // Redirect mode: clear the IDP session via the end_session endpoint.
+      auth.signoutRedirect();
+    } else {
+      // Headless mode: no IDP browser session exists, just clear locally.
+      auth.removeUser();
+      router.push("/auth/login");
+    }
+  }
   const user = auth.user;
   const displayName = user?.profile?.name ?? user?.profile?.email ?? "User";
   const initial = displayName[0]?.toUpperCase() ?? "U";
@@ -40,7 +55,7 @@ export function TopBar() {
             Settings
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => { broadcastSignout(); auth.signoutRedirect(); }}>
+          <DropdownMenuItem variant="destructive" onClick={handleSignOut}>
             <LogOut className="size-4" />
             Sign out
           </DropdownMenuItem>
