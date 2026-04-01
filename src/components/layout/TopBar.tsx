@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Settings, LogOut } from "lucide-react";
 import { useAuth, broadcastSignout } from "@/features/auth";
 import { AuthConfigContext } from "@/features/auth/context";
+import { PluginSlot } from "@/components/plugin/PluginSlot";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +36,8 @@ export function TopBar() {
   const initial = displayName[0]?.toUpperCase() ?? "U";
 
   return (
-    <header className="flex h-14 items-center justify-end border-b border-border px-5">
+    <header className="flex h-14 items-center justify-end gap-2 border-b border-border px-5">
+      <PluginSlot name="topbar.right" />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none">
