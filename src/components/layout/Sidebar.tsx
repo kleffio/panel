@@ -10,7 +10,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useHasRole } from "@/features/auth";
+import { useHasRole, useRoles } from "@/features/auth";
+import { PluginSlot } from "@/components/plugin/PluginSlot";
+import { useBackendPlugins } from "@/lib/plugins/use-backend-plugins";
+import { Puzzle } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -22,6 +25,8 @@ const NAV_ITEMS = [
 export function Sidebar() {
   const pathname = usePathname();
   const isAdmin = useHasRole("admin");
+  const roles = useRoles();
+  const { navItems: backendNavItems } = useBackendPlugins();
 
   const items = isAdmin
     ? [...NAV_ITEMS, { href: "/admin", label: "Admin", icon: ShieldCheck }]
@@ -57,6 +62,29 @@ export function Sidebar() {
             </Link>
           );
         })}
+        <PluginSlot name="navbar.item" />
+
+        {/* Backend-driven nav items from gRPC plugin UI manifests */}
+        {backendNavItems
+          .filter((item) => !item.permission || roles.includes(item.permission))
+          .map((item) => {
+            const active = pathname === item.path || pathname.startsWith(`${item.path}/`);
+            return (
+              <Link
+                key={item.path}
+                href={item.path}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                )}
+              >
+                <Puzzle className="size-4 shrink-0" />
+                {item.label}
+              </Link>
+            );
+          })}
       </nav>
 
     </aside>

@@ -11,6 +11,9 @@ importers:
       '@fontsource-variable/geist':
         specifier: ^5.2.8
         version: 5.2.8
+      '@kleffio/sdk':
+        specifier: github:kleffio/plugin-sdk-js#v0.1.0
+        version: https://codeload.github.com/kleffio/plugin-sdk-js/tar.gz/53dc62a3aa928ade5315f7105de72c455d617417(react@19.2.4)
       '@kleffio/ui':
         specifier: github:kleffio/ui#v0.1.0
         version: https://codeload.github.com/kleffio/ui/tar.gz/ac5ab3ffe82630bafe7f8965f1510bbb9d629b01(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -383,6 +386,12 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@kleffio/sdk@https://codeload.github.com/kleffio/plugin-sdk-js/tar.gz/53dc62a3aa928ade5315f7105de72c455d617417':
+    resolution: {tarball: https://codeload.github.com/kleffio/plugin-sdk-js/tar.gz/53dc62a3aa928ade5315f7105de72c455d617417}
+    version: 0.1.0
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
 
   '@kleffio/ui@https://codeload.github.com/kleffio/ui/tar.gz/ac5ab3ffe82630bafe7f8965f1510bbb9d629b01':
     resolution: {tarball: https://codeload.github.com/kleffio/ui/tar.gz/ac5ab3ffe82630bafe7f8965f1510bbb9d629b01}
@@ -3267,6 +3276,10 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@kleffio/sdk@https://codeload.github.com/kleffio/plugin-sdk-js/tar.gz/53dc62a3aa928ade5315f7105de72c455d617417(react@19.2.4)':
+    dependencies:
+      react: 19.2.4
 
   '@kleffio/ui@https://codeload.github.com/kleffio/ui/tar.gz/ac5ab3ffe82630bafe7f8965f1510bbb9d629b01(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
