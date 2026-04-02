@@ -11,7 +11,7 @@ interface PluginPageProps {
  * Catch-all route for plugin-registered pages.
  * A plugin registers a page via:
  *   slots: [{ slot: "page", component: MyPage, props: { path: "/my-page" } }]
- * It will be available at /p/my-page.
+ * It will be available at /my-page.
  */
 export default function PluginPage({ params }: PluginPageProps) {
   const { slug } = use(params);

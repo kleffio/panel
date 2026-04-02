@@ -5,6 +5,7 @@ import { BarChart, Bar, XAxis, CartesianGrid, ResponsiveContainer } from "rechar
 import { MetricCard } from "@/components/domain/MetricCard";
 import { ServerCard } from "@/components/domain/ServerCard";
 import { PluginSlot } from "@/components/plugin/PluginSlot";
+import { PluginWrapper } from "@/components/plugin/PluginWrapper";
 import { Card, CardContent, CardHeader, CardTitle } from "@kleffio/ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@kleffio/ui";
 import type { GameServer } from "@/types";
@@ -89,13 +90,13 @@ const crashedCount = MOCK_SERVERS.filter((s) => s.status === "crashed").length;
 export function DashboardView() {
   return (
     <div className="space-y-6">
-      <div>
+      <PluginWrapper name="dashboard.header">
         <h1 className="text-xl font-semibold text-foreground">Overview</h1>
         <p className="text-sm text-muted-foreground">Your infrastructure at a glance.</p>
-      </div>
+      </PluginWrapper>
 
       {/* Metrics */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <PluginWrapper name="dashboard.metrics" className="grid grid-cols-2 gap-4 lg:grid-cols-4" slotProps={{ servers: MOCK_SERVERS, runningServers, totalPlayers, crashedCount }}>
         <MetricCard
           label="Active Servers"
           value={runningServers.length}
@@ -120,10 +121,16 @@ export function DashboardView() {
           icon={<AlertTriangle className="size-4" />}
           delta={{ value: "1 new", direction: "down" }}
         />
-      </div>
+      </PluginWrapper>
+
+      {/* Plugin top */}
+      <PluginSlot name="dashboard.top" />
 
       {/* Plugin widgets */}
       <PluginSlot name="dashboard.widget" />
+
+      {/* Plugin bottom */}
+      <PluginSlot name="dashboard.bottom" />
 
       {/* Main content */}
       <Tabs defaultValue="servers">
@@ -133,28 +140,30 @@ export function DashboardView() {
         </TabsList>
 
         <TabsContent value="servers" className="mt-4">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <PluginWrapper name="dashboard.servers-tab" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" slotProps={{ servers: MOCK_SERVERS }}>
             {MOCK_SERVERS.map((server) => (
               <ServerCard key={server.id} server={server} />
             ))}
-          </div>
+          </PluginWrapper>
         </TabsContent>
 
         <TabsContent value="activity" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Deployments — last 7 days</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={deploymentChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                  <XAxis dataKey="day" tick={{ fill: "oklch(0.65 0 0)", fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <Bar dataKey="deployments" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+          <PluginWrapper name="dashboard.activity-tab" slotProps={{ deploymentChartData }}>
+            <Card>
+              <CardHeader>
+                <CardTitle>Deployments — last 7 days</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={deploymentChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="day" tick={{ fill: "oklch(0.65 0 0)", fontSize: 12 }} axisLine={false} tickLine={false} />
+                    <Bar dataKey="deployments" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </PluginWrapper>
         </TabsContent>
       </Tabs>
     </div>

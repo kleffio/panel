@@ -2,6 +2,8 @@
 
 import { Plus } from "lucide-react";
 import { ServerCard } from "@/components/domain/ServerCard";
+import { PluginSlot } from "@/components/plugin/PluginSlot";
+import { PluginWrapper } from "@/components/plugin/PluginWrapper";
 import { Button } from "@kleffio/ui";
 import { Input } from "@kleffio/ui";
 import type { GameServer } from "@/types";
@@ -71,7 +73,10 @@ const MOCK_SERVERS: GameServer[] = [
 export function ServersView() {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Plugin top */}
+      <PluginSlot name="servers.top" />
+
+      <PluginWrapper name="servers.header" className="flex items-center justify-between" slotProps={{ servers: MOCK_SERVERS }}>
         <div>
           <h1 className="text-xl font-semibold text-foreground">Game Servers</h1>
           <p className="text-sm text-muted-foreground">
@@ -82,18 +87,21 @@ export function ServersView() {
           <Plus className="size-4" />
           New Server
         </Button>
-      </div>
+      </PluginWrapper>
 
       <Input
         placeholder="Search servers…"
         className="max-w-sm"
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <PluginWrapper name="servers.list" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" slotProps={{ servers: MOCK_SERVERS }}>
         {MOCK_SERVERS.map((server) => (
           <ServerCard key={server.id} server={server} />
         ))}
-      </div>
+      </PluginWrapper>
+
+      {/* Plugin bottom */}
+      <PluginSlot name="servers.bottom" />
     </div>
   );
 }
