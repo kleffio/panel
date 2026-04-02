@@ -8,6 +8,7 @@ import {
   CreditCard,
   Settings,
   ShieldCheck,
+  Store,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHasRole, useRoles } from "@/features/auth";
@@ -16,8 +17,9 @@ import { useBackendPlugins } from "@/lib/plugins/use-backend-plugins";
 import { Puzzle } from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/servers",   label: "Servers",   icon: Server },
+  { href: "/dashboard",   label: "Dashboard",   icon: LayoutDashboard },
+  { href: "/servers",     label: "Servers",     icon: Server },
+  { href: "/marketplace", label: "Marketplace", icon: Store },
   { href: "/billing",   label: "Billing",   icon: CreditCard },
   { href: "/settings",  label: "Settings",  icon: Settings },
 ];
