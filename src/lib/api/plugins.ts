@@ -1,4 +1,4 @@
-import { get } from "./request";
+import { get, post } from "./request";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +43,26 @@ export interface InstalledPluginsResponse {
   plugins: InstalledPlugin[];
 }
 
+// ─── Catalog ─────────────────────────────────────────────────────────────────
+
+export interface CatalogPlugin {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+  tags: string[];
+  author: string;
+  image: string;
+  version: string;
+  verified: boolean;
+  logo?: string;
+}
+
+export interface CatalogResponse {
+  plugins: CatalogPlugin[];
+  cached_at: string;
+}
+
 // ─── API calls ────────────────────────────────────────────────────────────────
 
 export function getPluginUIManifests() {
@@ -51,4 +71,12 @@ export function getPluginUIManifests() {
 
 export function getInstalledPlugins() {
   return get<{ data: InstalledPluginsResponse }>("/api/v1/admin/plugins").then((r) => r.data);
+}
+
+export function getCatalog() {
+  return get<{ data: CatalogResponse }>("/api/v1/plugins/catalog").then((r) => r.data);
+}
+
+export function installPlugin(id: string, config: Record<string, string> = {}) {
+  return post<void, { id: string; config: Record<string, string> }>("/api/v1/admin/plugins", { id, config });
 }

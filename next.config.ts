@@ -22,7 +22,11 @@ const nextConfig: NextConfig = {
   },
 
   async rewrites() {
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+    // API_BASE_URL is the server-side (container-to-container) address.
+    // NEXT_PUBLIC_API_BASE_URL is the browser-side address baked at build time.
+    // Inside Docker the server-side rewrite must use the Docker network hostname
+    // (e.g. http://api:8080), not localhost which points to the panel container.
+    const apiBase = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
     if (!apiBase) return [];
     return [
       {
