@@ -7,6 +7,7 @@ import { Loader2, Upload, User } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@kleffio/ui";
 import { PluginSlot } from "@/components/plugin/PluginSlot";
+import { PluginWrapper } from "@/components/plugin/PluginWrapper";
 import { useBackendPlugins } from "@/lib/plugins/use-backend-plugins";
 import { Button } from "@kleffio/ui";
 import { Input } from "@kleffio/ui";
@@ -255,36 +256,43 @@ export function SettingsView() {
 
   return (
     <div className="space-y-6">
-      <div>
+      {/* Plugin top */}
+      <PluginSlot name="settings.top" />
+
+      <PluginWrapper name="settings.header">
         <h1 className="text-xl font-semibold text-foreground">Settings</h1>
         <p className="text-sm text-muted-foreground">
           Manage your account and organization settings.
         </p>
-      </div>
+      </PluginWrapper>
 
       {/* Profile — connects to GET/PATCH /api/v1/users/me */}
-      <ProfileCard />
+      <PluginWrapper name="settings.profile">
+        <ProfileCard />
+      </PluginWrapper>
 
       {/* Organization */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Organization</CardTitle>
-          <CardDescription>Settings that apply to your entire organization.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="org-name">Organization Name</Label>
-              <Input id="org-name" placeholder="Acme Corp" />
+      <PluginWrapper name="settings.org">
+        <Card>
+          <CardHeader>
+            <CardTitle>Organization</CardTitle>
+            <CardDescription>Settings that apply to your entire organization.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="org-name">Organization Name</Label>
+                <Input id="org-name" placeholder="Acme Corp" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="org-slug">Slug</Label>
+                <Input id="org-slug" placeholder="acme-corp" />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="org-slug">Slug</Label>
-              <Input id="org-slug" placeholder="acme-corp" />
-            </div>
-          </div>
-          <Button size="sm">Save</Button>
-        </CardContent>
-      </Card>
+            <Button size="sm">Save</Button>
+          </CardContent>
+        </Card>
+      </PluginWrapper>
 
       {/* Frontend plugin sections */}
       <PluginSlot name="settings.section" />
@@ -307,6 +315,9 @@ export function SettingsView() {
             </CardContent>
           </Card>
         ))}
+
+      {/* Plugin bottom */}
+      <PluginSlot name="settings.bottom" />
 
       {/* Danger zone */}
       <Card className="border-destructive/30">
