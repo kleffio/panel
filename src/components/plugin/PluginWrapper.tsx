@@ -3,7 +3,7 @@
 import { useSyncExternalStore, type ReactNode } from "react";
 import type { SlotName } from "@kleffio/sdk";
 import { pluginRegistry } from "@/lib/plugins/registry";
-import { PluginErrorBoundary } from "../../lib/plugins/PluginErrorBoundary";
+import { PluginErrorBoundary } from "@/lib/plugins/PluginErrorBoundary";
 
 // ─── PluginWrapper ────────────────────────────────────────────────────────────
 // Wraps default panel content that plugins can override.
