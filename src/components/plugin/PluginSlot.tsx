@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import type { SlotName } from "@kleffio/sdk";
 import { pluginRegistry } from "@/lib/plugins/registry";
-import { PluginErrorBoundary } from "./_PluginErrorBoundary";
+import { PluginErrorBoundary } from "../../lib/plugins/PluginErrorBoundary";
 
 // ─── PluginSlot ───────────────────────────────────────────────────────────────
 // Pure injection point — renders plugin components registered for this slot.

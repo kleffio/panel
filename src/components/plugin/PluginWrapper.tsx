@@ -3,7 +3,7 @@
 import { useSyncExternalStore, type ReactNode } from "react";
 import type { SlotName } from "@kleffio/sdk";
 import { pluginRegistry } from "@/lib/plugins/registry";
-import { PluginErrorBoundary } from "./_PluginErrorBoundary";
+import { PluginErrorBoundary } from "../../lib/plugins/PluginErrorBoundary";
 
 // ─── PluginWrapper ────────────────────────────────────────────────────────────
 // Wraps default panel content that plugins can override.
@@ -32,18 +32,18 @@ export function PluginWrapper({ name, slotProps, className, children }: PluginWr
     registrations.length === 0
       ? children
       : registrations.map((reg, index) => {
-          const Component = reg.component;
-          if (!Component) return null;
-          const mergedProps = { ...reg.props, ...slotProps };
-          return (
-            <PluginErrorBoundary
-              key={`${name}-${index}`}
-              pluginId={String(mergedProps.pluginId ?? `slot-${name}-${index}`)}
-            >
-              <Component {...mergedProps} />
-            </PluginErrorBoundary>
-          );
-        });
+        const Component = reg.component;
+        if (!Component) return null;
+        const mergedProps = { ...reg.props, ...slotProps };
+        return (
+          <PluginErrorBoundary
+            key={`${name}-${index}`}
+            pluginId={String(mergedProps.pluginId ?? `slot-${name}-${index}`)}
+          >
+            <Component {...mergedProps} />
+          </PluginErrorBoundary>
+        );
+      });
 
   if (className) return <div className={className}>{content}</div>;
   return <>{content}</>;
