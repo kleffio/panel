@@ -75,19 +75,17 @@ export function ServersView() {
       {/* Plugin top */}
       <PluginSlot name="servers.top" />
 
-      <PluginSlot name="servers.header" slotProps={{ servers: MOCK_SERVERS }}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">Game Servers</h1>
-            <p className="text-sm text-muted-foreground">
-              {MOCK_SERVERS.length} server{MOCK_SERVERS.length !== 1 ? "s" : ""} in your organization
-            </p>
-          </div>
-          <Button size="sm">
-            <Plus className="size-4" />
-            New Server
-          </Button>
+      <PluginSlot name="servers.header" className="flex items-center justify-between" slotProps={{ servers: MOCK_SERVERS }}>
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Game Servers</h1>
+          <p className="text-sm text-muted-foreground">
+            {MOCK_SERVERS.length} server{MOCK_SERVERS.length !== 1 ? "s" : ""} in your organization
+          </p>
         </div>
+        <Button size="sm">
+          <Plus className="size-4" />
+          New Server
+        </Button>
       </PluginSlot>
 
       <Input

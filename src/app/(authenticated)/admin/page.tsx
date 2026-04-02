@@ -29,10 +29,8 @@ export default function AdminPage() {
       {/* Plugin top */}
       <PluginSlot name="admin.top" />
 
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Admin Panel</h1>
-        <p className="text-sm text-muted-foreground">Platform-wide management. Handle with care.</p>
-      </div>
+      <h1 className="text-xl font-semibold text-foreground">Admin Panel</h1>
+      <p className="text-sm text-muted-foreground">Platform-wide management. Handle with care.</p>
 
       <PluginSlot name="admin.metrics" className="grid grid-cols-2 gap-4 lg:grid-cols-3" slotProps={{ users, orgs, suspendedUsers, adminCount }}>
         <MetricCard label="Total Users" value={users.length} icon={<Users className="size-4" />} />
@@ -40,7 +38,7 @@ export default function AdminPage() {
         <MetricCard label="Suspended" value={suspendedUsers} icon={<ShieldAlert className="size-4" />} />
       </PluginSlot>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <PluginSlot name="admin.cards" className="grid gap-6 lg:grid-cols-2">
         <PluginSlot name="admin.users" slotProps={{ users }}>
           <Card>
             <CardHeader>
@@ -115,7 +113,7 @@ export default function AdminPage() {
             </CardContent>
           </Card>
         </PluginSlot>
-      </div>
+      </PluginSlot>
 
       {/* Plugin bottom */}
       <PluginSlot name="admin.bottom" />

@@ -89,10 +89,8 @@ const crashedCount = MOCK_SERVERS.filter((s) => s.status === "crashed").length;
 export function DashboardView() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Overview</h1>
-        <p className="text-sm text-muted-foreground">Your infrastructure at a glance.</p>
-      </div>
+      <h1 className="text-xl font-semibold text-foreground">Overview</h1>
+      <p className="text-sm text-muted-foreground">Your infrastructure at a glance.</p>
 
       {/* Metrics */}
       <PluginSlot name="dashboard.metrics" className="grid grid-cols-2 gap-4 lg:grid-cols-4" slotProps={{ servers: MOCK_SERVERS, runningServers, totalPlayers, crashedCount }}>

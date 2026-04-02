@@ -258,12 +258,10 @@ export function SettingsView() {
       {/* Plugin top */}
       <PluginSlot name="settings.top" />
 
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage your account and organization settings.
-        </p>
-      </div>
+      <h1 className="text-xl font-semibold text-foreground">Settings</h1>
+      <p className="text-sm text-muted-foreground">
+        Manage your account and organization settings.
+      </p>
 
       {/* Profile — connects to GET/PATCH /api/v1/users/me */}
       <PluginSlot name="settings.profile">

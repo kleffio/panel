@@ -92,10 +92,8 @@ export function BillingView() {
       {/* Plugin top */}
       <PluginSlot name="billing.top" />
 
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Billing</h1>
-        <p className="text-sm text-muted-foreground">Manage your subscription and invoices.</p>
-      </div>
+      <h1 className="text-xl font-semibold text-foreground">Billing</h1>
+      <p className="text-sm text-muted-foreground">Manage your subscription and invoices.</p>
 
       {/* Current plan */}
       <PluginSlot name="billing.plan" slotProps={{ subscription: MOCK_SUBSCRIPTION }}>
