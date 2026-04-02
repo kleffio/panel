@@ -14,6 +14,7 @@ import {
 } from "@kleffio/ui";
 import { PlanBadge } from "@/components/domain/PlanBadge";
 import { PluginSlot } from "@/components/plugin/PluginSlot";
+import { PluginWrapper } from "@/components/plugin/PluginWrapper";
 import type { Invoice, Subscription } from "@/types";
 
 // TODO: replace with useQuery
@@ -92,11 +93,13 @@ export function BillingView() {
       {/* Plugin top */}
       <PluginSlot name="billing.top" />
 
-      <h1 className="text-xl font-semibold text-foreground">Billing</h1>
-      <p className="text-sm text-muted-foreground">Manage your subscription and invoices.</p>
+      <PluginWrapper name="billing.header">
+        <h1 className="text-xl font-semibold text-foreground">Billing</h1>
+        <p className="text-sm text-muted-foreground">Manage your subscription and invoices.</p>
+      </PluginWrapper>
 
       {/* Current plan */}
-      <PluginSlot name="billing.plan" slotProps={{ subscription: MOCK_SUBSCRIPTION }}>
+      <PluginWrapper name="billing.plan" slotProps={{ subscription: MOCK_SUBSCRIPTION }}>
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -144,10 +147,10 @@ export function BillingView() {
             </div>
           </CardContent>
         </Card>
-      </PluginSlot>
+      </PluginWrapper>
 
       {/* Invoices */}
-      <PluginSlot name="billing.invoices" slotProps={{ invoices: MOCK_INVOICES }}>
+      <PluginWrapper name="billing.invoices" slotProps={{ invoices: MOCK_INVOICES }}>
         <Card>
           <CardHeader>
             <CardTitle>Invoice History</CardTitle>
@@ -192,7 +195,7 @@ export function BillingView() {
             </Table>
           </CardContent>
         </Card>
-      </PluginSlot>
+      </PluginWrapper>
 
       {/* Plugin bottom */}
       <PluginSlot name="billing.bottom" />

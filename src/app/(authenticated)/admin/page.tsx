@@ -5,6 +5,7 @@ import { Users, Building2, ShieldAlert } from "lucide-react";
 import { get, post } from "@/lib/api";
 import { MetricCard } from "@/components/domain/MetricCard";
 import { PluginSlot } from "@/components/plugin/PluginSlot";
+import { PluginWrapper } from "@/components/plugin/PluginWrapper";
 import { Card, CardContent, CardHeader, CardTitle } from "@kleffio/ui";
 import { Badge } from "@kleffio/ui";
 import { Button } from "@kleffio/ui";
@@ -29,17 +30,19 @@ export default function AdminPage() {
       {/* Plugin top */}
       <PluginSlot name="admin.top" />
 
-      <h1 className="text-xl font-semibold text-foreground">Admin Panel</h1>
-      <p className="text-sm text-muted-foreground">Platform-wide management. Handle with care.</p>
+      <PluginWrapper name="admin.header">
+        <h1 className="text-xl font-semibold text-foreground">Admin Panel</h1>
+        <p className="text-sm text-muted-foreground">Platform-wide management. Handle with care.</p>
+      </PluginWrapper>
 
-      <PluginSlot name="admin.metrics" className="grid grid-cols-2 gap-4 lg:grid-cols-3" slotProps={{ users, orgs, suspendedUsers, adminCount }}>
+      <PluginWrapper name="admin.metrics" className="grid grid-cols-2 gap-4 lg:grid-cols-3" slotProps={{ users, orgs, suspendedUsers, adminCount }}>
         <MetricCard label="Total Users" value={users.length} icon={<Users className="size-4" />} />
         <MetricCard label="Organizations" value={orgs.length} icon={<Building2 className="size-4" />} />
         <MetricCard label="Suspended" value={suspendedUsers} icon={<ShieldAlert className="size-4" />} />
-      </PluginSlot>
+      </PluginWrapper>
 
-      <PluginSlot name="admin.cards" className="grid gap-6 lg:grid-cols-2">
-        <PluginSlot name="admin.users" slotProps={{ users }}>
+      <PluginWrapper name="admin.cards" className="grid gap-6 lg:grid-cols-2">
+        <PluginWrapper name="admin.users" slotProps={{ users }}>
           <Card>
             <CardHeader>
               <CardTitle>Users</CardTitle>
@@ -76,9 +79,9 @@ export default function AdminPage() {
               ))}
             </CardContent>
           </Card>
-        </PluginSlot>
+        </PluginWrapper>
 
-        <PluginSlot name="admin.orgs" slotProps={{ orgs }}>
+        <PluginWrapper name="admin.orgs" slotProps={{ orgs }}>
           <Card>
             <CardHeader>
               <CardTitle>Organizations</CardTitle>
@@ -112,8 +115,8 @@ export default function AdminPage() {
               ))}
             </CardContent>
           </Card>
-        </PluginSlot>
-      </PluginSlot>
+        </PluginWrapper>
+      </PluginWrapper>
 
       {/* Plugin bottom */}
       <PluginSlot name="admin.bottom" />

@@ -7,6 +7,7 @@ import { Loader2, Upload, User } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@kleffio/ui";
 import { PluginSlot } from "@/components/plugin/PluginSlot";
+import { PluginWrapper } from "@/components/plugin/PluginWrapper";
 import { useBackendPlugins } from "@/lib/plugins/use-backend-plugins";
 import { Button } from "@kleffio/ui";
 import { Input } from "@kleffio/ui";
@@ -258,18 +259,20 @@ export function SettingsView() {
       {/* Plugin top */}
       <PluginSlot name="settings.top" />
 
-      <h1 className="text-xl font-semibold text-foreground">Settings</h1>
-      <p className="text-sm text-muted-foreground">
-        Manage your account and organization settings.
-      </p>
+      <PluginWrapper name="settings.header">
+        <h1 className="text-xl font-semibold text-foreground">Settings</h1>
+        <p className="text-sm text-muted-foreground">
+          Manage your account and organization settings.
+        </p>
+      </PluginWrapper>
 
       {/* Profile — connects to GET/PATCH /api/v1/users/me */}
-      <PluginSlot name="settings.profile">
+      <PluginWrapper name="settings.profile">
         <ProfileCard />
-      </PluginSlot>
+      </PluginWrapper>
 
       {/* Organization */}
-      <PluginSlot name="settings.org">
+      <PluginWrapper name="settings.org">
         <Card>
           <CardHeader>
             <CardTitle>Organization</CardTitle>
@@ -289,7 +292,7 @@ export function SettingsView() {
             <Button size="sm">Save</Button>
           </CardContent>
         </Card>
-      </PluginSlot>
+      </PluginWrapper>
 
       {/* Frontend plugin sections */}
       <PluginSlot name="settings.section" />
