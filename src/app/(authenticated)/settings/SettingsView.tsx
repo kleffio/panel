@@ -255,6 +255,9 @@ export function SettingsView() {
 
   return (
     <div className="space-y-6">
+      {/* Plugin top */}
+      <PluginSlot name="settings.top" />
+
       <div>
         <h1 className="text-xl font-semibold text-foreground">Settings</h1>
         <p className="text-sm text-muted-foreground">
@@ -263,28 +266,32 @@ export function SettingsView() {
       </div>
 
       {/* Profile — connects to GET/PATCH /api/v1/users/me */}
-      <ProfileCard />
+      <PluginSlot name="settings.profile">
+        <ProfileCard />
+      </PluginSlot>
 
       {/* Organization */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Organization</CardTitle>
-          <CardDescription>Settings that apply to your entire organization.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="org-name">Organization Name</Label>
-              <Input id="org-name" placeholder="Acme Corp" />
+      <PluginSlot name="settings.org">
+        <Card>
+          <CardHeader>
+            <CardTitle>Organization</CardTitle>
+            <CardDescription>Settings that apply to your entire organization.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="org-name">Organization Name</Label>
+                <Input id="org-name" placeholder="Acme Corp" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="org-slug">Slug</Label>
+                <Input id="org-slug" placeholder="acme-corp" />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="org-slug">Slug</Label>
-              <Input id="org-slug" placeholder="acme-corp" />
-            </div>
-          </div>
-          <Button size="sm">Save</Button>
-        </CardContent>
-      </Card>
+            <Button size="sm">Save</Button>
+          </CardContent>
+        </Card>
+      </PluginSlot>
 
       {/* Frontend plugin sections */}
       <PluginSlot name="settings.section" />
@@ -307,6 +314,9 @@ export function SettingsView() {
             </CardContent>
           </Card>
         ))}
+
+      {/* Plugin bottom */}
+      <PluginSlot name="settings.bottom" />
 
       {/* Danger zone */}
       <Card className="border-destructive/30">

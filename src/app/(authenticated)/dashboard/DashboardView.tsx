@@ -95,35 +95,43 @@ export function DashboardView() {
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <MetricCard
-          label="Active Servers"
-          value={runningServers.length}
-          icon={<Server className="size-4" />}
-          delta={{ value: "2 this week", direction: "up" }}
-        />
-        <MetricCard
-          label="Live Players"
-          value={totalPlayers}
-          icon={<Users className="size-4" />}
-          delta={{ value: "+12%", direction: "up" }}
-        />
-        <MetricCard
-          label="Deployments Today"
-          value={9}
-          icon={<Activity className="size-4" />}
-          delta={{ value: "same as yesterday", direction: "neutral" }}
-        />
-        <MetricCard
-          label="Incidents"
-          value={crashedCount}
-          icon={<AlertTriangle className="size-4" />}
-          delta={{ value: "1 new", direction: "down" }}
-        />
-      </div>
+      <PluginSlot name="dashboard.metrics" slotProps={{ servers: MOCK_SERVERS, runningServers, totalPlayers, crashedCount }}>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <MetricCard
+            label="Active Servers"
+            value={runningServers.length}
+            icon={<Server className="size-4" />}
+            delta={{ value: "2 this week", direction: "up" }}
+          />
+          <MetricCard
+            label="Live Players"
+            value={totalPlayers}
+            icon={<Users className="size-4" />}
+            delta={{ value: "+12%", direction: "up" }}
+          />
+          <MetricCard
+            label="Deployments Today"
+            value={9}
+            icon={<Activity className="size-4" />}
+            delta={{ value: "same as yesterday", direction: "neutral" }}
+          />
+          <MetricCard
+            label="Incidents"
+            value={crashedCount}
+            icon={<AlertTriangle className="size-4" />}
+            delta={{ value: "1 new", direction: "down" }}
+          />
+        </div>
+      </PluginSlot>
+
+      {/* Plugin top */}
+      <PluginSlot name="dashboard.top" />
 
       {/* Plugin widgets */}
       <PluginSlot name="dashboard.widget" />
+
+      {/* Plugin bottom */}
+      <PluginSlot name="dashboard.bottom" />
 
       {/* Main content */}
       <Tabs defaultValue="servers">
@@ -133,28 +141,32 @@ export function DashboardView() {
         </TabsList>
 
         <TabsContent value="servers" className="mt-4">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {MOCK_SERVERS.map((server) => (
-              <ServerCard key={server.id} server={server} />
-            ))}
-          </div>
+          <PluginSlot name="dashboard.servers-tab" slotProps={{ servers: MOCK_SERVERS }}>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {MOCK_SERVERS.map((server) => (
+                <ServerCard key={server.id} server={server} />
+              ))}
+            </div>
+          </PluginSlot>
         </TabsContent>
 
         <TabsContent value="activity" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Deployments — last 7 days</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={deploymentChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                  <XAxis dataKey="day" tick={{ fill: "oklch(0.65 0 0)", fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <Bar dataKey="deployments" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+          <PluginSlot name="dashboard.activity-tab" slotProps={{ deploymentChartData }}>
+            <Card>
+              <CardHeader>
+                <CardTitle>Deployments — last 7 days</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={deploymentChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="day" tick={{ fill: "oklch(0.65 0 0)", fontSize: 12 }} axisLine={false} tickLine={false} />
+                    <Bar dataKey="deployments" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </PluginSlot>
         </TabsContent>
       </Tabs>
     </div>

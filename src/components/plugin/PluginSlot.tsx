@@ -40,18 +40,26 @@ interface PluginSlotProps {
   name: SlotName;
   /** Extra props forwarded to every component in this slot. */
   slotProps?: Record<string, unknown>;
+  /**
+   * Default content rendered when no plugin has registered for this slot.
+   * If a plugin registers for this slot, it replaces these children entirely.
+   *
+   * Usage (override slot):
+   * ```tsx
+   * <PluginSlot name="dashboard.metrics">
+   *   <DefaultMetrics />
+   * </PluginSlot>
+   * ```
+   *
+   * Usage (injection slot, no default):
+   * ```tsx
+   * <PluginSlot name="dashboard.top" />
+   * ```
+   */
+  children?: ReactNode;
 }
 
-/**
- * Renders all components registered for the given slot name.
- *
- * Usage:
- * ```tsx
- * <PluginSlot name="navbar.item" />
- * <PluginSlot name="dashboard.widget" />
- * ```
- */
-export function PluginSlot({ name, slotProps }: PluginSlotProps) {
+export function PluginSlot({ name, slotProps, children }: PluginSlotProps) {
   useSyncExternalStore(
     pluginRegistry.subscribe.bind(pluginRegistry),
     pluginRegistry.getSnapshot.bind(pluginRegistry),
@@ -59,8 +67,10 @@ export function PluginSlot({ name, slotProps }: PluginSlotProps) {
   );
   const registrations = pluginRegistry.getSlotRegistrations(name);
 
-  if (registrations.length === 0) return null;
+  // No plugin registered → render default content (or nothing for injection slots)
+  if (registrations.length === 0) return <>{children}</>;
 
+  // Plugin registered → render plugin components, replacing the default
   return (
     <>
       {registrations.map((reg, index) => {

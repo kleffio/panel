@@ -2,6 +2,7 @@
 
 import { Plus } from "lucide-react";
 import { ServerCard } from "@/components/domain/ServerCard";
+import { PluginSlot } from "@/components/plugin/PluginSlot";
 import { Button } from "@kleffio/ui";
 import { Input } from "@kleffio/ui";
 import type { GameServer } from "@/types";
@@ -71,29 +72,39 @@ const MOCK_SERVERS: GameServer[] = [
 export function ServersView() {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Game Servers</h1>
-          <p className="text-sm text-muted-foreground">
-            {MOCK_SERVERS.length} server{MOCK_SERVERS.length !== 1 ? "s" : ""} in your organization
-          </p>
+      {/* Plugin top */}
+      <PluginSlot name="servers.top" />
+
+      <PluginSlot name="servers.header" slotProps={{ servers: MOCK_SERVERS }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Game Servers</h1>
+            <p className="text-sm text-muted-foreground">
+              {MOCK_SERVERS.length} server{MOCK_SERVERS.length !== 1 ? "s" : ""} in your organization
+            </p>
+          </div>
+          <Button size="sm">
+            <Plus className="size-4" />
+            New Server
+          </Button>
         </div>
-        <Button size="sm">
-          <Plus className="size-4" />
-          New Server
-        </Button>
-      </div>
+      </PluginSlot>
 
       <Input
         placeholder="Search servers…"
         className="max-w-sm"
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {MOCK_SERVERS.map((server) => (
-          <ServerCard key={server.id} server={server} />
-        ))}
-      </div>
+      <PluginSlot name="servers.list" slotProps={{ servers: MOCK_SERVERS }}>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {MOCK_SERVERS.map((server) => (
+            <ServerCard key={server.id} server={server} />
+          ))}
+        </div>
+      </PluginSlot>
+
+      {/* Plugin bottom */}
+      <PluginSlot name="servers.bottom" />
     </div>
   );
 }
