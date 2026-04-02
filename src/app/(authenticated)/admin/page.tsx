@@ -34,12 +34,10 @@ export default function AdminPage() {
         <p className="text-sm text-muted-foreground">Platform-wide management. Handle with care.</p>
       </div>
 
-      <PluginSlot name="admin.metrics" slotProps={{ users, orgs, suspendedUsers, adminCount }}>
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-          <MetricCard label="Total Users" value={users.length} icon={<Users className="size-4" />} />
-          <MetricCard label="Organizations" value={orgs.length} icon={<Building2 className="size-4" />} />
-          <MetricCard label="Suspended" value={suspendedUsers} icon={<ShieldAlert className="size-4" />} />
-        </div>
+      <PluginSlot name="admin.metrics" className="grid grid-cols-2 gap-4 lg:grid-cols-3" slotProps={{ users, orgs, suspendedUsers, adminCount }}>
+        <MetricCard label="Total Users" value={users.length} icon={<Users className="size-4" />} />
+        <MetricCard label="Organizations" value={orgs.length} icon={<Building2 className="size-4" />} />
+        <MetricCard label="Suspended" value={suspendedUsers} icon={<ShieldAlert className="size-4" />} />
       </PluginSlot>
 
       <div className="grid gap-6 lg:grid-cols-2">

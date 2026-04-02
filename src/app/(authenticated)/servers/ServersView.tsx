@@ -95,12 +95,10 @@ export function ServersView() {
         className="max-w-sm"
       />
 
-      <PluginSlot name="servers.list" slotProps={{ servers: MOCK_SERVERS }}>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {MOCK_SERVERS.map((server) => (
-            <ServerCard key={server.id} server={server} />
-          ))}
-        </div>
+      <PluginSlot name="servers.list" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" slotProps={{ servers: MOCK_SERVERS }}>
+        {MOCK_SERVERS.map((server) => (
+          <ServerCard key={server.id} server={server} />
+        ))}
       </PluginSlot>
 
       {/* Plugin bottom */}

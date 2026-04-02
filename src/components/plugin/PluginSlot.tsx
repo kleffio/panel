@@ -41,25 +41,20 @@ interface PluginSlotProps {
   /** Extra props forwarded to every component in this slot. */
   slotProps?: Record<string, unknown>;
   /**
-   * Default content rendered when no plugin has registered for this slot.
-   * If a plugin registers for this slot, it replaces these children entirely.
+   * When provided, PluginSlot renders as a div with this className instead of
+   * a fragment — eliminating the need for a wrapper div inside the slot.
    *
-   * Usage (override slot):
    * ```tsx
-   * <PluginSlot name="dashboard.metrics">
-   *   <DefaultMetrics />
+   * <PluginSlot name="dashboard.metrics" className="grid grid-cols-4 gap-4">
+   *   <MetricCard ... />
    * </PluginSlot>
    * ```
-   *
-   * Usage (injection slot, no default):
-   * ```tsx
-   * <PluginSlot name="dashboard.top" />
-   * ```
    */
+  className?: string;
   children?: ReactNode;
 }
 
-export function PluginSlot({ name, slotProps, children }: PluginSlotProps) {
+export function PluginSlot({ name, slotProps, className, children }: PluginSlotProps) {
   useSyncExternalStore(
     pluginRegistry.subscribe.bind(pluginRegistry),
     pluginRegistry.getSnapshot.bind(pluginRegistry),
@@ -67,27 +62,23 @@ export function PluginSlot({ name, slotProps, children }: PluginSlotProps) {
   );
   const registrations = pluginRegistry.getSlotRegistrations(name);
 
-  // No plugin registered → render default content (or nothing for injection slots)
-  if (registrations.length === 0) return <>{children}</>;
+  const content =
+    registrations.length === 0
+      ? children
+      : registrations.map((reg, index) => {
+          const Component = reg.component;
+          if (!Component) return null;
+          const mergedProps = { ...reg.props, ...slotProps };
+          return (
+            <PluginErrorBoundary
+              key={`${name}-${index}`}
+              pluginId={String(mergedProps.pluginId ?? `slot-${name}-${index}`)}
+            >
+              <Component {...mergedProps} />
+            </PluginErrorBoundary>
+          );
+        });
 
-  // Plugin registered → render plugin components, replacing the default
-  return (
-    <>
-      {registrations.map((reg, index) => {
-        const Component = reg.component;
-        if (!Component) return null;
-
-        const mergedProps = { ...reg.props, ...slotProps };
-
-        return (
-          <PluginErrorBoundary
-            key={`${name}-${index}`}
-            pluginId={String(mergedProps.pluginId ?? `slot-${name}-${index}`)}
-          >
-            <Component {...mergedProps} />
-          </PluginErrorBoundary>
-        );
-      })}
-    </>
-  );
+  if (className) return <div className={className}>{content}</div>;
+  return <>{content}</>;
 }
