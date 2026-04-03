@@ -67,8 +67,9 @@ export default function MarketplacePage() {
       await uninstallPlugin(id);
       setInstalledIds((s) => { const next = new Set(s); next.delete(id); return next; });
       setJustInstalled((s) => { const next = new Set(s); next.delete(id); return next; });
-    } catch (err) {
-      setUninstallError(err instanceof Error ? err.message : "Uninstall failed.");
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? err?.message ?? "Uninstall failed.";
+      setUninstallError(msg);
     } finally {
       setUninstalling(null);
     }
