@@ -1,4 +1,4 @@
-import { get, post } from "./request";
+import { get, post, del } from "./request";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +37,8 @@ export interface InstalledPlugin {
   display_name: string;
   frontend_url: string | null;
   enabled: boolean;
+  type: string;
+  is_active_idp: boolean;
 }
 
 export interface InstalledPluginsResponse {
@@ -44,6 +46,16 @@ export interface InstalledPluginsResponse {
 }
 
 // ─── Catalog ─────────────────────────────────────────────────────────────────
+
+export interface ConfigField {
+  key: string;
+  label: string;
+  description?: string;
+  type: "string" | "secret" | "number" | "boolean" | "select" | "url";
+  required: boolean;
+  default?: string;
+  options?: string[];
+}
 
 export interface CatalogPlugin {
   id: string;
@@ -56,6 +68,7 @@ export interface CatalogPlugin {
   version: string;
   verified: boolean;
   logo?: string;
+  config?: ConfigField[];
 }
 
 export interface CatalogResponse {
@@ -79,4 +92,12 @@ export function getCatalog() {
 
 export function installPlugin(id: string, config: Record<string, string> = {}) {
   return post<void, { id: string; config: Record<string, string> }>("/api/v1/admin/plugins", { id, config });
+}
+
+export function uninstallPlugin(id: string) {
+  return del<void>(`/api/v1/admin/plugins/${id}`);
+}
+
+export function setActiveIDP(id: string) {
+  return post<void, Record<string, never>>(`/api/v1/admin/plugins/${id}/set-active`, {});
 }
