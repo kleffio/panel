@@ -1,4 +1,4 @@
-import { get, post } from "./request";
+import { get, post, del } from "./request";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,4 +79,8 @@ export function getCatalog() {
 
 export function installPlugin(id: string, config: Record<string, string> = {}) {
   return post<void, { id: string; config: Record<string, string> }>("/api/v1/admin/plugins", { id, config });
+}
+
+export function uninstallPlugin(id: string) {
+  return del<void>(`/api/v1/admin/plugins/${id}`);
 }

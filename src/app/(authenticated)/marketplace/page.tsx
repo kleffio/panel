@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Package, CheckCircle, ExternalLink, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, Badge, Button, Input } from "@kleffio/ui";
-import { getCatalog, getInstalledPlugins, installPlugin } from "@/lib/api/plugins";
+import { getCatalog, getInstalledPlugins, installPlugin, uninstallPlugin } from "@/lib/api/plugins";
 import { useHasRole } from "@/features/auth";
 import type { CatalogPlugin } from "@/lib/api/plugins";
 
@@ -17,7 +17,9 @@ export default function MarketplacePage() {
   const [plugins, setPlugins] = useState<CatalogPlugin[]>([]);
   const [installedIds, setInstalledIds] = useState<Set<string>>(new Set());
   const [installing, setInstalling] = useState<string | null>(null);
+  const [uninstalling, setUninstalling] = useState<string | null>(null);
   const [justInstalled, setJustInstalled] = useState<Set<string>>(new Set());
+  const [uninstallError, setUninstallError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [filterInstalled, setFilterInstalled] = useState(false);
@@ -55,6 +57,20 @@ export default function MarketplacePage() {
       setInstalledIds((s) => new Set(s).add(id));
     } finally {
       setInstalling(null);
+    }
+  }
+
+  async function handleUninstall(id: string) {
+    setUninstallError(null);
+    setUninstalling(id);
+    try {
+      await uninstallPlugin(id);
+      setInstalledIds((s) => { const next = new Set(s); next.delete(id); return next; });
+      setJustInstalled((s) => { const next = new Set(s); next.delete(id); return next; });
+    } catch (err) {
+      setUninstallError(err instanceof Error ? err.message : "Uninstall failed.");
+    } finally {
+      setUninstalling(null);
     }
   }
 
@@ -122,6 +138,12 @@ export default function MarketplacePage() {
         </div>
       </div>
 
+      {uninstallError && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {uninstallError}
+        </div>
+      )}
+
       {filtered.length === 0 && (
         <p className="text-sm text-muted-foreground">No plugins match your filters.</p>
       )}
@@ -166,18 +188,25 @@ export default function MarketplacePage() {
                   <span className="text-xs text-muted-foreground">v{plugin.version}</span>
                   <div className="flex items-center gap-2">
                     {isAdmin && (
-                      <Button
-                        size="sm"
-                        variant={isInstalled ? "outline" : "default"}
-                        disabled={installing === plugin.id || isInstalled}
-                        onClick={() => handleInstall(plugin.id)}
-                      >
-                        {isInstalled
-                          ? "Installed"
-                          : installing === plugin.id
-                          ? "Installing…"
-                          : "Install"}
-                      </Button>
+                      isInstalled ? (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={uninstalling === plugin.id}
+                          onClick={() => handleUninstall(plugin.id)}
+                        >
+                          {uninstalling === plugin.id ? "Removing…" : "Uninstall"}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          disabled={installing === plugin.id}
+                          onClick={() => handleInstall(plugin.id)}
+                        >
+                          {installing === plugin.id ? "Installing…" : "Install"}
+                        </Button>
+                      )
                     )}
                     {plugin.verified && (
                       <a
