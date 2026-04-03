@@ -43,6 +43,8 @@ export interface AuthConfig {
   enabled: boolean;
   /** True when no IDP plugin is installed — the user must complete initial setup. */
   setup_required?: boolean;
+  /** True once the IDP plugin has finished starting up and is ready to serve auth requests. */
+  ready?: boolean;
   authority?: string;
   client_id?: string;
   jwks_uri?: string;
