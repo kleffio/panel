@@ -37,13 +37,20 @@ export default function LoginPage() {
   // IDP installed but container still starting — show loading screen.
   if (authConfig && !authConfig.setup_required && !authConfig.ready) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
-        <div className="w-48 space-y-3">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-3/4" />
-          <Skeleton className="h-4 w-1/2" />
+      <div className="relative flex min-h-screen items-center justify-center bg-background bg-kleff-grid">
+        <div className="bg-kleff-spotlight pointer-events-none absolute inset-0" />
+        <div className="glass-panel relative w-full max-w-sm p-8 space-y-6 text-center">
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-gradient-kleff text-2xl font-bold tracking-tight">Kleff</span>
+            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+              Panel
+            </span>
+          </div>
+          <div className="flex flex-col items-center gap-3 py-2">
+            <div className="h-7 w-7 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+            <p className="text-sm text-muted-foreground">Starting identity provider…</p>
+          </div>
         </div>
-        <p className="text-sm text-muted-foreground">Starting identity provider…</p>
       </div>
     );
   }
