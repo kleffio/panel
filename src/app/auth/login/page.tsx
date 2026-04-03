@@ -34,6 +34,20 @@ export default function LoginPage() {
     }
   }, [auth.isAuthenticated, auth.isLoading, authConfig?.enabled, authConfig?.auth_mode, authConfig?.setup_required, router]);
 
+  // IDP installed but container still starting — show loading screen.
+  if (authConfig && !authConfig.setup_required && !authConfig.ready) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
+        <div className="w-48 space-y-3">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+        <p className="text-sm text-muted-foreground">Starting identity provider…</p>
+      </div>
+    );
+  }
+
   if (auth.isLoading && !loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">

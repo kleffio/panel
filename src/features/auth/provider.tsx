@@ -104,6 +104,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchAuthConfig().then(setAuthConfig).catch(() => setAuthConfig({ enabled: false }));
   }, []);
 
+  // IDP plugin installed but container still starting — poll every 3 s until ready.
+  useEffect(() => {
+    if (!authConfig) return;
+    if (authConfig.setup_required || authConfig.ready) return;
+    const id = setInterval(() => {
+      fetchAuthConfig()
+        .then(setAuthConfig)
+        .catch(() => {});
+    }, 3000);
+    return () => clearInterval(id);
+  }, [authConfig?.setup_required, authConfig?.ready]);
+
   // Still loading — render nothing to avoid a flash of unauthenticated state.
   if (authConfig === null) return null;
 
