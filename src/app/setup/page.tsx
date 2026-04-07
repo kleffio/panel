@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Badge, Button, Card, CardContent, Input, Label, Skeleton } from "@kleffio/ui";
+import { Badge, Button, Card, CardContent, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Skeleton, Switch } from "@kleffio/ui";
+import { ChevronDown } from "lucide-react";
 
 type ConfigField = {
   key: string;
@@ -12,6 +13,7 @@ type ConfigField = {
   required: boolean;
   default?: string;
   options?: string[];
+  advanced?: boolean;
 };
 
 type CatalogPlugin = {
@@ -39,10 +41,12 @@ const OIDC_FALLBACK_FIELDS: ConfigField[] = [
   { key: "OIDC_CLIENT_ID", label: "Client ID", type: "string", required: true,
     description: "The client ID of your OIDC application." },
   { key: "OIDC_CLIENT_SECRET", label: "Client Secret", type: "secret", required: false,
+    advanced: true,
     description: "The client secret. Leave blank for public clients." },
-  { key: "AUTH_MODE", label: "Login Mode", type: "select", required: false, default: "redirect",
-    options: ["redirect", "headless"],
-    description: "redirect — users log in via your IDP's login page (recommended). headless — Kleff shows its own form (requires ROPC support)." },
+  { key: "AUTH_MODE", label: "Login Mode", type: "select", required: false, default: "headless",
+    advanced: true,
+    options: ["headless", "redirect"],
+    description: "headless — Kleff shows its own login form (requires ROPC/Direct Access Grant). redirect — users are sent to your IDP's login page." },
 ];
 
 export default function SetupPage() {
@@ -128,6 +132,12 @@ export default function SetupPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data.error ?? "Installation failed.");
+      }
+      // Clear any stale OIDC session so the login page doesn't auto-redirect
+      // with the wrong identity (e.g. a previous IDP's token still in localStorage).
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("oidc.user:")) localStorage.removeItem(k);
       }
       window.location.replace("/auth/login");
     } catch (err) {
@@ -302,42 +312,75 @@ function ConfigForm({
   values: Record<string, string>;
   onChange: (key: string, value: string) => void;
 }) {
+  const [advancedMode, setAdvancedMode] = useState(false);
+  const normalFields = fields.filter(f => !f.advanced);
+  const advancedFields = fields.filter(f => f.advanced);
+  const hasAdvancedFields = advancedFields.length > 0;
+
+  const renderField = (field: ConfigField) => (
+    <div key={field.key} className="space-y-1.5">
+      <Label htmlFor={field.key}>
+        {field.label}
+        {field.required && <span className="text-red-400 ml-1">*</span>}
+      </Label>
+      {field.type === "select" && field.options ? (
+        <Select
+          value={values[field.key] ?? ""}
+          onValueChange={(v) => onChange(field.key, v)}
+        >
+          <SelectTrigger id={field.key} className="w-full">
+            <SelectValue placeholder="Select…" />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options.map((opt) => (
+              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : field.type === "boolean" ? (
+        <Switch
+          id={field.key}
+          checked={values[field.key] === "true"}
+          onCheckedChange={(c) => onChange(field.key, c ? "true" : "false")}
+        />
+      ) : (
+        <Input
+          id={field.key}
+          type={field.type === "secret" ? "password" : "text"}
+          required={field.required}
+          placeholder={field.default}
+          value={values[field.key] ?? ""}
+          onChange={(e) => onChange(field.key, e.target.value)}
+        />
+      )}
+      {field.description && (
+        <p className="text-xs text-muted-foreground">{field.description}</p>
+      )}
+    </div>
+  );
+
   return (
     <>
-      {fields.map((field) => (
-        <div key={field.key} className="space-y-1.5">
-          <Label htmlFor={field.key}>
-            {field.label}
-            {field.required && <span className="text-red-400 ml-1">*</span>}
-          </Label>
-          {field.type === "select" && field.options ? (
-            <select
-              id={field.key}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              value={values[field.key] ?? ""}
-              onChange={(e) => onChange(field.key, e.target.value)}
-            >
-              {field.options.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <Input
-              id={field.key}
-              type={field.type === "secret" ? "password" : "text"}
-              required={field.required}
-              placeholder={field.default}
-              value={values[field.key] ?? ""}
-              onChange={(e) => onChange(field.key, e.target.value)}
-            />
-          )}
-          {field.description && (
-            <p className="text-xs text-muted-foreground">{field.description}</p>
+      {normalFields.map(renderField)}
+      
+      {hasAdvancedFields && (
+        <div className="space-y-4 pt-1">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit"
+            onClick={() => setAdvancedMode((v) => !v)}
+          >
+            <ChevronDown className={`size-3.5 transition-transform ${advancedMode ? "rotate-180" : ""}`} />
+            {advancedMode ? "Hide advanced settings" : "Show advanced settings"}
+          </button>
+
+          {advancedMode && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+              {advancedFields.map(renderField)}
+            </div>
           )}
         </div>
-      ))}
+      )}
     </>
   );
 }

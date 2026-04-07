@@ -55,15 +55,24 @@ function CurrentUserProvider({ children }: { children: ReactNode }) {
     return () => channel.close();
   }, [auth.removeUser]);
 
-  // When silent renew fails (expired refresh token, server-side logout detected
-  // by monitorSession, etc.) clear the stale session so the layout redirects to
-  // login instead of showing an error screen.
+  // When a hard auth failure occurs (refresh token expired, user disabled, etc.)
+  // clear the stale session so the layout redirects to login.
+  // Transient errors (network blips, silent_renew_error) are ignored so the
+  // library can retry on the next automaticSilentRenew cycle instead of
+  // immediately logging the user out.
   useEffect(() => {
-    if (auth.error) {
+    if (!auth.error) return;
+    const msg = auth.error.message ?? "";
+    const isHardFailure =
+      msg.includes("login_required") ||
+      msg.includes("invalid_grant") ||
+      msg.includes("session_not_found") ||
+      msg.includes("account_disabled");
+    if (isHardFailure) {
       clearApiAccessToken();
       auth.removeUser();
     }
-  }, [auth.error]);
+  }, [auth.error, auth.removeUser]);
 
   useEffect(() => {
     if (auth.isAuthenticated && auth.user?.access_token) {

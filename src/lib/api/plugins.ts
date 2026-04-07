@@ -1,4 +1,4 @@
-import { get, post, del } from "./request";
+import { get, post, del, patch } from "./request";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +55,7 @@ export interface ConfigField {
   required: boolean;
   default?: string;
   options?: string[];
+  advanced?: boolean;
 }
 
 export interface CatalogPlugin {
@@ -100,4 +101,22 @@ export function uninstallPlugin(id: string) {
 
 export function setActiveIDP(id: string) {
   return post<void, Record<string, never>>(`/api/v1/admin/plugins/${id}/set-active`, {});
+}
+
+export interface InstalledPluginDetail {
+  id: string;
+  display_name: string;
+  frontend_url: string | null;
+  enabled: boolean;
+  type: string;
+  is_active_idp: boolean;
+  config: Record<string, string>;
+}
+
+export function getPlugin(id: string) {
+  return get<{ data: InstalledPluginDetail }>(`/api/v1/admin/plugins/${id}`).then((r) => r.data);
+}
+
+export function updatePluginConfig(id: string, config: Record<string, string>) {
+  return patch<void, { config: Record<string, string> }>(`/api/v1/admin/plugins/${id}/config`, { config });
 }

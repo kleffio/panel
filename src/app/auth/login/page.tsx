@@ -34,8 +34,14 @@ export default function LoginPage() {
     }
   }, [auth.isAuthenticated, auth.isLoading, authConfig?.enabled, authConfig?.auth_mode, authConfig?.setup_required, router]);
 
-  // IDP installed but container still starting — show loading screen.
-  if (authConfig && !authConfig.setup_required && !authConfig.ready) {
+  // Setup redirect pending — render nothing while the router replaces the URL.
+  if (authConfig?.setup_required) {
+    return null;
+  }
+
+  // IDP plugin active but EnsureSetup still running (Authentik/Keycloak still starting).
+  // AuthProvider polls every 3 s — show spinner until ready: true.
+  if (authConfig?.enabled && !authConfig.ready) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-background bg-kleff-grid">
         <div className="bg-kleff-spotlight pointer-events-none absolute inset-0" />
@@ -49,6 +55,7 @@ export default function LoginPage() {
           <div className="flex flex-col items-center gap-3 py-2">
             <div className="h-7 w-7 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
             <p className="text-sm text-muted-foreground">Starting identity provider…</p>
+            <p className="text-xs text-muted-foreground">This might take a while…</p>
           </div>
         </div>
       </div>
