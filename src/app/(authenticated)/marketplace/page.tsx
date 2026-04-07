@@ -1,20 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Package, CheckCircle, ExternalLink, Search } from "lucide-react";
+import { Package, CheckCircle, ExternalLink, Search, ChevronDown } from "lucide-react";
 import {
   Card, CardContent, CardHeader, CardTitle,
   Badge, Button, Input, Label,
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, Switch,
 } from "@kleffio/ui";
-import { getCatalog, getInstalledPlugins, installPlugin, uninstallPlugin, setActiveIDP } from "@/lib/api/plugins";
-import { useHasRole } from "@/features/auth";
+import { getCatalog, getInstalledPlugins, getPlugin, installPlugin, uninstallPlugin, updatePluginConfig, setActiveIDP } from "@/lib/api/plugins";
+import { useHasRole, clearStoredSession, broadcastSignout } from "@/features/auth";
 import type { CatalogPlugin, ConfigField } from "@/lib/api/plugins";
 
 const TYPE_LABELS: Record<string, string> = {
   ui: "UI",
   idp: "Identity Provider",
 };
+
+type SheetMode = "install" | "edit" | "activate";
 
 export default function MarketplacePage() {
   const isAdmin = useHasRole("admin");
@@ -24,13 +27,16 @@ export default function MarketplacePage() {
   const [uninstalling, setUninstalling] = useState<string | null>(null);
   const [activating, setActivating] = useState<string | null>(null);
   const [activeIDPId, setActiveIDPId] = useState<string | null>(null);
-  const [justInstalled, setJustInstalled] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Config sheet state
   const [configPlugin, setConfigPlugin] = useState<CatalogPlugin | null>(null);
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
   const [configError, setConfigError] = useState<string | null>(null);
+  const [sheetMode, setSheetMode] = useState<SheetMode>("install");
+  const [saving, setSaving] = useState(false);
+  const [advancedMode, setAdvancedMode] = useState(false);
+  const [alreadyInstalledActivate, setAlreadyInstalledActivate] = useState(false);
 
   const [search, setSearch] = useState("");
   const [filterInstalled, setFilterInstalled] = useState(false);
@@ -56,64 +62,128 @@ export default function MarketplacePage() {
     const q = search.trim().toLowerCase();
     return plugins.filter((p) => {
       if (q && !p.name.toLowerCase().includes(q)) return false;
-      if (filterInstalled && !installedIds.has(p.id) && !justInstalled.has(p.id)) return false;
+      if (filterInstalled && !installedIds.has(p.id)) return false;
       if (filterOfficial && !p.verified) return false;
       if (filterCategory && p.type !== filterCategory) return false;
       return true;
     });
-  }, [plugins, search, filterInstalled, filterOfficial, filterCategory, installedIds, justInstalled]);
+  }, [plugins, search, filterInstalled, filterOfficial, filterCategory, installedIds]);
 
   function extractError(err: any, fallback: string): string {
     return (err?.data as any)?.error ?? err?.message ?? fallback;
   }
 
-  function openInstall(plugin: CatalogPlugin) {
-    const hasConfig = plugin.config && plugin.config.length > 0;
-    if (!hasConfig) {
-      doInstall(plugin.id, {});
-      return;
-    }
-    // Pre-fill defaults
+  function openSheet(plugin: CatalogPlugin, mode: SheetMode) {
     const defaults: Record<string, string> = {};
-    for (const field of plugin.config!) {
+    for (const field of plugin.config ?? []) {
       if (field.default) defaults[field.key] = field.default;
     }
     setConfigValues(defaults);
     setConfigError(null);
+    setSheetMode(mode);
+    setAdvancedMode(false);
     setConfigPlugin(plugin);
   }
 
-  async function doInstall(id: string, config: Record<string, string>) {
-    setActionError(null);
-    setInstalling(id);
+  async function prefillEdit(plugin: CatalogPlugin) {
+    const defaults: Record<string, string> = {};
+    for (const field of plugin.config ?? []) {
+      if (field.default) defaults[field.key] = field.default;
+    }
+    setConfigValues(defaults);
+    setConfigError(null);
+    setSheetMode("edit");
+    setAdvancedMode(false);
+    setConfigPlugin(plugin);
     try {
-      await installPlugin(id, config);
-      setJustInstalled((s) => new Set(s).add(id));
-      setInstalledIds((s) => new Set(s).add(id));
-      setConfigPlugin(null);
-    } catch (err: any) {
-      const msg = extractError(err, "Install failed.");
-      if (configPlugin) {
-        setConfigError(msg);
-      } else {
-        setActionError(msg);
+      const detail = await getPlugin(plugin.id);
+      setConfigValues((prev) => ({ ...prev, ...(detail.config ?? {}) }));
+    } catch {
+      // Proceed with defaults
+    }
+  }
+
+  // IDP activate: always open the config sheet so the user can review settings.
+  async function openActivate(plugin: CatalogPlugin) {
+    setActionError(null);
+    if (installedIds.has(plugin.id)) {
+      // Already installed — show current config prefilled; submit will only swap the IDP.
+      setAlreadyInstalledActivate(true);
+      const defaults: Record<string, string> = {};
+      for (const field of plugin.config ?? []) {
+        if (field.default) defaults[field.key] = field.default;
       }
-    } finally {
-      setInstalling(null);
+      setConfigValues(defaults);
+      setConfigError(null);
+      setSheetMode("activate");
+      setAdvancedMode(false);
+      setConfigPlugin(plugin);
+      try {
+        const detail = await getPlugin(plugin.id);
+        setConfigValues((prev) => ({ ...prev, ...(detail.config ?? {}) }));
+      } catch {
+        // Proceed with defaults
+      }
+    } else {
+      // Not yet installed — show empty/default config; submit will install then activate.
+      setAlreadyInstalledActivate(false);
+      openSheet(plugin, "activate");
     }
   }
 
   async function handleConfigSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!configPlugin) return;
-    // Validate required fields
-    for (const field of configPlugin.config ?? []) {
+
+    const fields = configPlugin.config ?? [];
+    for (const field of fields) {
       if (field.required && !configValues[field.key]?.trim()) {
         setConfigError(`"${field.label}" is required.`);
         return;
       }
     }
-    await doInstall(configPlugin.id, configValues);
+
+    if (sheetMode === "edit") {
+      setSaving(true);
+      setConfigError(null);
+      try {
+        await updatePluginConfig(configPlugin.id, configValues);
+        setConfigPlugin(null);
+      } catch (err: any) {
+        setConfigError(extractError(err, "Update failed."));
+      } finally {
+        setSaving(false);
+      }
+    } else if (sheetMode === "activate") {
+      setActivating(configPlugin.id);
+      setConfigError(null);
+      try {
+        if (!alreadyInstalledActivate) {
+          await installPlugin(configPlugin.id, configValues);
+          setInstalledIds((s) => new Set(s).add(configPlugin.id));
+        }
+        await setActiveIDP(configPlugin.id);
+        clearStoredSession();
+        broadcastSignout();
+        window.location.href = "/auth/login";
+      } catch (err: any) {
+        setConfigError(extractError(err, "Activate failed."));
+        setActivating(null);
+      }
+    } else {
+      // install mode
+      setInstalling(configPlugin.id);
+      setConfigError(null);
+      try {
+        await installPlugin(configPlugin.id, configValues);
+        setInstalledIds((s) => new Set(s).add(configPlugin.id));
+        setConfigPlugin(null);
+      } catch (err: any) {
+        setConfigError(extractError(err, "Install failed."));
+      } finally {
+        setInstalling(null);
+      }
+    }
   }
 
   async function handleUninstall(id: string) {
@@ -122,7 +192,6 @@ export default function MarketplacePage() {
     try {
       await uninstallPlugin(id);
       setInstalledIds((s) => { const next = new Set(s); next.delete(id); return next; });
-      setJustInstalled((s) => { const next = new Set(s); next.delete(id); return next; });
       if (activeIDPId === id) setActiveIDPId(null);
     } catch (err: any) {
       setActionError(extractError(err, "Uninstall failed."));
@@ -131,18 +200,15 @@ export default function MarketplacePage() {
     }
   }
 
-  async function handleActivate(id: string) {
-    setActionError(null);
-    setActivating(id);
-    try {
-      await setActiveIDP(id);
-      setActiveIDPId(id);
-    } catch (err: any) {
-      setActionError(extractError(err, "Activate failed."));
-    } finally {
-      setActivating(null);
-    }
-  }
+  const normalFields = useMemo(() => {
+    return (configPlugin?.config ?? []).filter((f) => !f.advanced);
+  }, [configPlugin]);
+
+  const advancedFields = useMemo(() => {
+    return (configPlugin?.config ?? []).filter((f) => f.advanced);
+  }, [configPlugin]);
+
+  const hasAdvancedFields = advancedFields.length > 0;
 
   return (
     <div className="space-y-6">
@@ -254,17 +320,35 @@ export default function MarketplacePage() {
                 <div className="mt-auto flex items-center justify-between pt-2">
                   <span className="text-xs text-muted-foreground">v{plugin.version}</span>
                   <div className="flex items-center gap-2">
-                    {isAdmin && isInstalled && isIDP && !isActiveIDP && (
+                    {isAdmin && isIDP && !isActiveIDP && (
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="default"
                         disabled={activating === plugin.id}
-                        onClick={() => handleActivate(plugin.id)}
+                        onClick={() => openActivate(plugin)}
                       >
                         {activating === plugin.id ? "Activating…" : "Activate"}
                       </Button>
                     )}
-                    {isAdmin && (
+                    {isAdmin && isInstalled && !isIDP && plugin.config && plugin.config.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => prefillEdit(plugin)}
+                      >
+                        Edit
+                      </Button>
+                    )}
+                    {isAdmin && isInstalled && isActiveIDP && plugin.config && plugin.config.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => prefillEdit(plugin)}
+                      >
+                        Edit
+                      </Button>
+                    )}
+                    {isAdmin && !isIDP && (
                       isInstalled ? (
                         <Button
                           size="sm"
@@ -279,7 +363,7 @@ export default function MarketplacePage() {
                           size="sm"
                           variant="default"
                           disabled={installing === plugin.id}
-                          onClick={() => openInstall(plugin)}
+                          onClick={() => openSheet(plugin, "install")}
                         >
                           {installing === plugin.id ? "Installing…" : "Install"}
                         </Button>
@@ -303,25 +387,61 @@ export default function MarketplacePage() {
         })}
       </div>
 
-      {/* Config sheet for plugins with required fields */}
+      {/* Config sheet */}
       <Sheet open={!!configPlugin} onOpenChange={(open) => { if (!open) setConfigPlugin(null); }}>
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
-            <SheetTitle>Install {configPlugin?.name}</SheetTitle>
+            <SheetTitle>
+              {sheetMode === "edit"
+                ? `Edit ${configPlugin?.name}`
+                : sheetMode === "activate"
+                ? `Activate ${configPlugin?.name}`
+                : `Install ${configPlugin?.name}`}
+            </SheetTitle>
             <SheetDescription>
-              Fill in the required configuration to install this plugin.
+              {sheetMode === "edit"
+                ? "Update the plugin configuration. Leave secret fields blank to keep current values."
+                : sheetMode === "activate"
+                ? "Fill in the configuration to activate this identity provider."
+                : "Fill in the required configuration to install this plugin."}
             </SheetDescription>
           </SheetHeader>
 
           <form onSubmit={handleConfigSubmit} className="flex flex-col gap-4 px-4 py-2">
-            {configPlugin?.config?.map((field) => (
+            {normalFields.map((field) => (
               <ConfigFieldInput
                 key={field.key}
                 field={field}
                 value={configValues[field.key] ?? ""}
-                onChange={(v) => setConfigValues((prev) => ({ ...prev, [field.key]: v }))}
+                onChange={(v: string) => setConfigValues((prev) => ({ ...prev, [field.key]: v }))}
               />
             ))}
+
+            {hasAdvancedFields && (
+              <div className="space-y-4 pt-1">
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit"
+                  onClick={() => setAdvancedMode((v) => !v)}
+                >
+                  <ChevronDown className={`size-3.5 transition-transform ${advancedMode ? "rotate-180" : ""}`} />
+                  {advancedMode ? "Hide advanced settings" : "Show advanced settings"}
+                </button>
+
+                {advancedMode && (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                    {advancedFields.map((field) => (
+                      <ConfigFieldInput
+                        key={field.key}
+                        field={field}
+                        value={configValues[field.key] ?? ""}
+                        onChange={(v: string) => setConfigValues((prev) => ({ ...prev, [field.key]: v }))}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {configError && (
               <p className="text-sm text-destructive">{configError}</p>
@@ -330,10 +450,14 @@ export default function MarketplacePage() {
             <SheetFooter className="px-0 pt-2">
               <Button
                 type="submit"
-                disabled={installing === configPlugin?.id}
+                disabled={activating === configPlugin?.id || installing === configPlugin?.id || saving}
                 className="w-full"
               >
-                {installing === configPlugin?.id ? "Installing…" : "Install"}
+                {sheetMode === "edit"
+                  ? (saving ? "Saving…" : "Save changes")
+                  : sheetMode === "activate"
+                  ? (activating === configPlugin?.id ? "Activating…" : "Activate")
+                  : (installing === configPlugin?.id ? "Installing…" : "Install")}
               </Button>
             </SheetFooter>
           </form>
@@ -360,24 +484,21 @@ function ConfigFieldInput({
       </Label>
 
       {field.type === "select" ? (
-        <select
-          id={field.key}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value="">Select…</option>
-          {field.options?.map((opt) => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
-        </select>
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger id={field.key} className="w-full">
+            <SelectValue placeholder="Select…" />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options?.map((opt) => (
+              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       ) : field.type === "boolean" ? (
-        <input
+        <Switch
           id={field.key}
-          type="checkbox"
           checked={value === "true"}
-          onChange={(e) => onChange(e.target.checked ? "true" : "false")}
-          className="size-4"
+          onCheckedChange={(c) => onChange(c ? "true" : "false")}
         />
       ) : (
         <Input

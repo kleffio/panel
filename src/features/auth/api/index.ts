@@ -59,7 +59,7 @@ export interface AuthConfig {
  * relying on build-time NEXT_PUBLIC_* env vars.
  */
 export async function fetchAuthConfig(): Promise<AuthConfig> {
-  const res = await fetch("/api/v1/auth/config");
+  const res = await fetch("/api/v1/auth/config", { cache: "no-store" });
   const data = await res.json().catch(() => ({}));
   return (data.data ?? { enabled: false }) as AuthConfig;
 }

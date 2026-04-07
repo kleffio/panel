@@ -4,6 +4,24 @@ import type { ApiTokenResponse } from "./models";
 
 export type { ApiTokenResponse };
 
+/**
+ * Removes all oidc-client-ts session entries from localStorage.
+ * Call this before hard-navigating to /auth/login after an IDP switch or
+ * initial setup so that stale tokens don't auto-redirect the user back to
+ * /dashboard with the wrong identity.
+ */
+export function clearStoredSession(): void {
+  if (typeof window === "undefined") return;
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith("oidc.user:")) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach((k) => localStorage.removeItem(k));
+}
+
 function decodeJwtPayload(jwt: string): Record<string, unknown> {
   try {
     const b64 = jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
