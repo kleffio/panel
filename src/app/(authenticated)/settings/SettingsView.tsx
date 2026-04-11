@@ -5,24 +5,27 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Upload, User } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@kleffio/ui";
-import { PluginSlot } from "@/components/plugin/PluginSlot";
-import { PluginWrapper } from "@/components/plugin/PluginWrapper";
-import { useBackendPlugins } from "@/lib/plugins/use-backend-plugins";
-import { Button } from "@kleffio/ui";
-import { Input } from "@kleffio/ui";
-import { Label } from "@kleffio/ui";
-import { Separator } from "@kleffio/ui";
-import { Skeleton } from "@kleffio/ui";
-import { Textarea } from "@kleffio/ui";
 import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Separator,
+  Skeleton,
+  Textarea,
 } from "@kleffio/ui";
-import { Avatar, AvatarFallback, AvatarImage } from "@kleffio/ui";
 
 import { getMyProfile, updateMyProfile, uploadAvatar } from "@/lib/api/profiles";
 import type { ThemePreference, UpdateProfilePayload } from "@/types/user";
@@ -252,72 +255,38 @@ function ProfileCard() {
 // ─── Root view ────────────────────────────────────────────────────────────────
 
 export function SettingsView() {
-  const { settingsPages } = useBackendPlugins();
-
   return (
     <div className="space-y-6">
-      {/* Plugin top */}
-      <PluginSlot name="settings.top" />
-
-      <PluginWrapper name="settings.header">
+      <div>
         <h1 className="text-xl font-semibold text-foreground">Settings</h1>
         <p className="text-sm text-muted-foreground">
           Manage your account and organization settings.
         </p>
-      </PluginWrapper>
+      </div>
 
       {/* Profile — connects to GET/PATCH /api/v1/users/me */}
-      <PluginWrapper name="settings.profile">
-        <ProfileCard />
-      </PluginWrapper>
+      <ProfileCard />
 
       {/* Organization */}
-      <PluginWrapper name="settings.org">
-        <Card>
-          <CardHeader>
-            <CardTitle>Organization</CardTitle>
-            <CardDescription>Settings that apply to your entire organization.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="org-name">Organization Name</Label>
-                <Input id="org-name" placeholder="Acme Corp" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="org-slug">Slug</Label>
-                <Input id="org-slug" placeholder="acme-corp" />
-              </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Organization</CardTitle>
+          <CardDescription>Settings that apply to your entire organization.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="org-name">Organization Name</Label>
+              <Input id="org-name" placeholder="Acme Corp" />
             </div>
-            <Button size="sm">Save</Button>
-          </CardContent>
-        </Card>
-      </PluginWrapper>
-
-      {/* Frontend plugin sections */}
-      <PluginSlot name="settings.section" />
-
-      {/* Backend plugin settings pages (iframe-embedded) */}
-      {settingsPages
-        .filter((page) => page.iframe_url)
-        .map((page) => (
-          <Card key={page.path}>
-            <CardHeader>
-              <CardTitle>{page.label}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 overflow-hidden rounded-b-xl">
-              <iframe
-                src={page.iframe_url}
-                title={page.label}
-                className="w-full border-0"
-                style={{ height: 600 }}
-              />
-            </CardContent>
-          </Card>
-        ))}
-
-      {/* Plugin bottom */}
-      <PluginSlot name="settings.bottom" />
+            <div className="space-y-1.5">
+              <Label htmlFor="org-slug">Slug</Label>
+              <Input id="org-slug" placeholder="acme-corp" />
+            </div>
+          </div>
+          <Button size="sm">Save</Button>
+        </CardContent>
+      </Card>
 
       {/* Danger zone */}
       <Card className="border-destructive/30">
