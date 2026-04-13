@@ -20,10 +20,33 @@ export interface BackendSettingsPage {
   iframe_url?: string;
 }
 
+export interface BackendLoginConfig {
+  disable_signup_link?: boolean;
+}
+
+export interface BackendSignupConfig {
+  disabled?: boolean;
+  hide_first_name?: boolean;
+  hide_last_name?: boolean;
+  hide_username?: boolean;
+}
+
+export interface BackendProfileSection {
+  id: string;
+  title: string;
+  description?: string;
+  iframe_url?: string;
+  /** Native action keys this section supports (e.g. "change_password"). */
+  actions?: string[];
+}
+
 export interface BackendPluginUIManifest {
   plugin_id: string;
   nav_items?: BackendNavItem[];
   settings_pages?: BackendSettingsPage[];
+  login_config?: BackendLoginConfig;
+  signup_config?: BackendSignupConfig;
+  profile_sections?: BackendProfileSection[];
 }
 
 export interface PluginUIManifestsResponse {
@@ -70,6 +93,7 @@ export interface CatalogPlugin {
   verified: boolean;
   logo?: string;
   config?: ConfigField[];
+  dependencies?: string[];
 }
 
 export interface CatalogResponse {
@@ -80,7 +104,7 @@ export interface CatalogResponse {
 // ─── API calls ────────────────────────────────────────────────────────────────
 
 export function getPluginUIManifests() {
-  return get<PluginUIManifestsResponse>("/api/v1/plugins/ui-manifests");
+  return get<{ data: PluginUIManifestsResponse }>("/api/v1/plugins/ui-manifests").then((r) => r.data);
 }
 
 export function getInstalledPlugins() {
@@ -119,4 +143,46 @@ export function getPlugin(id: string) {
 
 export function updatePluginConfig(id: string, config: Record<string, string>) {
   return patch<void, { config: Record<string, string> }>(`/api/v1/admin/plugins/${id}/config`, { config });
+}
+
+export function changePassword(currentPassword: string, newPassword: string) {
+  return post<{ data: { status: string } }, { current_password: string; new_password: string }>(
+    "/api/v1/auth/change-password",
+    { current_password: currentPassword, new_password: newPassword }
+  );
+}
+
+// ─── Sessions ─────────────────────────────────────────────────────────────────
+
+export interface Session {
+  id: string;
+  ip_address?: string;
+  user_agent?: string;
+  /** Unix seconds */
+  started_at?: number;
+  /** Unix seconds */
+  last_access?: number;
+  current: boolean;
+}
+
+export interface SessionsResponse {
+  sessions: Session[];
+}
+
+export function listSessions(sid?: string) {
+  const url = sid
+    ? `/api/v1/auth/sessions?sid=${encodeURIComponent(sid)}`
+    : "/api/v1/auth/sessions";
+  return get<{ data: SessionsResponse }>(url).then((r) => r.data);
+}
+
+export function revokeSession(sessionID: string) {
+  return del<void>(`/api/v1/auth/sessions/${sessionID}`);
+}
+
+export function revokeAllSessions(sid?: string) {
+  const url = sid
+    ? `/api/v1/auth/sessions?sid=${encodeURIComponent(sid)}`
+    : "/api/v1/auth/sessions";
+  return del<void>(url);
 }

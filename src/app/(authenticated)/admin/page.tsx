@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Building2, ShieldAlert } from "lucide-react";
+import { Users, Building2, ShieldAlert, ExternalLink } from "lucide-react";
 import { get, post } from "@/lib/api";
 import { MetricCard } from "@/components/domain/MetricCard";
 import { PluginSlot } from "@/components/plugin/PluginSlot";
 import { PluginWrapper } from "@/components/plugin/PluginWrapper";
-import { Card, CardContent, CardHeader, CardTitle } from "@kleffio/ui";
+import { useBackendPlugins } from "@/lib/plugins/use-backend-plugins";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@kleffio/ui";
 import { Badge } from "@kleffio/ui";
 import { Button } from "@kleffio/ui";
 
@@ -16,6 +17,7 @@ type AdminOrg = { id: string; name: string; plan: string; status: string; create
 export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [orgs, setOrgs] = useState<AdminOrg[]>([]);
+  const { settingsPages } = useBackendPlugins();
 
   useEffect(() => {
     get<{ data: AdminUser[] }>("/api/v1/admin/users").then(d => setUsers(d.data ?? []));
@@ -117,6 +119,33 @@ export default function AdminPage() {
           </Card>
         </PluginWrapper>
       </PluginWrapper>
+
+      {/* IDP admin pages (injected by active identity provider plugin) */}
+      {settingsPages.filter((p) => p.iframe_url).length > 0 && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Identity Provider</h2>
+            <p className="text-sm text-muted-foreground">
+              Administration pages injected by the active identity provider plugin.
+            </p>
+          </div>
+          {settingsPages
+            .filter((page) => page.iframe_url)
+            .map((page) => (
+              <Card key={page.path}>
+                <CardHeader className="flex flex-row items-center justify-between gap-4">
+                  <CardTitle>{page.label}</CardTitle>
+                  <Button variant="outline" size="sm" className="shrink-0" asChild>
+                    <a href={page.iframe_url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="mr-1.5 size-3.5" />
+                      Open
+                    </a>
+                  </Button>
+                </CardHeader>
+              </Card>
+            ))}
+        </div>
+      )}
 
       {/* Plugin bottom */}
       <PluginSlot name="admin.bottom" />

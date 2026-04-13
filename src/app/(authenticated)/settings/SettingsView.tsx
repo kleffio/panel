@@ -3,7 +3,9 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Upload, User } from "lucide-react";
+import { Loader2, Upload, ExternalLink, Monitor, Smartphone, Trash2, LogOut } from "lucide-react";
+import { changePassword, listSessions, revokeSession, revokeAllSessions } from "@/lib/api/plugins";
+import { useAuth, clearStoredSession, broadcastSignout } from "@/features/auth";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@kleffio/ui";
 import { PluginSlot } from "@/components/plugin/PluginSlot";
@@ -122,13 +124,9 @@ function ProfileCard() {
   if (isLoading) return <ProfileSkeleton />;
 
   if (isError || !profile) {
-    return (
-      <Card>
-        <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          Failed to load profile. Refresh to try again.
-        </CardContent>
-      </Card>
-    );
+    // Backend profile API is unimplemented — silently hide the extra profile
+    // fields (avatar, bio, theme) until the platform supports them.
+    return null;
   }
 
   // Derive initials for the avatar fallback.
@@ -249,10 +247,264 @@ function ProfileCard() {
   );
 }
 
+// ─── Sessions section ─────────────────────────────────────────────────────────
+
+function parseUA(ua?: string): { label: string; isMobile: boolean } {
+  if (!ua) return { label: "Unknown device", isMobile: false };
+
+  const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(ua);
+
+  // OS detection
+  let os = "";
+  if (/Windows NT/i.test(ua)) os = "Windows";
+  else if (/Mac OS X/i.test(ua)) os = "macOS";
+  else if (/Android/i.test(ua)) os = "Android";
+  else if (/iPhone|iPad|iPod/i.test(ua)) os = "iOS";
+  else if (/Linux/i.test(ua)) os = "Linux";
+
+  // Browser detection
+  let browser = "";
+  if (/Edg\//i.test(ua)) browser = "Edge";
+  else if (/OPR\//i.test(ua)) browser = "Opera";
+  else if (/Chrome\//i.test(ua)) browser = "Chrome";
+  else if (/Firefox\//i.test(ua)) browser = "Firefox";
+  else if (/Safari\//i.test(ua)) browser = "Safari";
+
+  const label = [browser, os].filter(Boolean).join(" on ") || ua.slice(0, 60);
+  return { label, isMobile };
+}
+
+function formatTime(unix?: number) {
+  if (!unix) return "—";
+  return new Date(unix * 1000).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function SessionsSection({ sectionId, canRevoke }: { sectionId: string; canRevoke: boolean }) {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  // Use the "sid" claim from the ID token — this is the session ID both Keycloak
+  // and Authentik embed in their JWTs. session_state is a browser-level OIDC hash
+  // (used for check_session_iframe) and does not reliably match the session ID.
+  const sid = (auth.user?.profile?.sid as string | undefined) ?? auth.user?.session_state ?? undefined;
+
+  const SESSIONS_KEY = ["sessions", sectionId] as const;
+
+  const { data, isLoading } = useQuery({
+    queryKey: SESSIONS_KEY,
+    queryFn: () => listSessions(sid),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (sessionID: string) => revokeSession(sessionID),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
+      toast.success("Session revoked.");
+    },
+    onError: () => {
+      toast.error("Could not revoke session.");
+    },
+  });
+
+  const revokeAllMutation = useMutation({
+    mutationFn: () => revokeAllSessions(sid),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
+      toast.success("All other sessions signed out.");
+    },
+    onError: () => {
+      toast.error("Could not sign out other sessions.");
+    },
+  });
+
+  const signOutSelfMutation = useMutation({
+    mutationFn: (sessionID: string) => revokeSession(sessionID),
+    onSuccess: () => {
+      clearStoredSession();
+      broadcastSignout();
+      window.location.href = "/auth/login";
+    },
+    onError: () => {
+      toast.error("Could not sign out.");
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex items-center justify-between gap-4 rounded-md border p-3">
+            <div className="flex items-center gap-3 flex-1">
+              <Skeleton className="size-8 rounded-md shrink-0" />
+              <div className="space-y-1.5 flex-1">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-56" />
+              </div>
+            </div>
+            <Skeleton className="h-8 w-24 shrink-0" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const sessions = data?.sessions ?? [];
+  const otherSessions = sessions.filter((s) => !s.current);
+
+  if (sessions.length === 0) {
+    return <p className="text-sm text-muted-foreground">No active sessions found.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Revoke-all button — only shown when there are other sessions to sign out */}
+      {canRevoke && otherSessions.length > 0 && (
+        <div className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            {otherSessions.length === 1
+              ? "1 other active session"
+              : `${otherSessions.length} other active sessions`}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+            disabled={revokeAllMutation.isPending || revokeMutation.isPending}
+            onClick={() => revokeAllMutation.mutate()}
+          >
+            {revokeAllMutation.isPending ? (
+              <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+            ) : (
+              <LogOut className="mr-1.5 size-3.5" />
+            )}
+            Sign out all other devices
+          </Button>
+        </div>
+      )}
+
+      {/* Session list */}
+      {sessions.map((session) => {
+        const { label, isMobile } = parseUA(session.user_agent);
+        const DeviceIcon = isMobile ? Smartphone : Monitor;
+        return (
+          <div key={session.id} className="flex items-center justify-between gap-4 rounded-md border p-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
+                <DeviceIcon className="size-4 text-muted-foreground" />
+              </div>
+              <div className="min-w-0 space-y-0.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium">{label}</span>
+                  {session.current && (
+                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                      This device
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {session.ip_address && `${session.ip_address} · `}
+                  {session.last_access
+                    ? `Last active ${formatTime(session.last_access)}`
+                    : `Started ${formatTime(session.started_at)}`}
+                </p>
+              </div>
+            </div>
+            {canRevoke && !session.current && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                disabled={revokeMutation.isPending || revokeAllMutation.isPending || signOutSelfMutation.isPending}
+                onClick={() => revokeMutation.mutate(session.id)}
+              >
+                {revokeMutation.isPending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 className="mr-1.5 size-3.5" />
+                    Sign out
+                  </>
+                )}
+              </Button>
+            )}
+            {canRevoke && session.current && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                disabled={signOutSelfMutation.isPending || revokeMutation.isPending || revokeAllMutation.isPending}
+                onClick={() => signOutSelfMutation.mutate(session.id)}
+              >
+                {signOutSelfMutation.isPending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <>
+                    <LogOut className="mr-1.5 size-3.5" />
+                    Sign out
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Change password form ─────────────────────────────────────────────────────
+
+function ChangePasswordForm() {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: () => changePassword(current, next),
+    onSuccess: () => {
+      toast.success("Password changed.");
+      setCurrent(""); setNext(""); setConfirm("");
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Could not change password.";
+      toast.error(msg);
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (next !== confirm) { toast.error("New passwords do not match."); return; }
+    mutation.mutate();
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="current-password">Current password</Label>
+        <Input id="current-password" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} className="max-w-sm" autoComplete="current-password" />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="new-password">New password</Label>
+        <Input id="new-password" type="password" value={next} onChange={(e) => setNext(e.target.value)} className="max-w-sm" autoComplete="new-password" />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="confirm-password">Confirm new password</Label>
+        <Input id="confirm-password" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="max-w-sm" autoComplete="new-password" />
+      </div>
+      <Button type="submit" size="sm" disabled={mutation.isPending || !current || !next || !confirm}>
+        {mutation.isPending && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
+        {mutation.isPending ? "Saving…" : "Change password"}
+      </Button>
+    </form>
+  );
+}
+
 // ─── Root view ────────────────────────────────────────────────────────────────
 
 export function SettingsView() {
-  const { settingsPages } = useBackendPlugins();
+  const { profileSections } = useBackendPlugins();
 
   return (
     <div className="space-y-6">
@@ -297,24 +549,66 @@ export function SettingsView() {
       {/* Frontend plugin sections */}
       <PluginSlot name="settings.section" />
 
-      {/* Backend plugin settings pages (iframe-embedded) */}
-      {settingsPages
-        .filter((page) => page.iframe_url)
-        .map((page) => (
-          <Card key={page.path}>
-            <CardHeader>
-              <CardTitle>{page.label}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 overflow-hidden rounded-b-xl">
-              <iframe
-                src={page.iframe_url}
-                title={page.label}
-                className="w-full border-0"
-                style={{ height: 600 }}
-              />
-            </CardContent>
-          </Card>
-        ))}
+      {/* Backend plugin profile sections (from active IDP — password, 2FA, sessions) */}
+      {profileSections.length > 0 && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Security</h2>
+            <p className="text-sm text-muted-foreground">
+              Manage passwords, two-factor authentication, and active sessions via your identity provider.
+            </p>
+          </div>
+          {profileSections.map((section) => (
+            <Card key={section.id}>
+              <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                  <CardTitle>{section.title}</CardTitle>
+                  {section.description && (
+                    <CardDescription>{section.description}</CardDescription>
+                  )}
+                </div>
+                {section.iframe_url && !section.actions?.length && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    asChild
+                  >
+                    <a href={section.iframe_url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="mr-1.5 size-3.5" />
+                      Open
+                    </a>
+                  </Button>
+                )}
+              </CardHeader>
+              {(section.actions?.includes("change_password") || section.actions?.includes("list_sessions")) && (
+                <CardContent className="space-y-6">
+                  {section.actions?.includes("change_password") && (
+                    <>
+                      <div>
+                        <h3 className="text-sm font-medium mb-3">Change Password</h3>
+                        <ChangePasswordForm />
+                      </div>
+                    </>
+                  )}
+                  {section.actions?.includes("change_password") && section.actions?.includes("list_sessions") && (
+                    <Separator />
+                  )}
+                  {section.actions?.includes("list_sessions") && (
+                    <div>
+                      <h3 className="text-sm font-medium mb-3">Active Sessions</h3>
+                      <SessionsSection
+                        sectionId={section.id}
+                        canRevoke={!!section.actions?.includes("revoke_session")}
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Plugin bottom */}
       <PluginSlot name="settings.bottom" />

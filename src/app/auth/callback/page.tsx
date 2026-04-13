@@ -16,9 +16,12 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     if (!auth.isLoading) {
-      router.replace("/dashboard");
+      // If the token exchange failed for any reason, go to login rather than
+      // dashboard — sending an unauthenticated user to the protected route
+      // causes an infinite signinRedirect loop.
+      router.replace(auth.isAuthenticated ? "/dashboard" : "/auth/login");
     }
-  }, [auth.isLoading, router]);
+  }, [auth.isLoading, auth.isAuthenticated, router]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">

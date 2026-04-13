@@ -25,6 +25,7 @@ type CatalogPlugin = {
   version: string;
   verified: boolean;
   config: ConfigField[];
+  dependencies?: string[];
 };
 
 // The step the user is on:
@@ -63,7 +64,7 @@ export default function SetupPage() {
   const [installError, setInstallError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/v1/setup/catalog")
+    fetch("/api/v1/setup/catalog", { cache: "no-store" })
       .then(async (res) => {
         if (res.status === 403) {
           router.replace("/auth/login");
@@ -120,6 +121,24 @@ export default function SetupPage() {
     setInstallError(null);
 
     try {
+      // Install any required dependencies first
+      if (selected.dependencies && selected.dependencies.length > 0) {
+        for (const depId of selected.dependencies) {
+          const depRes = await fetch("/api/v1/setup/install", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: depId,
+              config: {},
+            }),
+          });
+          if (!depRes.ok) {
+            const data = await depRes.json().catch(() => ({}));
+            throw new Error(data.error ?? `Failed to install dependency: ${depId}`);
+          }
+        }
+      }
+
       const res = await fetch("/api/v1/setup/install", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -273,6 +292,21 @@ export default function SetupPage() {
                 {selected.config.length > 0 && " You can optionally connect an existing instance below."}
               </p>
             )}
+            {selected.dependencies && selected.dependencies.length > 0 && (
+              <div className="rounded-md border p-4 bg-muted/10 mb-4">
+                <p className="text-sm font-medium mb-1">Required dependencies</p>
+                <p className="text-xs text-muted-foreground mb-3">
+                  The following plugins will be automatically installed and activated prior to {selected.name}.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {selected.dependencies.map((dep) => (
+                    <Badge key={dep} variant="secondary" className="px-2 py-0 border-primary/20">
+                      {dep}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
             {selected.config.length > 0 && (
               <ConfigForm
                 fields={selected.config}
@@ -384,3 +418,5 @@ function ConfigForm({
     </>
   );
 }
+
+

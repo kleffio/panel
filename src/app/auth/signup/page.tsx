@@ -3,6 +3,7 @@
 import { useState, useContext } from "react";
 import { useAuth, storeApiTokens, login, register, broadcastSignin } from "@/features/auth";
 import { AuthConfigContext } from "@/features/auth/context";
+import { useBackendPlugins } from "@/lib/plugins/use-backend-plugins";
 import { Button } from "@kleffio/ui";
 import { Input } from "@kleffio/ui";
 import { Label } from "@kleffio/ui";
@@ -11,6 +12,7 @@ import { Skeleton } from "@kleffio/ui";
 export default function SignupPage() {
   const auth = useAuth();
   const authConfig = useContext(AuthConfigContext);
+  const { signupConfig } = useBackendPlugins();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
@@ -73,76 +75,93 @@ export default function SignupPage() {
           <p className="text-sm text-muted-foreground">Enter your details to get started</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex gap-3">
-            <div className="flex-1 space-y-1.5">
-              <Label htmlFor="firstName">First name</Label>
+        {signupConfig?.disabled ? (
+          <div className="rounded-lg border border-border bg-muted/40 px-4 py-5 text-center space-y-1">
+            <p className="text-sm font-medium text-foreground">Registration is managed externally</p>
+            <p className="text-xs text-muted-foreground">
+              Contact your administrator or sign up through your identity provider.
+            </p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {!signupConfig?.hide_first_name && !signupConfig?.hide_last_name && (
+              <div className="flex gap-3">
+                {!signupConfig?.hide_first_name && (
+                  <div className="flex-1 space-y-1.5">
+                    <Label htmlFor="firstName">First name</Label>
+                    <Input
+                      id="firstName"
+                      autoComplete="given-name"
+                      required
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                    />
+                  </div>
+                )}
+                {!signupConfig?.hide_last_name && (
+                  <div className="flex-1 space-y-1.5">
+                    <Label htmlFor="lastName">Last name</Label>
+                    <Input
+                      id="lastName"
+                      autoComplete="family-name"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            {!signupConfig?.hide_username && (
+              <div className="space-y-1.5">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  autoComplete="username"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="email">Email</Label>
               <Input
-                id="firstName"
-                autoComplete="given-name"
+                id="email"
+                type="email"
+                autoComplete="email"
                 required
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
-            <div className="flex-1 space-y-1.5">
-              <Label htmlFor="lastName">Last name</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Password</Label>
               <Input
-                id="lastName"
-                autoComplete="family-name"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
+                id="password"
+                type="password"
+                autoComplete="new-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="username">Username</Label>
-            <Input
-              id="username"
-              autoComplete="username"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="confirm">Confirm password</Label>
-            <Input
-              id="confirm"
-              type="password"
-              autoComplete="new-password"
-              required
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-            />
-          </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Creating account…" : "Create account"}
-          </Button>
-        </form>
+            <div className="space-y-1.5">
+              <Label htmlFor="confirm">Confirm password</Label>
+              <Input
+                id="confirm"
+                type="password"
+                autoComplete="new-password"
+                required
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+              />
+            </div>
+            {error && <p className="text-sm text-red-400">{error}</p>}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Creating account…" : "Create account"}
+            </Button>
+          </form>
+        )}
 
         <p className="text-center text-xs text-muted-foreground">
           Already have an account?{" "}

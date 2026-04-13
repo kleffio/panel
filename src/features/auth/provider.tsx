@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { AuthProvider as OidcProvider, useAuth as useOidcAuth } from "react-oidc-context";
 import { WebStorageStateStore } from "oidc-client-ts";
-import { setApiAccessToken, clearApiAccessToken } from "@/lib/api";
+import { setApiAccessToken, clearApiAccessToken, setOnUnauthorized } from "@/lib/api";
 import { CurrentUserContext, AuthConfigContext, type CurrentUser } from "./context";
 import { fetchCurrentUser, fetchAuthConfig, type AuthConfig } from "./api";
 
@@ -75,27 +75,51 @@ function CurrentUserProvider({ children }: { children: ReactNode }) {
   }, [auth.error, auth.removeUser]);
 
   useEffect(() => {
+    // Register global interceptor callback to log out on 401s
+    setOnUnauthorized(() => {
+      clearApiAccessToken();
+      auth.removeUser();
+    });
+    return () => {
+      setOnUnauthorized(() => {});
+    };
+  }, [auth.removeUser]);
+
+  // Sync token to API client synchronously during render so queries 
+  // fired by children on mount have the token immediately.
+  if (auth.isAuthenticated && auth.user?.access_token) {
+    setApiAccessToken(auth.user.access_token);
+  } else if (!auth.isLoading) {
+    clearApiAccessToken();
+  }
+
+  useEffect(() => {
     if (auth.isAuthenticated && auth.user?.access_token) {
-      setApiAccessToken(auth.user.access_token);
       fetchCurrentUser()
         .then(setCurrentUser)
         .catch(() => {
           setCurrentUser({ userId: auth.user?.profile?.sub ?? "", email: auth.user?.profile?.email ?? "", roles: [] });
         });
     } else if (!auth.isLoading) {
-      // Only clear once OIDC has finished loading — avoids wiping the token
-      // during the brief session-restore window before isAuthenticated becomes true.
-      clearApiAccessToken();
       setCurrentUser(null);
     }
   }, [auth.isAuthenticated, auth.isLoading, auth.user?.access_token]);
 
-  // Hold rendering while OIDC session is being restored so child components
-  // don't fire API calls before the bearer token is available.
-  if (auth.isLoading) return null;
+  // Heartbeat: poll /auth/me every 30 s while authenticated.
+  // If this device's session was revoked by another device, the platform JWT
+  // middleware will return 401 → setOnUnauthorized fires → auth.removeUser().
+  // For Keycloak this is instant (in-process revocation set).
+  // For Authentik this is within ~1 minute (userinfo cache TTL).
+  useEffect(() => {
+    if (!auth.isAuthenticated) return;
+    const id = setInterval(() => {
+      fetchCurrentUser().catch(() => {});
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [auth.isAuthenticated]);
 
   return (
-    <CurrentUserContext.Provider value={currentUser}>
+    <CurrentUserContext.Provider value={auth.isLoading ? null : currentUser}>
       {children}
     </CurrentUserContext.Provider>
   );
@@ -113,17 +137,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchAuthConfig().then(setAuthConfig).catch(() => setAuthConfig({ enabled: false }));
   }, []);
 
-  // IDP plugin installed but container still starting — poll every 3 s until ready.
+  // Poll authConfig so open tabs pick up IDP changes (e.g. switching IDPs).
+  // - 3 s while the IDP is starting up (ready: false)
+  // - 5 s while the IDP is running — fast enough to detect a switch within one
+  //   polling cycle before the login page triggers a signinRedirect to the old IDP.
   useEffect(() => {
     if (!authConfig) return;
-    if (authConfig.setup_required || authConfig.ready) return;
+    if (authConfig.setup_required && authConfig.ready) return;
+    const interval = authConfig.ready ? 5_000 : 3_000;
     const id = setInterval(() => {
       fetchAuthConfig()
-        .then(setAuthConfig)
+        .then((next) => {
+          const idpChanged =
+            next.authority !== authConfig.authority ||
+            next.client_id !== authConfig.client_id ||
+            next.enabled !== authConfig.enabled;
+          if (idpChanged) {
+            // Full reload to clear stale oidc-client-ts state (session storage,
+            // in-flight redirects). A React state update alone would leave
+            // OidcProvider pointed at the old IDP and trigger a signinRedirect
+            // to the stopped container.
+            window.location.reload();
+          } else if (next.ready !== authConfig.ready) {
+            setAuthConfig(next);
+          }
+        })
         .catch(() => {});
-    }, 3000);
+    }, interval);
     return () => clearInterval(id);
-  }, [authConfig?.setup_required, authConfig?.ready]);
+  }, [authConfig?.setup_required, authConfig?.ready, authConfig?.authority, authConfig?.client_id, authConfig?.enabled]);
 
   // Still loading — render nothing to avoid a flash of unauthenticated state.
   if (authConfig === null) return null;
@@ -140,21 +182,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const isRedirect = authConfig.auth_mode === "redirect";
+  // When the backend pre-fetches OIDC endpoints, pass them as metadata so
+  // oidc-client-ts skips the cross-origin discovery document fetch entirely.
+  // This avoids CORS issues when the IDP is on a different origin.
+  const hasMetadata =
+    authConfig.token_endpoint &&
+    authConfig.authorization_endpoint &&
+    authConfig.userinfo_endpoint &&
+    authConfig.end_session_endpoint;
   const oidcConfig = {
     authority: authConfig.authority,
     client_id: authConfig.client_id,
     scope: authConfig.scopes?.join(" ") ?? "openid profile email",
     ...oidcStaticConfig,
+    ...(hasMetadata && {
+      metadata: {
+        issuer: authConfig.authority,
+        authorization_endpoint: authConfig.authorization_endpoint,
+        // Proxy token exchange through the platform API to avoid CORS — the
+        // browser cannot POST directly to the IDP's cross-origin token endpoint.
+        token_endpoint: `${typeof window !== "undefined" ? window.location.origin : ""}/api/v1/auth/token-exchange`,
+        userinfo_endpoint: authConfig.userinfo_endpoint,
+        end_session_endpoint: authConfig.end_session_endpoint,
+        jwks_uri: authConfig.jwks_uri,
+      },
+    }),
     // Headless mode: store tokens in localStorage so all tabs share the session.
     // Redirect mode: keep the default sessionStorage (cross-tab logout is handled
     // by the IDP browser cookie + monitorSession instead).
     ...(!isRedirect && {
       userStore: new WebStorageStateStore({ store: window.localStorage }),
     }),
-    // Redirect mode: monitor the IDP session so cross-tab logouts are detected
-    // instantly, and clean up the URL after the OIDC callback redirect.
+    // Redirect mode: clean up the URL after the OIDC callback redirect.
+    // monitorSession is intentionally omitted — it requires check_session_iframe
+    // from the IDP, which we don't include in our pre-fetched metadata, and
+    // attempting it causes a login_required error that immediately clears the
+    // just-stored tokens and triggers an infinite redirect loop.
     ...(isRedirect && {
-      monitorSession: true,
       onSigninCallback: () => {
         if (typeof window !== "undefined") {
           window.history.replaceState({}, document.title, window.location.pathname);

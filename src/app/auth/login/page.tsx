@@ -3,6 +3,7 @@
 import { useState, useEffect, useContext } from "react";
 import { useAuth, storeApiTokens, login, broadcastSignin } from "@/features/auth";
 import { AuthConfigContext } from "@/features/auth/context";
+import { useBackendPlugins } from "@/lib/plugins/use-backend-plugins";
 import { useRouter } from "next/navigation";
 import { Button } from "@kleffio/ui";
 import { Input } from "@kleffio/ui";
@@ -12,6 +13,7 @@ import { Skeleton } from "@kleffio/ui";
 export default function LoginPage() {
   const auth = useAuth();
   const authConfig = useContext(AuthConfigContext);
+  const { loginConfig } = useBackendPlugins();
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -29,10 +31,12 @@ export default function LoginPage() {
       return;
     }
     // Redirect mode: hand off to the IDP login page instead of the headless form.
-    if (!auth.isLoading && authConfig?.enabled && authConfig.auth_mode === "redirect") {
+    // Guard on ready so we don't signinRedirect while the IDP is switching —
+    // authConfig in context may still point at the previous IDP until the next poll.
+    if (!auth.isLoading && authConfig?.enabled && authConfig.ready && authConfig.auth_mode === "redirect") {
       auth.signinRedirect();
     }
-  }, [auth.isAuthenticated, auth.isLoading, authConfig?.enabled, authConfig?.auth_mode, authConfig?.setup_required, router]);
+  }, [auth.isAuthenticated, auth.isLoading, authConfig?.enabled, authConfig?.ready, authConfig?.auth_mode, authConfig?.setup_required, router]);
 
   // Setup redirect pending — render nothing while the router replaces the URL.
   if (authConfig?.setup_required) {
@@ -134,12 +138,14 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <p className="text-center text-xs text-muted-foreground">
-          Don&apos;t have an account?{" "}
-          <a href="/auth/signup" className="text-primary underline underline-offset-4 hover:text-primary/80">
-            Create one
-          </a>
-        </p>
+        {!loginConfig?.disable_signup_link && (
+          <p className="text-center text-xs text-muted-foreground">
+            Don&apos;t have an account?{" "}
+            <a href="/auth/signup" className="text-primary underline underline-offset-4 hover:text-primary/80">
+              Create one
+            </a>
+          </p>
+        )}
       </div>
     </div>
   );
