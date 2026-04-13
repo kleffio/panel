@@ -51,6 +51,12 @@ export interface AuthConfig {
   scopes?: string[];
   /** "headless" = Kleff login form (default). "redirect" = OIDC Authorization Code flow via IDP. */
   auth_mode?: "headless" | "redirect";
+  /** Pre-fetched OIDC endpoints — when present, passed as metadata to oidc-client-ts
+   *  so the browser never needs to make a cross-origin discovery document request. */
+  token_endpoint?: string;
+  authorization_endpoint?: string;
+  userinfo_endpoint?: string;
+  end_session_endpoint?: string;
 }
 
 /**

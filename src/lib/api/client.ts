@@ -1,6 +1,13 @@
 import axios from "axios";
-import { normalizeApiError } from "./error";
+import { normalizeApiError, ApiError } from "./error";
 import { getApiAccessToken } from "./token";
+
+type UnauthorizedHandler = () => void;
+let onUnauthorizedHandler: UnauthorizedHandler | null = null;
+
+export function setOnUnauthorized(handler: UnauthorizedHandler) {
+  onUnauthorizedHandler = handler;
+}
 
 // Use relative paths so browser requests go through the Next.js rewrite proxy
 // (/api/* → http://api:8080/api/*). The full API base URL is only needed in
@@ -24,5 +31,11 @@ apiClient.interceptors.request.use((config) => {
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: unknown) => Promise.reject(normalizeApiError(error))
+  (error: unknown) => {
+    const apiError = normalizeApiError(error);
+    if (apiError.status === 401 && onUnauthorizedHandler) {
+      onUnauthorizedHandler();
+    }
+    return Promise.reject(apiError);
+  }
 );
