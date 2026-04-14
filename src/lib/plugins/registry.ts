@@ -4,7 +4,20 @@ import type { KleffPlugin, SlotName, SlotRegistration } from "@kleffio/sdk";
 
 class PluginRegistry {
   private _plugins: KleffPlugin[] = [];
+  private _settled = false;
   private readonly _listeners: Set<() => void> = new Set();
+
+  /** Mark plugin loading as complete so pages can show a not-found state. */
+  markSettled(): void {
+    if (this._settled) return;
+    this._settled = true;
+    this._listeners.forEach((fn) => fn());
+  }
+
+  /** Whether plugin scripts have finished loading (resolved or errored). */
+  get settled(): boolean {
+    return this._settled;
+  }
 
   /** Register a frontend plugin created with definePlugin(). */
   register(plugin: KleffPlugin): void {
@@ -66,6 +79,7 @@ class PluginRegistry {
   /** Reset all registrations (used in tests / hot-reload). */
   reset(): void {
     this._plugins = [];
+    this._settled = false;
   }
 }
 

@@ -7,7 +7,6 @@ import { Plus, Radar, Waypoints } from "lucide-react";
 import { useEffect } from "react";
 import type { EdgeTypes, NodeTypes } from "reactflow";
 import {
-  Background,
   Panel,
   ReactFlow,
   ReactFlowProvider,
@@ -126,8 +125,6 @@ function FlowCanvasBody({
         className="bg-transparent"
         proOptions={{ hideAttribution: true }}
       >
-        <Background color="var(--test-overlay-dot)" gap={28} size={1.3} />
-
         <Panel position="top-left" className="!m-4 flex flex-wrap items-center gap-3">
           <Button
             type="button"

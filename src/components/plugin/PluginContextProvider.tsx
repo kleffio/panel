@@ -7,6 +7,7 @@ import { PluginCtx, type PluginContext, type ToastOptions } from "@kleffio/sdk";
 import { useCurrentUser } from "@/features/auth";
 import { initPluginGlobals } from "@/lib/plugins/globals";
 import { loadPluginScript } from "@/lib/plugins/loader";
+import { pluginRegistry } from "@/lib/plugins/registry";
 import { getInstalledPlugins } from "@/lib/api/plugins";
 
 // ─── API client ───────────────────────────────────────────────────────────────
@@ -108,6 +109,9 @@ export function PluginContextProvider({ children }: PluginContextProviderProps) 
       })
       .catch((err) => {
         console.error("[kleff] Failed to fetch installed plugins:", err);
+      })
+      .finally(() => {
+        pluginRegistry.markSettled();
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
