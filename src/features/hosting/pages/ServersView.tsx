@@ -1,99 +1,177 @@
 "use client";
 
-import { Plus } from "lucide-react";
-import { ServerCard } from "@/features/hosting/ui/ServerCard";
+import { useState } from "react";
+import { Plus, Square, Play, RotateCcw, Trash2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { PluginSlot } from "@/features/plugins/ui/PluginSlot";
+import { PluginWrapper } from "@/features/plugins/ui/PluginWrapper";
+import { NewServerSheet } from "@/features/hosting/ui/NewServerSheet";
 import { Button } from "@kleffio/ui";
 import { Input } from "@kleffio/ui";
-import type { GameServer } from "@/types";
+import { listDeployments, stopServer, startServer, restartServer, deleteDeployment, type Deployment } from "@/lib/api/deployments";
 
-// TODO: replace with useQuery + pagination
-const MOCK_SERVERS: GameServer[] = [
-  {
-    id: "srv-001",
-    organizationId: "org-001",
-    name: "mc-survival-na",
-    gameType: "Minecraft",
-    region: "us-east-1",
-    status: "running",
-    plan: { id: "plan-pro", tier: "pro", name: "Pro", vcpu: 4, memoryGb: 8, storageGb: 100, bandwidthGb: 2000, maxPlayers: 50, pricePerHour: 0.12 },
-    resources: { cpuPercent: 42, memoryPercent: 67, diskPercent: 23, networkInMbps: 12, networkOutMbps: 8 },
-    ipAddress: "34.201.12.88",
-    port: 25565,
-    currentPlayers: 18,
-    createdAt: "2024-11-01T00:00:00Z",
-    updatedAt: "2025-03-18T10:00:00Z",
-    lastStartedAt: "2025-03-18T08:00:00Z",
-  },
-  {
-    id: "srv-002",
-    organizationId: "org-001",
-    name: "valheim-eu-pvp",
-    gameType: "Valheim",
-    region: "eu-central-1",
-    status: "running",
-    plan: { id: "plan-business", tier: "business", name: "Business", vcpu: 8, memoryGb: 16, storageGb: 250, bandwidthGb: 5000, maxPlayers: 100, pricePerHour: 0.28 },
-    resources: { cpuPercent: 71, memoryPercent: 55, diskPercent: 40, networkInMbps: 45, networkOutMbps: 22 },
-    ipAddress: "18.185.44.9",
-    port: 2456,
-    currentPlayers: 63,
-    createdAt: "2024-12-15T00:00:00Z",
-    updatedAt: "2025-03-18T10:00:00Z",
-    lastStartedAt: "2025-03-17T20:00:00Z",
-  },
-  {
-    id: "srv-003",
-    organizationId: "org-001",
-    name: "csgo-casual-ap",
-    gameType: "CS2",
-    region: "ap-southeast-1",
-    status: "stopped",
-    plan: { id: "plan-starter", tier: "starter", name: "Starter", vcpu: 2, memoryGb: 4, storageGb: 50, bandwidthGb: 500, maxPlayers: 20, pricePerHour: 0.05 },
-    currentPlayers: 0,
-    createdAt: "2025-01-10T00:00:00Z",
-    updatedAt: "2025-03-17T22:00:00Z",
-  },
-  {
-    id: "srv-004",
-    organizationId: "org-001",
-    name: "rust-official-eu",
-    gameType: "Rust",
-    region: "eu-west-1",
-    status: "crashed",
-    plan: { id: "plan-business", tier: "business", name: "Business", vcpu: 8, memoryGb: 16, storageGb: 250, bandwidthGb: 5000, maxPlayers: 100, pricePerHour: 0.28 },
-    resources: { cpuPercent: 0, memoryPercent: 0, diskPercent: 61, networkInMbps: 0, networkOutMbps: 0 },
-    currentPlayers: 0,
-    createdAt: "2025-02-01T00:00:00Z",
-    updatedAt: "2025-03-18T07:12:00Z",
-    lastStartedAt: "2025-03-18T06:00:00Z",
-  },
-];
+function statusLabel(status: Deployment["status"]): string {
+  switch (status) {
+    case "pending":
+    case "in_progress":
+      return "Provisioning";
+    case "restarting":
+      return "Restarting";
+    case "succeeded":
+      return "Running";
+    case "failed":
+      return "Failed";
+    case "rolled_back":
+      return "Stopped";
+  }
+}
+
+function statusClasses(status: Deployment["status"]): { dot: string; badge: string } {
+  switch (status) {
+    case "pending":
+    case "in_progress":
+      return { dot: "bg-blue-400 animate-pulse", badge: "bg-blue-400/10 text-blue-400 ring-blue-400/20" };
+    case "restarting":
+      return { dot: "bg-yellow-400 animate-pulse", badge: "bg-yellow-400/10 text-yellow-400 ring-yellow-400/20" };
+    case "succeeded":
+      return { dot: "bg-emerald-500", badge: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20" };
+    case "failed":
+      return { dot: "bg-red-500", badge: "bg-red-500/10 text-red-400 ring-red-500/20" };
+    case "rolled_back":
+      return { dot: "bg-zinc-500", badge: "bg-zinc-500/10 text-zinc-400 ring-zinc-500/20" };
+  }
+}
+
+function DeploymentCard({ deployment }: { deployment: Deployment }) {
+  const queryClient = useQueryClient();
+
+  const optimisticUpdate = (id: string, status: Deployment["status"]) => {
+    queryClient.setQueryData<Deployment[]>(["deployments"], (old) =>
+      old ? old.map((d) => d.id === id ? { ...d, status } : d) : old
+    );
+  };
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["deployments"] });
+
+  const stop = useMutation({
+    mutationFn: () => stopServer(deployment.id),
+    onMutate: () => optimisticUpdate(deployment.id, "rolled_back"),
+    onSettled: invalidate,
+  });
+  const start = useMutation({
+    mutationFn: () => startServer(deployment.id),
+    onMutate: () => optimisticUpdate(deployment.id, "in_progress"),
+    onSettled: invalidate,
+  });
+  const restart = useMutation({
+    mutationFn: () => restartServer(deployment.id),
+    onMutate: () => optimisticUpdate(deployment.id, "restarting"),
+    onSettled: invalidate,
+  });
+  const destroy = useMutation({ mutationFn: () => deleteDeployment(deployment.id), onSuccess: invalidate });
+
+  const busy = stop.isPending || start.isPending || restart.isPending || destroy.isPending;
+  const isRunning = deployment.status === "succeeded";
+  const isStopped = deployment.status === "rolled_back" || deployment.status === "failed";
+  const isTransitioning = deployment.status === "pending" || deployment.status === "in_progress" || deployment.status === "restarting";
+
+  const { dot, badge } = statusClasses(deployment.status);
+
+  const dimmed = busy || isTransitioning;
+
+  return (
+    <div className={`relative rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-4 transition-colors ${dimmed ? "opacity-60 pointer-events-none" : "hover:border-zinc-700"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-sm font-semibold text-zinc-50 truncate">{deployment.server_name}</span>
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${badge}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+          {statusLabel(deployment.status)}
+        </span>
+      </div>
+      {deployment.address ? (
+        <p className="text-xs font-mono text-zinc-400">{deployment.address}</p>
+      ) : (
+        <p className="text-xs text-zinc-600 italic">Address not yet assigned</p>
+      )}
+      <p className="text-xs text-zinc-600">
+        Created {new Date(deployment.created_at).toLocaleString()}
+      </p>
+      <div className="flex gap-2 pt-1">
+        {!isTransitioning && isRunning && (
+          <>
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => stop.mutate()}>
+              <Square className="size-3" />
+              Stop
+            </Button>
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => restart.mutate()}>
+              <RotateCcw className="size-3" />
+              Restart
+            </Button>
+          </>
+        )}
+        {!isTransitioning && isStopped && (
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => start.mutate()}>
+            <Play className="size-3" />
+            Start
+          </Button>
+        )}
+        <Button size="sm" variant="outline" disabled={busy} className="ml-auto text-red-400 hover:text-red-300" onClick={() => destroy.mutate()}>
+          <Trash2 className="size-3" />
+          Delete
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function ServersView() {
+  const [newServerOpen, setNewServerOpen] = useState(false);
+  const { data: deployments = [], isLoading } = useQuery({
+    queryKey: ["deployments"],
+    queryFn: listDeployments,
+    refetchInterval: 5000,
+  });
+
+  const activeServerNames = deployments
+    .filter((d) => d.status === "pending" || d.status === "in_progress" || d.status === "restarting" || d.status === "succeeded")
+    .map((d) => d.server_name);
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <PluginSlot name="servers.top" />
+
+      <PluginWrapper name="servers.header" className="flex items-center justify-between" slotProps={{ servers: deployments }}>
         <div>
           <h1 className="text-xl font-semibold text-foreground">Game Servers</h1>
           <p className="text-sm text-muted-foreground">
-            {MOCK_SERVERS.length} server{MOCK_SERVERS.length !== 1 ? "s" : ""} in your organization
+            {deployments.length} server{deployments.length !== 1 ? "s" : ""} in your organization
           </p>
         </div>
-        <Button size="sm">
+        <Button size="sm" onClick={() => setNewServerOpen(true)}>
           <Plus className="size-4" />
           New Server
         </Button>
-      </div>
+      </PluginWrapper>
+
+      <NewServerSheet open={newServerOpen} onOpenChange={setNewServerOpen} activeServerNames={activeServerNames} />
 
       <Input
         placeholder="Search servers…"
         className="max-w-sm"
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {MOCK_SERVERS.map((server) => (
-          <ServerCard key={server.id} server={server} />
-        ))}
-      </div>
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading servers…</p>
+      ) : deployments.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No servers yet. Create one to get started.</p>
+      ) : (
+        <PluginWrapper name="servers.list" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" slotProps={{ servers: deployments }}>
+          {deployments.map((d) => (
+            <DeploymentCard key={d.id} deployment={d} />
+          ))}
+        </PluginWrapper>
+      )}
+
+      <PluginSlot name="servers.bottom" />
     </div>
   );
 }
