@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DashboardView } from "./DashboardView";
+import { DashboardView } from "@/features/hosting/pages/DashboardView";
 
 export const metadata: Metadata = { title: "Dashboard" };
 

@@ -2,9 +2,10 @@
 # Used by docker-compose.dev.yml; source is mounted at runtime.
 FROM node:22-alpine
 RUN corepack enable pnpm
-WORKDIR /workspace/panel
+WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
+COPY scripts/ ./scripts/
 RUN pnpm config set node-linker hoisted
 RUN pnpm install --frozen-lockfile
 

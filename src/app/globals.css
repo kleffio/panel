@@ -29,6 +29,21 @@
   --background: oklch(0.14 0 0);
   --foreground: oklch(0.985 0 0);
 
+  /* ── Test / architecture / hosting tokens (mapped to dashboard zinc palette) */
+  --test-background: #0f0f10;
+  --test-foreground: #fafafa;
+  --test-panel: #18181b;
+  --test-panel-soft: #18181b;
+  --test-panel-muted: #18181b;
+  --test-panel-card: rgba(24, 24, 27, 0.88);
+  --test-border: #27272a;
+  --test-muted: #a1a1aa;
+  --test-accent: oklch(0.8 0.17 90);
+  --test-accent-soft: #27272a;
+  --test-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  --test-success: #10b981;
+  --test-success-soft: rgba(16, 185, 129, 0.1);
+
   --card: oklch(0.17 0 0);
   --card-foreground: oklch(0.985 0 0);
 

@@ -1,0 +1,771 @@
+import { Activity, Boxes, Database, Globe, HardDrive, Server, Shield, Swords } from "lucide-react";
+
+import { TEST_ROUTES } from "@/lib/config/routes";
+import type {
+  AiSuggestion,
+  DetailSection,
+  FlowNode,
+  GameServerDetailData,
+  HostingPageKey,
+  InfrastructureEdge,
+  InfrastructureNode,
+  OverviewActivityItem,
+  OverviewDeploymentItem,
+  OverviewMetricCard,
+} from "@/features/hosting/model/types";
+
+export const detailSections: Record<HostingPageKey, DetailSection> = {
+  web: {
+    key: "web",
+    label: "Web Hosting",
+    title: "frontend simplified web hosting view",
+    description:
+      "The frontend node opens into a simplified operating view with domains, environment, logs, and attached services directly underneath the primary app card.",
+    badges: ["Live", "Next.js", "2 Attached Services"],
+    stats: [
+      { label: "Deployment", value: "v1.28.4 Live" },
+      { label: "Domains", value: "2 Active" },
+      { label: "Env Vars", value: "14 Configured" },
+      { label: "Bandwidth", value: "84 GB / mo" },
+    ],
+    leftPanel: {
+      title: "Runtime Logs",
+      badge: "Docked",
+      rows: [
+        { primary: "20:02", secondary: "[edge] GET /pricing 200 41ms" },
+        { primary: "20:03", secondary: "[build] Latest deployment completed successfully" },
+        { primary: "20:04", secondary: "[api] Database connection pool healthy" },
+      ],
+    },
+    rightPanel: {
+      title: "Quick Config",
+      badge: "Inline",
+      rows: [
+        { primary: "Primary Domain", secondary: "platform.kleff.io", meta: "Edit" },
+        { primary: "Build Command", secondary: "pnpm build", meta: "Edit" },
+        { primary: "Environment", secondary: "Production", meta: "Edit" },
+      ],
+    },
+    attachedTitle: "Attached Services",
+    attachedBadge: "Dependencies shown inline",
+    attached: [
+      {
+        name: "postgres-platform-prod",
+        description: "Primary relational database for dashboard state, auth, and billing records",
+        status: "Healthy",
+        href: TEST_ROUTES.DATABASE,
+      },
+      {
+        name: "redis-marketing-cache",
+        description: "Cache layer for sessions, page fragments, and API throttling",
+        status: "Healthy",
+        href: TEST_ROUTES.CACHE,
+      },
+    ],
+  },
+  server: {
+    key: "server",
+    label: "Server Hosting",
+    title: "backend simplified server hosting view",
+    description:
+      "The backend node becomes a stacked server workspace with live console visibility, quick explorer access, and attached databases shown underneath.",
+    badges: ["Online", "2 Containers", "1 Database"],
+    stats: [
+      { label: "CPU", value: "43%" },
+      { label: "Memory", value: "6 / 8 GB Used" },
+      { label: "Workers", value: "2 Active" },
+      { label: "Alerts", value: "0 Open" },
+    ],
+    leftPanel: {
+      title: "Live Console",
+      badge: "Open",
+      rows: [
+        { primary: "19:41", secondary: "[api] HTTP server ready on port 8080" },
+        { primary: "19:42", secondary: "[jobs] Invoice sync worker drained queue" },
+        { primary: "19:43", secondary: "[auth] OIDC token refresh completed" },
+        { primary: "19:44", secondary: "[db] Pool healthy, 16 active connections" },
+      ],
+    },
+    rightPanel: {
+      title: "Server Explorer",
+      badge: "Quick access",
+      rows: [
+        { primary: "services/api", secondary: "Main application routes and handlers", meta: "Open" },
+        { primary: "services/jobs", secondary: "Background workers and schedule config", meta: "Open" },
+        { primary: "config/env", secondary: "Production environment and secrets mapping", meta: "Edit" },
+      ],
+    },
+    attachedTitle: "Attached Databases",
+    attachedBadge: "Used by API and jobs worker",
+    attached: [
+      {
+        name: "postgres-platform-prod",
+        description: "Primary production database for auth, accounts, dashboard state, and billing writes",
+        status: "Connected",
+        href: TEST_ROUTES.DATABASE,
+      },
+    ],
+  },
+  database: {
+    key: "database",
+    label: "Database Hosting",
+    title: "postgres simplified database hosting view",
+    description:
+      "This reverse relationship view makes the database cluster primary and shows connected apps as dependents directly below it.",
+    badges: ["High Load", "Managed PostgreSQL", "3 Connected Apps"],
+    stats: [
+      { label: "Storage", value: "182 / 250 GB" },
+      { label: "Connections", value: "61 Active" },
+      { label: "Backups", value: "Daily + PITR" },
+      { label: "Region", value: "CA-East" },
+    ],
+    leftPanel: {
+      title: "Performance Snapshot",
+      badge: "Live",
+      rows: [
+        { primary: "Read Latency", secondary: "14 ms average", meta: "Stable" },
+        { primary: "Write Latency", secondary: "29 ms average", meta: "Monitor" },
+        { primary: "Replication", secondary: "Replica lag under 2 seconds", meta: "Healthy" },
+      ],
+    },
+    rightPanel: {
+      title: "Admin Controls",
+      badge: "Inline",
+      rows: [
+        { primary: "Storage Cap", secondary: "250 GB", meta: "Edit" },
+        { primary: "Connection Limit", secondary: "120 clients", meta: "Edit" },
+        { primary: "Backup Policy", secondary: "Daily + 7 day retention", meta: "Edit" },
+      ],
+    },
+    attachedTitle: "Connected Apps and Services",
+    attachedBadge: "Reverse relationship view",
+    attached: [
+      { name: "frontend", description: "Primary dashboard UI reading app state and account data", status: "Connected", href: TEST_ROUTES.WEB },
+      { name: "backend", description: "Main API and workers writing invoice, auth, and session-linked records", status: "Connected", href: TEST_ROUTES.SERVER },
+      { name: "admin-panel", description: "Operational interface with audit and moderation queries", status: "Connected" },
+    ],
+  },
+  cache: {
+    key: "cache",
+    label: "Cache Hosting",
+    title: "redis simplified cache hosting view",
+    description:
+      "The cache node gets its own simplified view too, so the graph can drill into memory, eviction policy, and attached consumers in the same pattern.",
+    badges: ["Healthy", "Redis 7", "2 Consumers"],
+    stats: [
+      { label: "Memory Used", value: "2.1 / 4 GB" },
+      { label: "Ops / Min", value: "14.8k" },
+      { label: "Evictions", value: "0 Today" },
+      { label: "Policy", value: "allkeys-lru" },
+    ],
+    leftPanel: {
+      title: "Usage Snapshot",
+      badge: "Realtime",
+      rows: [
+        { primary: "Hit Rate", secondary: "94.2% average", meta: "Strong" },
+        { primary: "Peak Memory", secondary: "2.8 GB in last 24h", meta: "Monitor" },
+        { primary: "Persistence", secondary: "AOF enabled with hourly rewrite", meta: "Configured" },
+      ],
+    },
+    rightPanel: {
+      title: "Admin Controls",
+      badge: "Inline",
+      rows: [
+        { primary: "Memory Cap", secondary: "4 GB", meta: "Edit" },
+        { primary: "Eviction Policy", secondary: "allkeys-lru", meta: "Edit" },
+        { primary: "Persistence Mode", secondary: "AOF + snapshots", meta: "Edit" },
+      ],
+    },
+    attachedTitle: "Connected Consumers",
+    attachedBadge: "Attached app list",
+    attached: [
+      { name: "frontend", description: "Uses Redis for sessions, route caching, and edge response acceleration", status: "Connected", href: TEST_ROUTES.WEB },
+      { name: "backend", description: "Uses Redis for queue state, background jobs, and throttling windows", status: "Connected", href: TEST_ROUTES.SERVER },
+    ],
+  },
+  proxy: {
+    key: "proxy",
+    label: "Proxy",
+    title: "ingress proxy simplified view",
+    description:
+      "Central traffic gateway handling TLS termination, HTTP routing, and TCP fan-out to app and game workloads.",
+    badges: ["Envoy", "TLS", "Traffic Routing"],
+    stats: [
+      { label: "CPU", value: "48%" },
+      { label: "Memory", value: "2.0 / 6 GB" },
+      { label: "Traffic", value: "8.9k req/min" },
+      { label: "Certificates", value: "Auto-rotating" },
+    ],
+    leftPanel: {
+      title: "Traffic Logs",
+      badge: "Live",
+      rows: [
+        { primary: "20:01", secondary: "[proxy] TLS handshake completed for platform.kleff.io" },
+        { primary: "20:02", secondary: "[route] GET /api/health -> backend:8080 200 12ms" },
+        { primary: "20:03", secondary: "[route] TCP session opened -> minecraft:25565" },
+      ],
+    },
+    rightPanel: {
+      title: "Routing Config",
+      badge: "Inline",
+      rows: [
+        { primary: "HTTP Backend", secondary: "proxy -> backend:8080", meta: "Edit" },
+        { primary: "TCP Game", secondary: "proxy -> minecraft:25565", meta: "Edit" },
+        { primary: "TLS Policy", secondary: "Auto-renew Let's Encrypt", meta: "Edit" },
+      ],
+    },
+    attachedTitle: "Upstream Services",
+    attachedBadge: "Traffic destinations",
+    attached: [
+      {
+        name: "Backend API",
+        description: "Receives routed HTTP traffic from the proxy and handles app control-plane requests.",
+        status: "Connected",
+        href: TEST_ROUTES.SERVER,
+      },
+      {
+        name: "Minecraft Shard",
+        description: "Receives routed TCP sessions from the proxy for gameplay traffic.",
+        status: "Connected",
+        href: TEST_ROUTES.GAME_SERVER,
+      },
+    ],
+  },
+  workers: {
+    key: "workers",
+    label: "Workers",
+    title: "workers simplified background processing view",
+    description:
+      "Background workers handle queue consumers, webhook retries, batch jobs, and off-path processing for the backend.",
+    badges: ["Autoscaling", "Warmup", "Queue Draining"],
+    stats: [
+      { label: "CPU", value: "57%" },
+      { label: "Memory", value: "3.9 / 8 GB" },
+      { label: "Queue Rate", value: "1.2k jobs/min" },
+      { label: "Replicas", value: "4 Target" },
+    ],
+    leftPanel: {
+      title: "Job Feed",
+      badge: "Live",
+      rows: [
+        { primary: "19:58", secondary: "[jobs] Invoice sync batch dispatched to queue shard alpha" },
+        { primary: "19:59", secondary: "[workers] Image transform pool scaled to 4 replicas" },
+        { primary: "20:00", secondary: "[retry] Webhook replay backlog dropping below alert threshold" },
+      ],
+    },
+    rightPanel: {
+      title: "Worker Controls",
+      badge: "Inline",
+      rows: [
+        { primary: "Replica Policy", secondary: "2 min / 4 max", meta: "Edit" },
+        { primary: "Retry Queue", secondary: "Enabled with exponential backoff", meta: "Edit" },
+        { primary: "Batch Window", secondary: "Runs every 5 minutes", meta: "Edit" },
+      ],
+    },
+    attachedTitle: "Connected Dependencies",
+    attachedBadge: "Runtime services used by workers",
+    attached: [
+      {
+        name: "Postgres",
+        description: "Persists batch writes, retries, and workflow state transitions.",
+        status: "Connected",
+        href: TEST_ROUTES.DATABASE,
+      },
+      {
+        name: "Redis Cache",
+        description: "Stores queue state, locks, and ephemeral retry metadata.",
+        status: "Connected",
+        href: TEST_ROUTES.CACHE,
+      },
+    ],
+  },
+  "game-server": {
+    key: "game-server",
+    label: "Game Server",
+    title: "minecraft shard simplified hosting view",
+    description:
+      "The gameplay shard keeps a simplified summary entry here for shared lookups, while the dedicated page renders the full server workspace.",
+    badges: ["Minecraft", "2 Containers", "1 Database"],
+    stats: [
+      { label: "CPU", value: "64%" },
+      { label: "Memory", value: "10.8 / 16 GB" },
+      { label: "Players", value: "143 Online" },
+      { label: "Plugins", value: "14 Active" },
+    ],
+    leftPanel: {
+      title: "Console Snapshot",
+      badge: "Open",
+      rows: [
+        { primary: "19:41", secondary: "[Server thread/INFO] Done (2.814s)! For help, type \"help\"" },
+        { primary: "19:42", secondary: "[LuckPerms] Loaded user data for player: AidaV" },
+        { primary: "19:43", secondary: "[AutoSave] Running scheduled world backup..." },
+      ],
+    },
+    rightPanel: {
+      title: "Server Config",
+      badge: "Inline",
+      rows: [
+        { primary: "Player Cap", secondary: "150 concurrent players", meta: "Edit" },
+        { primary: "Runtime", secondary: "Paper 1.21", meta: "Edit" },
+        { primary: "Plugin Pack", secondary: "14 active modules", meta: "Manage" },
+      ],
+    },
+    attachedTitle: "Attached Services",
+    attachedBadge: "Shard dependencies",
+    attached: [
+      {
+        name: "Ingress Proxy",
+        description: "Handles TCP ingress and sticky routing for player sessions.",
+        status: "Connected",
+        href: TEST_ROUTES.PROXY,
+      },
+      {
+        name: "Redis Cache",
+        description: "Stores match state, session coordination, and burst control metadata.",
+        status: "Connected",
+        href: TEST_ROUTES.CACHE,
+      },
+    ],
+  },
+  observability: {
+    key: "observability",
+    label: "Observability",
+    title: "observability simplified logs and traces view",
+    description:
+      "Logs, traces, metrics, and alert routing are centralized here for operators and the AI analyzer to inspect platform health.",
+    badges: ["Tracing", "Alerts", "SLOs"],
+    stats: [
+      { label: "CPU", value: "17%" },
+      { label: "Memory", value: "1.8 / 8 GB" },
+      { label: "Log Volume", value: "2.3 GB/day" },
+      { label: "Alerting", value: "Active" },
+    ],
+    leftPanel: {
+      title: "Signal Feed",
+      badge: "Live",
+      rows: [
+        { primary: "20:04", secondary: "[trace] backend span latency elevated on billing flow" },
+        { primary: "20:05", secondary: "[alerts] Queue pressure warning routed to ops-on-call" },
+        { primary: "20:06", secondary: "[logs] Ingestion healthy across API, workers, and shard telemetry" },
+      ],
+    },
+    rightPanel: {
+      title: "Monitoring Controls",
+      badge: "Inline",
+      rows: [
+        { primary: "Trace Sampling", secondary: "20% production traffic", meta: "Edit" },
+        { primary: "Alert Routing", secondary: "Ops + AI analyzer", meta: "Edit" },
+        { primary: "Retention", secondary: "14 day searchable window", meta: "Edit" },
+      ],
+    },
+    attachedTitle: "Connected Producers",
+    attachedBadge: "Signal sources",
+    attached: [
+      {
+        name: "Backend API",
+        description: "Streams request traces, billing events, and error telemetry.",
+        status: "Connected",
+        href: TEST_ROUTES.SERVER,
+      },
+      {
+        name: "Workers",
+        description: "Streams job telemetry, retries, and queue latency signals.",
+        status: "Connected",
+        href: TEST_ROUTES.WORKERS,
+      },
+    ],
+  },
+};
+
+export const flowNodes: FlowNode[] = [
+  {
+    key: "web",
+    name: "frontend",
+    subtext: "frontend-prod.up.railway.app",
+    status: "Just now via GitHub",
+    icon: Globe,
+    route: TEST_ROUTES.WEB,
+  },
+  {
+    key: "server",
+    name: "backend",
+    subtext: "api + workers cluster",
+    status: "High Memory Usage",
+    footer: "2 containers: API + jobs",
+    icon: Server,
+    route: TEST_ROUTES.SERVER,
+    variant: "warning",
+  },
+  {
+    key: "cache",
+    name: "redis",
+    subtext: "cache and session store",
+    status: "Just deployed",
+    footer: "redis-volume",
+    icon: HardDrive,
+    route: TEST_ROUTES.CACHE,
+  },
+  {
+    key: "database",
+    name: "postgres",
+    subtext: "shared production data",
+    status: "Just deployed",
+    footer: "pg-data",
+    icon: Database,
+    route: TEST_ROUTES.DATABASE,
+  },
+];
+
+export const infrastructureNodes: InfrastructureNode[] = [
+  {
+    id: "frontend",
+    key: "web",
+    name: "Frontend",
+    subtitle: "Next.js edge app",
+    description: "Public dashboard, auth handoff, billing UI, and deploy entrypoint for the platform.",
+    kind: "app",
+    status: "running",
+    icon: Globe,
+    route: TEST_ROUTES.WEB,
+    badges: ["Live", "Global CDN"],
+    metrics: { cpu: 21, ram: 32, ramLabel: "1.3 / 4 GB", traffic: "4.2k req/min" },
+    footer: "2 attached services",
+    position: { x: 60, y: 200 },
+    actions: ["restart", "logs", "scale"],
+    panel: {
+      title: "Frontend edge deployment",
+      description: "Handles dashboard sessions, marketing pages, and project management traffic.",
+      highlights: ["Build healthy in us-east", "2 custom domains attached", "Sessions cached in Redis"],
+    },
+  },
+  {
+    id: "proxy",
+    key: "proxy",
+    name: "Ingress Proxy",
+    subtitle: "Envoy + TLS edge",
+    description: "Terminates TLS, routes HTTP and TCP traffic, and fan-outs traffic to app and game workloads.",
+    kind: "proxy",
+    status: "running",
+    icon: Shield,
+    route: TEST_ROUTES.PROXY,
+    badges: ["Envoy", "TLS"],
+    metrics: { cpu: 48, ram: 41, ramLabel: "2.0 / 6 GB", traffic: "8.9k req/min" },
+    footer: "Weighted traffic routing",
+    position: { x: 420, y: 200 },
+    actions: ["restart", "logs", "scale"],
+    panel: {
+      title: "Shared ingress proxy",
+      description: "Central traffic gateway for HTTP workloads and session-aware routing to game shards.",
+      highlights: ["TLS certs auto-rotating", "Weighted routing enabled", "Burst traffic seen in last 10m"],
+    },
+  },
+  {
+    id: "backend",
+    key: "server",
+    name: "Backend API",
+    subtitle: "Containers: api + jobs",
+    description: "Main application API, auth callbacks, billing writes, background orchestration, and worker control plane.",
+    kind: "api",
+    status: "error",
+    icon: Server,
+    route: TEST_ROUTES.SERVER,
+    badges: ["Overloaded", "2 containers"],
+    metrics: { cpu: 91, ram: 84, ramLabel: "6.7 / 8 GB", traffic: "5.8k req/min" },
+    footer: "Restart queue available",
+    position: { x: 760, y: 40 },
+    actions: ["restart", "logs", "scale"],
+    panel: {
+      title: "Backend control plane",
+      description: "Serves API traffic, coordinates jobs, and writes session-linked state into the primary database.",
+      highlights: ["CPU saturation across api container", "Queue depth rising for invoice sync", "Redis hit-rate hiding some pressure"],
+    },
+  },
+  {
+    id: "workers",
+    key: "workers",
+    name: "Workers",
+    subtitle: "Async jobs + queues",
+    description: "Executes async jobs, queue consumers, image transforms, and webhook retries off the main API path.",
+    kind: "worker",
+    status: "starting",
+    icon: Boxes,
+    route: TEST_ROUTES.WORKERS,
+    badges: ["Autoscaling", "Warmup"],
+    metrics: { cpu: 57, ram: 49, ramLabel: "3.9 / 8 GB", traffic: "1.2k jobs/min" },
+    footer: "Scaling up to 4 replicas",
+    position: { x: 1140, y: 40 },
+    actions: ["restart", "logs", "scale"],
+    panel: {
+      title: "Background worker pool",
+      description: "Handles cron jobs, webhooks, queue draining, and batch synchronization tasks.",
+      highlights: ["Replica set booting", "Queue latency improving", "Can absorb API burst load"],
+    },
+  },
+  {
+    id: "redis",
+    key: "cache",
+    name: "Redis Cache",
+    subtitle: "Sessions + queue state",
+    description: "High-speed cache for sessions, route fragments, queue metadata, and burst control windows.",
+    kind: "cache",
+    status: "running",
+    icon: HardDrive,
+    route: TEST_ROUTES.CACHE,
+    badges: ["Healthy", "AOF enabled"],
+    metrics: { cpu: 29, ram: 58, ramLabel: "2.3 / 4 GB", traffic: "14.8k ops/min" },
+    footer: "Evictions: 0 today",
+    position: { x: 820, y: 520 },
+    actions: ["restart", "logs", "scale"],
+    panel: {
+      title: "Redis service",
+      description: "Provides cache, queue state, and request coordination for frontend, backend, and game shards.",
+      highlights: ["Cache hit rate above 94%", "AOF persistence healthy", "Latency flat during burst"],
+    },
+  },
+  {
+    id: "postgres",
+    key: "database",
+    name: "Postgres",
+    subtitle: "Primary relational data",
+    description: "Main production database for auth, billing, state transitions, and shard-linked persistence.",
+    kind: "database",
+    status: "running",
+    icon: Database,
+    route: TEST_ROUTES.DATABASE,
+    badges: ["Managed", "Replica lag low"],
+    metrics: { cpu: 72, ram: 76, ramLabel: "182 / 250 GB", traffic: "61 active conns" },
+    footer: "Daily backups + PITR",
+    position: { x: 1500, y: 280 },
+    actions: ["restart", "logs", "scale"],
+    panel: {
+      title: "Primary database cluster",
+      description: "Stores platform state, auth records, billing data, and shard-linked game metadata.",
+      highlights: ["Storage trending upward", "Writes elevated from API retries", "Replica lag remains stable"],
+    },
+  },
+  {
+    id: "minecraft",
+    key: "game-server",
+    name: "Minecraft Shard",
+    subtitle: "Game server node",
+    description: "Dedicated gameplay shard for player sessions, world state sync, and TCP traffic routing through the ingress proxy.",
+    kind: "game-server",
+    status: "running",
+    icon: Swords,
+    route: TEST_ROUTES.GAME_SERVER,
+    badges: ["Players 143", "Shard alpha"],
+    metrics: { cpu: 64, ram: 68, ramLabel: "10.8 / 16 GB", traffic: "143 players online" },
+    footer: "Sticky sessions enabled",
+    position: { x: 460, y: 520 },
+    actions: ["restart", "logs", "scale"],
+    panel: {
+      title: "Gameplay shard",
+      description: "Persistent world shard routed through ingress with sticky sessions and metrics mirrored into the platform.",
+      highlights: ["Shard online", "Player concurrency climbing", "TCP routing healthy"],
+    },
+  },
+  {
+    id: "observability",
+    key: "observability",
+    name: "Observability",
+    subtitle: "Logs + traces + alerts",
+    description: "Aggregates traces, metrics, and service logs for alerting, analysis, and support operations.",
+    kind: "support",
+    status: "running",
+    icon: Activity,
+    route: TEST_ROUTES.OBSERVABILITY,
+    badges: ["Tracing", "Alerts"],
+    metrics: { cpu: 17, ram: 26, ramLabel: "1.8 / 8 GB", traffic: "2.3 GB/day logs" },
+    footer: "SLO alerts enabled",
+    position: { x: 1500, y: 620 },
+    actions: ["restart", "logs", "scale"],
+    panel: {
+      title: "Observability workspace",
+      description: "Provides logs, traces, and alerting signals to operators and the AI analyzer.",
+      highlights: ["Alerts routed to ops", "Trace sampling active", "Supports AI recommendations"],
+    },
+  },
+];
+
+export const infrastructureEdges: InfrastructureEdge[] = [
+  { id: "frontend-proxy", source: "frontend", target: "proxy", kind: "traffic", label: "HTTP traffic", sourceHandle: "right", targetHandle: "left" },
+  { id: "proxy-backend", source: "proxy", target: "backend", kind: "traffic", label: "API routing", sourceHandle: "right", targetHandle: "left" },
+  { id: "proxy-minecraft", source: "proxy", target: "minecraft", kind: "traffic", label: "TCP ingress", sourceHandle: "bottom", targetHandle: "top" },
+  { id: "backend-workers", source: "backend", target: "workers", kind: "dependency", label: "Job fan-out", sourceHandle: "right", targetHandle: "left" },
+  { id: "backend-redis", source: "backend", target: "redis", kind: "network", label: "Sessions + queues", sourceHandle: "bottom", targetHandle: "left" },
+  { id: "backend-postgres", source: "backend", target: "postgres", kind: "network", label: "Primary writes", sourceHandle: "right", targetHandle: "top" },
+  { id: "workers-postgres", source: "workers", target: "postgres", kind: "dependency", label: "Batch writes", sourceHandle: "right", targetHandle: "left" },
+  { id: "workers-redis", source: "workers", target: "redis", kind: "dependency", label: "Queue state", sourceHandle: "bottom", targetHandle: "right" },
+  { id: "minecraft-redis", source: "minecraft", target: "redis", kind: "network", label: "Match state", sourceHandle: "right", targetHandle: "left" },
+  { id: "backend-observability", source: "backend", target: "observability", kind: "network", label: "Trace stream", sourceHandle: "right", targetHandle: "top" },
+  { id: "workers-observability", source: "workers", target: "observability", kind: "network", label: "Job telemetry", sourceHandle: "right", targetHandle: "top" },
+];
+
+export const mockAiSuggestions: AiSuggestion[] = [
+  {
+    id: "ai-backend-scale",
+    nodeId: "backend",
+    title: "Backend API is CPU bound",
+    description: "Ingress bursts are pushing the API container above 90% CPU and increasing retry pressure on database writes.",
+    severity: "critical",
+    actionLabel: "Scale API pool",
+  },
+  {
+    id: "ai-workers-shift",
+    nodeId: "workers",
+    title: "Shift queue work off the API path",
+    description: "Worker replicas are warming successfully; move webhook retries and invoice sync fully off the backend service.",
+    severity: "warning",
+    actionLabel: "Scale workers",
+  },
+  {
+    id: "ai-proxy-route",
+    nodeId: "proxy",
+    title: "Ingress should isolate game traffic",
+    description: "TCP game sessions and API bursts are sharing the same proxy tier. Consider a dedicated proxy lane for gameplay shards.",
+    severity: "info",
+    actionLabel: "Split ingress",
+  },
+  {
+    id: "ai-postgres-guardrail",
+    nodeId: "postgres",
+    title: "Database write headroom is narrowing",
+    description: "The primary cluster is handling elevated write amplification from the API. Connection pressure is still safe but trending upward.",
+    severity: "warning",
+    actionLabel: "Tune connection pool",
+  },
+];
+
+export const overviewMetricCards: OverviewMetricCard[] = [
+  {
+    label: "System Health Score",
+    value: "60/100",
+    caption: "Stable across 8 regions",
+    trendDirection: "up",
+    tone: "success",
+    icon: "activity",
+  },
+  {
+    label: "Active Nodes",
+    value: "6",
+    suffix: "/ 8 running",
+    caption: "1 warning, 1 booting",
+    tone: "default",
+    icon: "hard-drive",
+  },
+  {
+    label: "Avg CPU Load",
+    value: "50%",
+    caption: "+12% from last hour",
+    trendDirection: "up",
+    tone: "danger",
+    icon: "cpu",
+  },
+  {
+    label: "Total Traffic",
+    value: "24.2k",
+    suffix: "req/min",
+    caption: "Global Edge Network",
+    tone: "default",
+    icon: "activity",
+  },
+];
+
+export const overviewDeployments: OverviewDeploymentItem[] = [
+  {
+    title: "Frontend v1.28.4",
+    description: "Deployed just now via GitHub branch main",
+    active: true,
+  },
+  {
+    title: "Workers Rollout",
+    description: "Auto-scaled to 4 replicas due to queue pressure",
+    active: true,
+  },
+  {
+    title: "Redis Config Update",
+    description: "2 hours ago",
+    active: false,
+  },
+];
+
+export const overviewActivityFeed: OverviewActivityItem[] = [
+  {
+    message: "System updated routing policy",
+    time: "12 minutes ago",
+    icon: "commit",
+  },
+  {
+    message: "API Latency spiked to 450ms",
+    time: "24 minutes ago",
+    icon: "alert",
+  },
+  {
+    message: "Database backup completed",
+    time: "4 hours ago",
+    icon: "check",
+  },
+];
+
+export const gameServerDetailData: GameServerDetailData = {
+  badges: ["Game Server", "Minecraft", "2 Containers", "1 Database"],
+  title: "Survival SMP shard workspace",
+  description:
+    "Dedicated gameplay workspace for the Minecraft shard with live console output, file explorer context, container topology, and attached data services surfaced in one operational view.",
+  resourceCards: [
+    { label: "CPU", value: "64%", detail: "Gameplay + plugins" },
+    { label: "Memory", value: "10.8 / 16 GB", detail: "Headroom available" },
+    { label: "Player Cap", value: "87 / 150", detail: "Peak concurrency" },
+    { label: "Plugins", value: "14 Active", detail: "LuckPerms, Essentials, WorldEdit" },
+  ],
+  consoleLines: [
+    { time: "19:41", tag: "[Server thread/INFO]", tone: "text-emerald-300", message: "Done (2.814s)! For help, type \"help\"" },
+    { time: "19:42", tag: "[LuckPerms]", tone: "text-emerald-300", message: "Loaded user data for player: AidaV" },
+    { time: "19:43", tag: "[AutoSave]", tone: "text-amber-200", message: "Running scheduled world backup..." },
+    { time: "19:44", tag: "[Minecraft]", tone: "text-emerald-300", message: "Player joined: PixelNomad (87/150)" },
+  ],
+  explorerGroups: [
+    { title: "Player Data", items: ["whitelist.json", "ops.json", "playerdata/"] },
+    { title: "Plugins", items: ["luckperms/", "essentials/", "worldedit/"] },
+    { title: "Server Files", items: ["server.properties", "paper-global.yml", "plugins.yml"] },
+  ],
+  selectedFile: {
+    path: "plugins/luckperms/config.yml",
+    overview: "LuckPerms manages player groups, ranks, and permission inheritance across the shard.",
+    recentChange: "Sync interval shortened to 45s to reduce stale role propagation during peak joins.",
+  },
+  containers: [
+    {
+      name: "mc-survival-core",
+      description: "Main gameplay container running the Paper server, world state, player sessions, and plugin runtime.",
+      status: "Online",
+      meta: ["Port 25565", "Paper 1.21", "Memory Cap: 8 GB"],
+    },
+    {
+      name: "postgres-survival-auth",
+      description: "Attached database container storing roles, groups, permissions, and plugin-linked identity data.",
+      status: "Connected",
+      meta: ["PostgreSQL 16", "28 GB Used", "Plugin: LuckPerms"],
+    },
+  ],
+  attachedDatabasesDescription:
+    "Data services currently supporting permissions, player session routing, and live world events.",
+  attachedDatabasesBadge: "Used by gameplay + plugins",
+  attachedDatabases: [
+    {
+      name: "survival-auth-db",
+      description: "Stores permissions, ranks, and plugin-linked account metadata for the shard.",
+      status: "Healthy",
+      badges: ["PostgreSQL 16", "LuckPerms", "Private Network"],
+      href: TEST_ROUTES.DATABASE,
+    },
+    {
+      name: "redis-match-state",
+      description: "Caches player session routing, world event bursts, and short-lived gameplay state.",
+      status: "Healthy",
+      badges: ["Redis 7", "Session Sync", "AOF Enabled"],
+      href: TEST_ROUTES.CACHE,
+    },
+  ],
+  footerNote: "Gameplay shard mirrored from infrastructure canvas",
+};

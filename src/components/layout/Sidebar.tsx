@@ -4,24 +4,30 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  Network,
+  FolderKanban,
+  Shield,
   Server,
   CreditCard,
   Settings,
   ShieldCheck,
   Store,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@kleffio/ui";
 import { useHasRole, useRoles } from "@/features/auth";
-import { PluginSlot } from "@/components/plugin/PluginSlot";
-import { useBackendPlugins } from "@/lib/plugins/use-backend-plugins";
+import { PluginSlot } from "@/features/plugins/ui/PluginSlot";
+import { useBackendPlugins } from "@/features/plugins/model/use-backend-plugins";
 import { Puzzle } from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/dashboard",   label: "Dashboard",   icon: LayoutDashboard },
-  { href: "/servers",     label: "Servers",     icon: Server },
-  { href: "/marketplace", label: "Marketplace", icon: Store },
-  { href: "/billing",   label: "Billing",   icon: CreditCard },
-  { href: "/settings",  label: "Settings",  icon: Settings },
+  { href: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard },
+  { href: "/overview",     label: "Overview",     icon: Network },
+  { href: "/projects",     label: "Projects",     icon: FolderKanban },
+  { href: "/architecture", label: "Architecture", icon: Shield },
+  { href: "/servers",      label: "Servers",      icon: Server },
+  { href: "/marketplace",  label: "Marketplace",  icon: Store },
+  { href: "/billing",      label: "Billing",      icon: CreditCard },
+  { href: "/settings",     label: "Settings",     icon: Settings },
 ];
 
 export function Sidebar() {

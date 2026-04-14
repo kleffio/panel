@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { BillingView } from "./BillingView";
+import { BillingView } from "@/features/billing/pages/BillingView";
 
 export const metadata: Metadata = { title: "Billing" };
 

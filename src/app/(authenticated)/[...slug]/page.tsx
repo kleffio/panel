@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useSyncExternalStore } from "react";
-import { pluginRegistry } from "@/lib/plugins/registry";
+import { pluginRegistry } from "@/features/plugins/lib/registry";
 
 interface PluginPageProps {
   params: Promise<{ slug: string[] }>;
