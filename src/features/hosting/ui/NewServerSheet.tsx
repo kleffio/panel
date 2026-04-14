@@ -113,6 +113,7 @@ export function NewServerSheet({ open, onOpenChange, onCreated, activeServerName
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const nameConflict = activeServerNames.includes(serverName.trim());
+  const nameInvalid = serverName.trim() !== "" && !/^[a-zA-Z0-9][a-zA-Z0-9_.\-]*$/.test(serverName.trim());
 
   const requiredFieldsFilled = selectedBlueprint
     ? selectedBlueprint.config
@@ -361,6 +362,9 @@ export function NewServerSheet({ open, onOpenChange, onCreated, activeServerName
               </div>
             </div>
 
+            {nameInvalid && (
+              <p className="text-sm text-destructive">Name can only contain letters, numbers, underscores, dots, and hyphens (no spaces).</p>
+            )}
             {nameConflict && (
               <p className="text-sm text-destructive">A server with that name already exists.</p>
             )}
@@ -369,7 +373,7 @@ export function NewServerSheet({ open, onOpenChange, onCreated, activeServerName
             )}
 
             <SheetFooter className="px-0 pt-2">
-              <Button type="submit" disabled={submitting || !serverName.trim() || nameConflict || !requiredFieldsFilled} className="w-full">
+              <Button type="submit" disabled={submitting || !serverName.trim() || nameConflict || nameInvalid || !requiredFieldsFilled} className="w-full">
                 {submitting ? "Launching…" : "Launch server"}
               </Button>
             </SheetFooter>

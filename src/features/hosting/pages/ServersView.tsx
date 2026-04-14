@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { Plus, Square, Play, RotateCcw, Trash2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { PluginSlot } from "@/components/plugin/PluginSlot";
-import { PluginWrapper } from "@/components/plugin/PluginWrapper";
+import { PluginSlot } from "@/features/plugins/ui/PluginSlot";
+import { PluginWrapper } from "@/features/plugins/ui/PluginWrapper";
 import { NewServerSheet } from "@/features/hosting/ui/NewServerSheet";
 import { Button } from "@kleffio/ui";
 import { Input } from "@kleffio/ui";
@@ -137,7 +137,6 @@ export function ServersView() {
 
   return (
     <div className="space-y-6">
-      {/* Plugin top */}
       <PluginSlot name="servers.top" />
 
       <PluginWrapper name="servers.header" className="flex items-center justify-between" slotProps={{ servers: deployments }}>
@@ -172,7 +171,6 @@ export function ServersView() {
         </PluginWrapper>
       )}
 
-      {/* Plugin bottom */}
       <PluginSlot name="servers.bottom" />
     </div>
   );
