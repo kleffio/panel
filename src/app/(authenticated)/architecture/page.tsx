@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getHostingArchitecturePageData } from "@/features/hosting/server/loaders";
-import { ArchitectureView } from "./ArchitectureView";
+import { ArchitectureView } from "@/features/hosting/pages/ArchitectureView";
 
 export const metadata: Metadata = { title: "Architecture" };
 

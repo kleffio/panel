@@ -2,7 +2,7 @@
 
 import { ExternalLink } from "lucide-react";
 import { Button, Card, CardHeader, CardTitle } from "@kleffio/ui";
-import { useBackendPlugins } from "@/lib/plugins/use-backend-plugins";
+import { useBackendPlugins } from "@/features/plugins/model/use-backend-plugins";
 
 export function AdminPluginSections() {
   const { settingsPages } = useBackendPlugins();

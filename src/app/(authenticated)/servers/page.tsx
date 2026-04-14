@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ServersView } from "./ServersView";
+import { ServersView } from "@/features/hosting/pages/ServersView";
 
 export const metadata: Metadata = { title: "Servers" };
 

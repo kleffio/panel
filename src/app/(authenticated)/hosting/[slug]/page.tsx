@@ -4,7 +4,7 @@ import {
   getHostingDetailPageData,
   hostingDetailSlugs,
 } from "@/features/hosting/server/loaders";
-import { HostingDetailView } from "./HostingDetailView";
+import { HostingDetailView } from "@/features/hosting/pages/HostingDetailView";
 
 type Params = Promise<{ slug: string }>;
 

@@ -5,6 +5,7 @@ RUN corepack enable pnpm
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
+COPY scripts/ ./scripts/
 RUN pnpm config set node-linker hoisted
 RUN pnpm install --frozen-lockfile
 

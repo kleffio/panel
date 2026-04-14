@@ -22,7 +22,7 @@ import {
   getOrganizedInfrastructurePosition,
   resolveDraggedNodeCollisions,
   type InfrastructureFlowNodeData,
-} from "@/lib/infrastructure-graph";
+} from "@/features/hosting/lib/infrastructure-graph";
 
 function clampMetric(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);

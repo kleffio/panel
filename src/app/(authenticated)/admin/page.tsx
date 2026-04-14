@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { PluginSlot } from "@/components/plugin/PluginSlot";
+import { PluginSlot } from "@/features/plugins/ui/PluginSlot";
 import { getOrgSettings } from "@/features/admin/server/loaders";
-import { AdminDashboard } from "@/features/admin/ui/AdminDashboard";
+import { AdminDashboard } from "@/features/admin/pages/AdminDashboard";
 import { AdminPluginSections } from "@/features/admin/ui/AdminPluginSections";
 
 export const metadata: Metadata = { title: "Admin Settings" };
