@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Settings, LogOut } from "lucide-react";
 import { useAuth, broadcastSignout } from "@/features/auth";
 import { AuthConfigContext } from "@/features/auth/context";
-import { PluginSlot } from "@/components/plugin/PluginSlot";
+import { PluginSlot } from "@/features/plugins/ui/PluginSlot";
 import {
   DropdownMenu,
   DropdownMenuContent,

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { SettingsView } from "./SettingsView";
+import { SettingsView } from "@/features/settings/pages/SettingsView";
 
 export const metadata: Metadata = { title: "Settings" };
 
