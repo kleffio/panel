@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Package, CheckCircle, ExternalLink, Search, ChevronDown } from "lucide-react";
+import { Package, CheckCircle, ExternalLink, Search, ChevronDown, Check, Loader2 } from "lucide-react";
 import {
   Card, CardContent, CardHeader, CardTitle,
   Badge, Button, Input, Label,
@@ -18,6 +18,168 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 type SheetMode = "install" | "edit" | "activate";
+
+// ─── Dependency install sheet ─────────────────────────────────────────────────
+
+interface DepsSheetProps {
+  /** The plugin that needs its deps installed before we can proceed. */
+  plugin: CatalogPlugin | null;
+  /** All catalog plugins — needed to look up dep names/descriptions. */
+  catalog: CatalogPlugin[];
+  /** Currently installed plugin IDs. */
+  installedIds: Set<string>;
+  /** Called when an individual dep is successfully installed. */
+  onDepInstalled: (id: string) => void;
+  /** Called when the user dismisses without continuing. */
+  onClose: () => void;
+  /** Called when all deps are met and the user clicks Continue. */
+  onContinue: () => void;
+}
+
+function DepsSheet({ plugin, catalog, installedIds, onDepInstalled, onClose, onContinue }: DepsSheetProps) {
+  const [installingId, setInstallingId] = useState<string | null>(null);
+  const [installingAll, setInstallingAll] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const deps = useMemo(() => {
+    if (!plugin) return [];
+    return (plugin.dependencies ?? []).map((depId) => ({
+      id: depId,
+      catalog: catalog.find((p) => p.id === depId) ?? null,
+      installed: installedIds.has(depId),
+    }));
+  }, [plugin, catalog, installedIds]);
+
+  const allInstalled = deps.every((d) => d.installed);
+  const unmetDeps = deps.filter((d) => !d.installed);
+
+  async function installDep(depId: string) {
+    setError(null);
+    setInstallingId(depId);
+    try {
+      await installPlugin(depId, {});
+      onDepInstalled(depId);
+    } catch (err: any) {
+      const msg = (err?.data as any)?.error ?? err?.message ?? "Install failed.";
+      setError(`Failed to install ${depId}: ${msg}`);
+    } finally {
+      setInstallingId(null);
+    }
+  }
+
+  async function installAll() {
+    setError(null);
+    setInstallingAll(true);
+    for (const dep of unmetDeps) {
+      try {
+        await installPlugin(dep.id, {});
+        onDepInstalled(dep.id);
+      } catch (err: any) {
+        const msg = (err?.data as any)?.error ?? err?.message ?? "Install failed.";
+        setError(`Failed to install ${dep.catalog?.name ?? dep.id}: ${msg}`);
+        setInstallingAll(false);
+        return;
+      }
+    }
+    setInstallingAll(false);
+  }
+
+  return (
+    <Sheet open={!!plugin} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>Required dependencies</SheetTitle>
+          <SheetDescription>
+            <strong>{plugin?.name}</strong> requires the following plugins to be installed first.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex flex-col gap-3 px-4 py-4">
+          {deps.map((dep) => (
+            <div
+              key={dep.id}
+              className="flex items-center justify-between gap-3 rounded-md border p-3"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`flex size-8 shrink-0 items-center justify-center rounded-md ${dep.installed ? "bg-emerald-500/10" : "bg-muted"}`}>
+                  {dep.installed ? (
+                    <Check className="size-4 text-emerald-500" />
+                  ) : (
+                    <Package className="size-4 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {dep.catalog?.name ?? dep.id}
+                  </p>
+                  {dep.catalog?.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-1">
+                      {dep.catalog.description}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {dep.installed ? (
+                <Badge variant="outline" className="shrink-0 text-xs text-emerald-600 border-emerald-400/50">
+                  Installed
+                </Badge>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  disabled={installingId === dep.id || installingAll}
+                  onClick={() => installDep(dep.id)}
+                >
+                  {installingId === dep.id ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    "Install"
+                  )}
+                </Button>
+              )}
+            </div>
+          ))}
+
+          {error && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
+        </div>
+
+        <SheetFooter className="flex-col gap-2 px-4">
+          {!allInstalled && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={installingAll || installingId !== null}
+              onClick={installAll}
+            >
+              {installingAll ? (
+                <>
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                  Installing…
+                </>
+              ) : unmetDeps.length === 1 ? (
+                `Install ${unmetDeps[0].catalog?.name ?? unmetDeps[0].id}`
+              ) : (
+                `Install all (${unmetDeps.length})`
+              )}
+            </Button>
+          )}
+          <Button
+            className="w-full"
+            disabled={!allInstalled}
+            onClick={() => { onClose(); onContinue(); }}
+          >
+            Continue
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function MarketplacePage() {
   const isAdmin = useHasRole("admin");
@@ -37,6 +199,10 @@ export default function MarketplacePage() {
   const [saving, setSaving] = useState(false);
   const [advancedMode, setAdvancedMode] = useState(false);
   const [alreadyInstalledActivate, setAlreadyInstalledActivate] = useState(false);
+
+  // Dependency sheet state
+  const [depsPlugin, setDepsPlugin] = useState<CatalogPlugin | null>(null);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   const [search, setSearch] = useState("");
   const [filterInstalled, setFilterInstalled] = useState(false);
@@ -73,6 +239,17 @@ export default function MarketplacePage() {
     return (err?.data as any)?.error ?? err?.message ?? fallback;
   }
 
+  /** Check for unmet deps; if any exist open the deps sheet and queue the action, otherwise run immediately. */
+  function withDepsCheck(plugin: CatalogPlugin, action: () => void) {
+    const unmet = (plugin.dependencies ?? []).filter((d) => !installedIds.has(d));
+    if (unmet.length > 0) {
+      setDepsPlugin(plugin);
+      setPendingAction(() => action);
+    } else {
+      action();
+    }
+  }
+
   function openSheet(plugin: CatalogPlugin, mode: SheetMode) {
     const defaults: Record<string, string> = {};
     for (const field of plugin.config ?? []) {
@@ -107,7 +284,6 @@ export default function MarketplacePage() {
   async function openActivate(plugin: CatalogPlugin) {
     setActionError(null);
     if (installedIds.has(plugin.id)) {
-      // Already installed — show current config prefilled; submit will only swap the IDP.
       setAlreadyInstalledActivate(true);
       const defaults: Record<string, string> = {};
       for (const field of plugin.config ?? []) {
@@ -125,7 +301,6 @@ export default function MarketplacePage() {
         // Proceed with defaults
       }
     } else {
-      // Not yet installed — show empty/default config; submit will install then activate.
       setAlreadyInstalledActivate(false);
       openSheet(plugin, "activate");
     }
@@ -176,8 +351,7 @@ export default function MarketplacePage() {
       setConfigError(null);
       try {
         await installPlugin(configPlugin.id, configValues);
-        setInstalledIds((s) => new Set(s).add(configPlugin.id));
-        setConfigPlugin(null);
+        window.location.reload();
       } catch (err: any) {
         setConfigError(extractError(err, "Install failed."));
       } finally {
@@ -188,11 +362,23 @@ export default function MarketplacePage() {
 
   async function handleUninstall(id: string) {
     setActionError(null);
+
+    // Pre-flight: find any installed plugins that declare this plugin as a dependency.
+    const dependents = plugins.filter(
+      (p) => installedIds.has(p.id) && (p.dependencies ?? []).includes(id)
+    );
+    if (dependents.length > 0) {
+      const names = dependents.map((p) => p.name).join(", ");
+      setActionError(
+        `Cannot uninstall: ${dependents.length === 1 ? names : `[${names}]`} depends on this plugin. Uninstall ${dependents.length === 1 ? "it" : "them"} first.`
+      );
+      return;
+    }
+
     setUninstalling(id);
     try {
       await uninstallPlugin(id);
-      setInstalledIds((s) => { const next = new Set(s); next.delete(id); return next; });
-      if (activeIDPId === id) setActiveIDPId(null);
+      window.location.reload();
     } catch (err: any) {
       setActionError(extractError(err, "Uninstall failed."));
     } finally {
@@ -279,6 +465,9 @@ export default function MarketplacePage() {
           const isInstalled = installedIds.has(plugin.id);
           const isActiveIDP = activeIDPId === plugin.id;
           const isIDP = plugin.type === "idp";
+          const unmetDeps = (plugin.dependencies ?? []).filter((d) => !installedIds.has(d));
+          const depsBlocked = unmetDeps.length > 0;
+
           return (
             <Card key={plugin.id} className="flex flex-col">
               <CardHeader className="pb-2">
@@ -317,57 +506,71 @@ export default function MarketplacePage() {
                   </div>
                 )}
 
+                {plugin.dependencies && plugin.dependencies.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {plugin.dependencies.map((dep) => {
+                      const depPlugin = plugins.find((p) => p.id === dep);
+                      const depInstalled = installedIds.has(dep);
+                      return (
+                        <Badge
+                          key={dep}
+                          variant={depInstalled ? "outline" : "destructive"}
+                          className="text-xs px-1.5 py-0"
+                          title={depInstalled
+                            ? `Requires ${depPlugin?.name ?? dep} (installed)`
+                            : `Requires ${depPlugin?.name ?? dep} (not installed)`}
+                        >
+                          {depInstalled && <Check className="mr-1 size-2.5" />}
+                          {depPlugin?.name ?? dep}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <div className="mt-auto flex items-center justify-between pt-2">
                   <span className="text-xs text-muted-foreground">v{plugin.version}</span>
                   <div className="flex items-center gap-2">
-                    {isAdmin && isIDP && !isActiveIDP && (
+                    {isAdmin && isInstalled && (
+                      <Button
+                        size="sm"
+                        variant={isActiveIDP ? "ghost" : "destructive"}
+                        className={isActiveIDP ? "text-destructive hover:text-destructive hover:bg-destructive/10" : ""}
+                        disabled={uninstalling === plugin.id || isActiveIDP}
+                        title={isActiveIDP ? "Switch to another identity provider before uninstalling" : undefined}
+                        onClick={() => handleUninstall(plugin.id)}
+                      >
+                        {uninstalling === plugin.id ? "Removing…" : "Uninstall"}
+                      </Button>
+                    )}
+                    {isAdmin && isInstalled && (plugin.config ?? []).length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => prefillEdit(plugin)}
+                      >
+                        Edit
+                      </Button>
+                    )}
+                    {isAdmin && isIDP && isInstalled && !isActiveIDP && (
                       <Button
                         size="sm"
                         variant="default"
                         disabled={activating === plugin.id}
-                        onClick={() => openActivate(plugin)}
+                        onClick={() => withDepsCheck(plugin, () => openActivate(plugin))}
                       >
                         {activating === plugin.id ? "Activating…" : "Activate"}
                       </Button>
                     )}
-                    {isAdmin && isInstalled && !isIDP && plugin.config && plugin.config.length > 0 && (
+                    {isAdmin && !isInstalled && (
                       <Button
                         size="sm"
-                        variant="outline"
-                        onClick={() => prefillEdit(plugin)}
+                        variant="default"
+                        disabled={installing === plugin.id}
+                        onClick={() => withDepsCheck(plugin, () => openSheet(plugin, "install"))}
                       >
-                        Edit
+                        {installing === plugin.id ? "Installing…" : depsBlocked ? "Install…" : "Install"}
                       </Button>
-                    )}
-                    {isAdmin && isInstalled && isActiveIDP && plugin.config && plugin.config.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => prefillEdit(plugin)}
-                      >
-                        Edit
-                      </Button>
-                    )}
-                    {isAdmin && !isIDP && (
-                      isInstalled ? (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          disabled={uninstalling === plugin.id}
-                          onClick={() => handleUninstall(plugin.id)}
-                        >
-                          {uninstalling === plugin.id ? "Removing…" : "Uninstall"}
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="default"
-                          disabled={installing === plugin.id}
-                          onClick={() => openSheet(plugin, "install")}
-                        >
-                          {installing === plugin.id ? "Installing…" : "Install"}
-                        </Button>
-                      )
                     )}
                     {plugin.verified && (
                       <a
@@ -386,6 +589,19 @@ export default function MarketplacePage() {
           );
         })}
       </div>
+
+      {/* Dependency install sheet */}
+      <DepsSheet
+        plugin={depsPlugin}
+        catalog={plugins}
+        installedIds={installedIds}
+        onDepInstalled={(id) => {
+          setInstalledIds((s) => new Set(s).add(id));
+          window.dispatchEvent(new Event("kleff-reload-plugins"));
+        }}
+        onClose={() => { setDepsPlugin(null); setPendingAction(null); }}
+        onContinue={() => { pendingAction?.(); setPendingAction(null); }}
+      />
 
       {/* Config sheet */}
       <Sheet open={!!configPlugin} onOpenChange={(open) => { if (!open) setConfigPlugin(null); }}>

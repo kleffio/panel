@@ -98,21 +98,29 @@ export function PluginContextProvider({ children }: PluginContextProviderProps) 
 
   useEffect(() => {
     initPluginGlobals();
-    getInstalledPlugins()
-      .then(({ plugins }) => {
-        const loads = plugins
-          .filter((p) => p.enabled && p.frontend_url)
-          .map((p) => loadPluginScript(p.frontend_url!).catch((err) => {
-            console.error(`[kleff] Failed to load plugin script for "${p.id}":`, err);
-          }));
-        return Promise.all(loads);
-      })
-      .catch((err) => {
-        console.error("[kleff] Failed to fetch installed plugins:", err);
-      })
-      .finally(() => {
-        pluginRegistry.markSettled();
-      });
+
+    const fetchPlugins = () => {
+      getInstalledPlugins()
+        .then(({ plugins }) => {
+          const loads = plugins
+            .filter((p) => p.enabled && p.frontend_url)
+            .map((p) => loadPluginScript(p.frontend_url!).catch((err) => {
+              console.error(`[kleff] Failed to load plugin script for "${p.id}":`, err);
+            }));
+          return Promise.all(loads);
+        })
+        .catch((err) => {
+          console.error("[kleff] Failed to fetch installed plugins:", err);
+        })
+        .finally(() => {
+          pluginRegistry.markSettled();
+        });
+    };
+
+    fetchPlugins();
+
+    window.addEventListener("kleff-reload-plugins", fetchPlugins);
+    return () => window.removeEventListener("kleff-reload-plugins", fetchPlugins);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
