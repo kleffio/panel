@@ -65,6 +65,12 @@ export function getStatusMeta(status: NodeStatus) {
         dotClassName: "bg-amber-300",
         textClassName: "text-amber-200",
       };
+    case "deleting":
+      return {
+        label: "Deleting",
+        dotClassName: "bg-orange-300",
+        textClassName: "text-orange-200",
+      };
     case "error":
       return {
         label: "Error",
@@ -77,21 +83,21 @@ export function getStatusMeta(status: NodeStatus) {
 export function getKindMeta(kind: NodeKind) {
   switch (kind) {
     case "app":
-      return { label: "App", accent: "rgba(246, 193, 119, 0.24)" };
+      return { label: "App", accent: "rgba(246, 193, 119, 0.07)" };
     case "api":
-      return { label: "API", accent: "rgba(255, 104, 104, 0.22)" };
+      return { label: "API", accent: "rgba(255, 104, 104, 0.07)" };
     case "worker":
-      return { label: "Worker", accent: "rgba(252, 211, 77, 0.18)" };
+      return { label: "Worker", accent: "rgba(252, 211, 77, 0.06)" };
     case "database":
-      return { label: "Database", accent: "rgba(120, 184, 255, 0.2)" };
+      return { label: "Database", accent: "rgba(120, 184, 255, 0.07)" };
     case "cache":
-      return { label: "Cache", accent: "rgba(83, 218, 161, 0.2)" };
+      return { label: "Cache", accent: "rgba(83, 218, 161, 0.07)" };
     case "proxy":
-      return { label: "Proxy", accent: "rgba(255, 255, 255, 0.12)" };
+      return { label: "Proxy", accent: "rgba(255, 255, 255, 0.04)" };
     case "game-server":
-      return { label: "Game", accent: "rgba(255, 172, 94, 0.22)" };
+      return { label: "Game", accent: "rgba(87, 194, 109, 0.08)" };
     case "support":
-      return { label: "Support", accent: "rgba(163, 133, 255, 0.2)" };
+      return { label: "Support", accent: "rgba(163, 133, 255, 0.07)" };
   }
 }
 

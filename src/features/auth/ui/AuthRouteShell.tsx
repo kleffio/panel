@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { AmbientOrbField, Card, cn } from "@kleffio/ui";
+import { Card, cn } from "@kleffio/ui";
 
 import { AuthThemeShell } from "@/components/layout/AuthThemeShell";
 
@@ -72,11 +72,16 @@ export function AuthRouteShell({ children }: { children: ReactNode }) {
                 : "bg-auth-kleff-hero lg:order-1 lg:basis-[52%]"
             )}
           >
-            <AmbientOrbField
-              key={currentMode ?? "auth"}
-              showEdgeScrim={false}
-              revealDelayMs={orbRevealDelayMs}
-            />
+            <motion.div
+              key={currentMode ?? "auth-bg"}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: shouldReduceMotion ? 0.15 : 0.55, delay: orbRevealDelayMs / 1000 }}
+              className="pointer-events-none absolute inset-0"
+            >
+              <div className="absolute -top-24 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-primary/20 blur-3xl" />
+              <div className="absolute bottom-[-120px] right-[-80px] h-72 w-72 rounded-full bg-primary/12 blur-3xl" />
+            </motion.div>
           </section>
 
           <motion.section

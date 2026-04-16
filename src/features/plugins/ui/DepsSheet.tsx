@@ -11,8 +11,8 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
-  Spinner,
 } from "@kleffio/ui";
+import { Spinner } from "@/components/ui/Spinner";
 import { installPlugin } from "@/lib/api/plugins";
 import type { CatalogPlugin } from "@/lib/api/plugins";
 

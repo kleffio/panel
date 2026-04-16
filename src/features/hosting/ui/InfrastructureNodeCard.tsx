@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowUpRight, Maximize2, Play, RotateCcw, ScrollText } from "lucide-react";
+import { ArrowUpRight, Maximize2, Play, RotateCcw, ScrollText, Trash2 } from "lucide-react";
 import { memo } from "react";
 import Link from "next/link";
 import type { NodeProps } from "reactflow";
@@ -74,6 +74,13 @@ const MetricBar = memo(function MetricBar({
   label: string;
   value: number;
 }) {
+  const barColor =
+    value > 80
+      ? "bg-red-400"
+      : value > 60
+        ? "bg-amber-400"
+        : "bg-yellow-400";
+
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-[var(--test-muted)]">
@@ -82,7 +89,7 @@ const MetricBar = memo(function MetricBar({
       </div>
       <div className="h-1.5 rounded-full bg-white/6">
         <div
-          className="h-full rounded-full bg-[var(--test-accent)]"
+          className={`h-full rounded-full ${barColor} transition-all duration-700`}
           style={{ width: `${value}%` }}
         />
       </div>
@@ -98,6 +105,10 @@ export const InfrastructureNodeCard = memo(function InfrastructureNodeCard({
   const status = getStatusMeta(node.status);
   const kind = getKindMeta(node.kind);
   const logo = getNodeLogoMeta(node.id);
+  const handleStyle = {
+    background: "rgba(13, 13, 13, 0.94)",
+    border: "1px solid rgba(245, 181, 23, 0.68)",
+  };
 
   return (
     <ContextMenu>
@@ -121,18 +132,14 @@ export const InfrastructureNodeCard = memo(function InfrastructureNodeCard({
           className={`relative min-w-[280px] max-w-[280px] rounded-[22px] border backdrop-blur-xl ${
             highlighted
               ? "border-amber-300/28 bg-[rgba(33,28,23,0.92)]"
-              : "border-white/6 bg-[var(--test-panel-card)]"
+              : "border-white/8 bg-[#111214]"
           } ${selected ? "ring-2 ring-amber-300/40 ring-offset-2 ring-offset-transparent" : ""}`}
           style={{ backgroundImage: `linear-gradient(180deg, ${kind.accent}, transparent)` }}
         >
-          <Handle id="top" type="source" position={Position.Top} className="!h-2 !w-2 !border-0 !bg-transparent" />
-          <Handle id="right" type="source" position={Position.Right} className="!h-2 !w-2 !border-0 !bg-transparent" />
-          <Handle id="bottom" type="source" position={Position.Bottom} className="!h-2 !w-2 !border-0 !bg-transparent" />
-          <Handle id="left" type="source" position={Position.Left} className="!h-2 !w-2 !border-0 !bg-transparent" />
-          <Handle id="top" type="target" position={Position.Top} className="!h-2 !w-2 !border-0 !bg-transparent" />
-          <Handle id="right" type="target" position={Position.Right} className="!h-2 !w-2 !border-0 !bg-transparent" />
-          <Handle id="bottom" type="target" position={Position.Bottom} className="!h-2 !w-2 !border-0 !bg-transparent" />
-          <Handle id="left" type="target" position={Position.Left} className="!h-2 !w-2 !border-0 !bg-transparent" />
+          <Handle id="top" type="source" position={Position.Top} className="!h-3 !w-3 !rounded-full" style={handleStyle} />
+          <Handle id="right" type="source" position={Position.Right} className="!h-3 !w-3 !rounded-full" style={handleStyle} />
+          <Handle id="bottom" type="source" position={Position.Bottom} className="!h-3 !w-3 !rounded-full" style={handleStyle} />
+          <Handle id="left" type="source" position={Position.Left} className="!h-3 !w-3 !rounded-full" style={handleStyle} />
 
           <div className="space-y-4 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -145,6 +152,9 @@ export const InfrastructureNodeCard = memo(function InfrastructureNodeCard({
                     <strong className="text-[15px] font-semibold text-[var(--test-foreground)]">
                       {node.name}
                     </strong>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-[var(--test-muted)]">
+                      {kind.label}
+                    </span>
                   </div>
                   <p className="mt-1 text-[12px] text-[var(--test-muted)]">{node.subtitle}</p>
                 </div>
@@ -174,7 +184,18 @@ export const InfrastructureNodeCard = memo(function InfrastructureNodeCard({
                 <span className={`h-2.5 w-2.5 rounded-full ${status.dotClassName}`} />
                 <span className={status.textClassName}>{status.label}</span>
               </div>
-              <span className="text-xs text-[var(--test-muted)]">{node.metrics.traffic}</span>
+              <div className="text-right">
+                <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--test-muted)]">Endpoint</p>
+                <p className="text-xs text-[var(--test-muted)]">{node.metrics.traffic}</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/6 bg-black/12 px-3 py-2.5">
+              <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-[0.12em] text-[var(--test-muted)]">
+                <span>Container</span>
+                <span className="text-[var(--test-foreground)]">{node.name}</span>
+              </div>
+              <p className="truncate text-[11px] text-[var(--test-muted)]">{node.subtitle}</p>
             </div>
 
             <div className="grid gap-3">
@@ -205,23 +226,45 @@ export const InfrastructureNodeCard = memo(function InfrastructureNodeCard({
       <ContextMenuContent className="rounded-2xl border border-[var(--test-border)] bg-[var(--test-panel)] text-[var(--test-foreground)]">
         <ContextMenuLabel>{node.name}</ContextMenuLabel>
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => onAction(node.id, "restart")}>
-          <RotateCcw className="h-4 w-4" />
-          Restart
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={() => onAction(node.id, "logs")}>
-          <ScrollText className="h-4 w-4" />
-          Logs
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={() => onAction(node.id, "scale")}>
-          <Maximize2 className="h-4 w-4" />
-          Scale
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => onAction(node.id, "restart")}>
-          <Play className="h-4 w-4" />
-          Quick recover
-        </ContextMenuItem>
+        {node.actions.includes("restart") ? (
+          <ContextMenuItem onSelect={() => onAction(node.id, "restart")}>
+            <RotateCcw className="h-4 w-4" />
+            Restart
+          </ContextMenuItem>
+        ) : null}
+        {node.actions.includes("logs") ? (
+          <ContextMenuItem onSelect={() => onAction(node.id, "logs")}>
+            <ScrollText className="h-4 w-4" />
+            Logs
+          </ContextMenuItem>
+        ) : null}
+        {node.actions.includes("scale") ? (
+          <ContextMenuItem onSelect={() => onAction(node.id, "scale")}>
+            <Maximize2 className="h-4 w-4" />
+            Scale
+          </ContextMenuItem>
+        ) : null}
+        {node.actions.includes("restart") ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={() => onAction(node.id, "restart")}>
+              <Play className="h-4 w-4" />
+              Quick recover
+            </ContextMenuItem>
+          </>
+        ) : null}
+        {node.actions.includes("delete") ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              className="text-red-200 focus:bg-red-400/15 focus:text-red-100"
+              onSelect={() => onAction(node.id, "delete")}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </ContextMenuItem>
+          </>
+        ) : null}
       </ContextMenuContent>
     </ContextMenu>
   );

@@ -8,16 +8,15 @@ interface PluginPageProps {
 }
 
 /**
- * Catch-all route for plugin-registered pages.
+ * Catch-all route for plugin-registered pages, scoped under `/p/*`.
  * A plugin registers a page via:
  *   slots: [{ slot: "page", component: MyPage, props: { path: "/my-page" } }]
- * It will be available at /my-page.
+ * and it becomes available at `/p/my-page`.
  */
 export default function PluginPage({ params }: PluginPageProps) {
   const { slug } = use(params);
   const path = "/" + slug.join("/");
 
-  // Subscribe so we re-render when a plugin script loads and self-registers.
   useSyncExternalStore(
     pluginRegistry.subscribe.bind(pluginRegistry),
     pluginRegistry.getSnapshot.bind(pluginRegistry),
@@ -27,6 +26,14 @@ export default function PluginPage({ params }: PluginPageProps) {
   const reg = pluginRegistry.getPagePlugin(path);
 
   if (!reg || !reg.component) {
+    if (pluginRegistry.settled) {
+      return (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
+          <div className="text-2xl font-semibold">404</div>
+          <div className="text-sm">No plugin is registered for {path}.</div>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-1 items-center justify-center text-muted-foreground text-sm">
         Loading plugin…
