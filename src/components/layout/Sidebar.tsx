@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   Network,
   FolderKanban,
-  Server,
   ShieldCheck,
   Store,
   Puzzle,
@@ -18,7 +17,6 @@ import { useBackendPlugins } from "@/features/plugins/model/use-backend-plugins"
 const NAV_ITEMS = [
   { href: "/overview",     label: "Overview",     icon: Network },
   { href: "/projects",     label: "Projects",     icon: FolderKanban },
-  { href: "/servers",      label: "Servers",      icon: Server },
   { href: "/marketplace",  label: "Marketplace",  icon: Store },
 ];
 

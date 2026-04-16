@@ -33,6 +33,7 @@ export interface Blueprint {
   logo: string;
   version: string;
   official: boolean;
+  constructs?: Record<string, string>;
   config: ConfigField[];
   resources: {
     memory_mb: number;
