@@ -2,22 +2,22 @@
 
 import "reactflow/dist/style.css";
 
-import { motion } from "framer-motion";
 import {
   BookmarkPlus,
   FolderOpen,
+  HelpCircle,
   LayersIcon as Layers,
   LayoutGrid,
-  Network,
   Plus,
   Trash2,
   Waypoints,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Edge, EdgeTypes, Node, NodeChange, NodeTypes } from "reactflow";
 import {
   Panel,
+  PanOnScrollMode,
   ReactFlow,
   ReactFlowProvider,
   applyNodeChanges,
@@ -25,6 +25,7 @@ import {
 } from "reactflow";
 
 import { useInfrastructureFlowWorkspace } from "@/features/hosting/model/useInfrastructureFlowWorkspace";
+import { useCanvasGroups } from "@/features/hosting/model/useCanvasGroups";
 import {
   INFRASTRUCTURE_EDGE_TYPE,
   INFRASTRUCTURE_NODE_TYPE,
@@ -40,17 +41,15 @@ import {
   Input,
 } from "@kleffio/ui";
 import { toast } from "sonner";
-import { AnalyzeSystemButton } from "./AnalyzeSystemButton";
 import { EdgeConnection } from "./EdgeConnection";
-import { GroupNode, GROUP_COLORS } from "./GroupNode";
+import { GroupNode } from "./GroupNode";
 import { GroupManagerModal } from "./GroupManagerModal";
+import { GroupEventProvider } from "./GroupEventContext";
 import { InfrastructureNodeCard } from "./InfrastructureNodeCard";
 import { NewServerSheet } from "./NewServerSheet";
 import { NodeDetailsPanel } from "./NodeDetailsPanel";
-import type { GroupNodeData } from "./GroupNode";
 import type { GroupFormData } from "./GroupManagerModal";
-import type { AiSuggestion, InfrastructureEdge, InfrastructureNode } from "@/features/hosting/model/types";
-import type { ConnectionDTO } from "@/lib/api";
+import type { InfrastructureEdge, InfrastructureNode } from "@/features/hosting/model/types";
 
 const nodeTypes: NodeTypes = {
   [INFRASTRUCTURE_NODE_TYPE]: InfrastructureNodeCard,
@@ -88,7 +87,6 @@ function saveLayouts(projectID: string, layouts: SavedLayout[]) {
 function FlowCanvasBody({
   infrastructureNodes,
   infrastructureEdges,
-  mockAiSuggestions,
   projectID,
   projectName,
   activeServerNames,
@@ -96,12 +94,10 @@ function FlowCanvasBody({
   onDeleteEdge,
   onDeleteNode,
   onPersistNodePosition,
-  onCreateConnection,
   simulateMetrics,
 }: {
   infrastructureNodes: InfrastructureNode[];
   infrastructureEdges: InfrastructureEdge[];
-  mockAiSuggestions: AiSuggestion[];
   projectID?: string | null;
   projectName?: string;
   activeServerNames?: string[];
@@ -109,186 +105,63 @@ function FlowCanvasBody({
   onDeleteEdge?: (edgeID: string) => Promise<void> | void;
   onDeleteNode?: (nodeID: string) => Promise<void> | void;
   onPersistNodePosition?: (nodeID: string, position: { x: number; y: number }) => void;
-  onCreateConnection?: (sourceID: string, targetID: string, kind: ConnectionDTO["kind"]) => Promise<void>;
   simulateMetrics?: boolean;
 }) {
   const { fitView } = useReactFlow();
   const [newServerOpen, setNewServerOpen] = useState(false);
+  const [hotkeysOpen, setHotkeysOpen] = useState(false);
   const [layouts, setLayouts] = useState<SavedLayout[]>(() =>
     projectID ? loadLayouts(projectID) : [],
   );
   const [saveNamePrompt, setSaveNamePrompt] = useState(false);
   const [newLayoutName, setNewLayoutName] = useState("");
   const refreshTimersRef = useRef<number[]>([]);
-  const [groupNodes, setGroupNodes] = useState<Node<GroupNodeData>[]>([]);
-  const groupNodesRef = useRef<Node<GroupNodeData>[]>([]);
-  groupNodesRef.current = groupNodes;
-  const groupColorRef = useRef(0);
-  const [groupModal, setGroupModal] = useState<{
-    open: boolean;
-    mode: "create" | "edit";
-    editId: string | null;
-    initialData?: GroupFormData;
-  }>({ open: false, mode: "create", editId: null });
-  const groupModalRef = useRef(groupModal);
-  groupModalRef.current = groupModal;
 
   const {
-    analysisActive,
-    activeSuggestions,
     applyPositions,
     closePanel,
     flowEdges,
     flowNodes,
-    handleAnalyzeSystem,
     handleNodeAction,
     handleNodeClick,
     handleNodeDrag,
     handleNodeDragStop,
     handleOrganizeCanvas,
     handlePaneClick,
-    isAnalyzing,
     onNodesChange,
     relatedNodes,
     selectedNode,
-    selectedNodeSuggestions,
     setHoveredNodeId,
-    setViewport,
-    viewport,
   } = useInfrastructureFlowWorkspace({
     initialInfrastructureNodes: infrastructureNodes,
     initialInfrastructureEdges: infrastructureEdges,
-    initialMockAiSuggestions: mockAiSuggestions,
     simulateMetrics,
     onDeleteNode,
   });
 
-  const issueCount = activeSuggestions.length;
   const flowNodesRef = useRef(flowNodes);
   flowNodesRef.current = flowNodes;
 
-  const handleDeleteGroup = useCallback((id: string) => {
-    setGroupNodes((ns) => ns.filter((n) => n.id !== id));
-  }, []);
-
-  const handleEditGroup = useCallback((id: string) => {
-    const target = groupNodesRef.current.find((node) => node.id === id);
-    if (!target) return;
-    setGroupModal({
-      open: true,
-      mode: "edit",
-      editId: id,
-      initialData: {
-        label: target.data.label,
-        color: target.data.color,
-        memberIds: target.data.memberIds,
-        notes: target.data.notes ?? "",
-        role: target.data.role ?? "",
-      },
-    });
-  }, []);
-
-  const handleCreateGroup = useCallback(() => {
-    const color = GROUP_COLORS[groupColorRef.current % GROUP_COLORS.length];
-    groupColorRef.current += 1;
-    setGroupModal({
-      open: true,
-      mode: "create",
-      editId: null,
-      initialData: { label: "New Group", color, memberIds: [], notes: "", role: "" },
-    });
-  }, []);
-
-  const handleConfirmGroup = useCallback(
-    (formData: GroupFormData) => {
-      setGroupModal((prev) => {
-        if (prev.mode === "edit" && prev.editId) {
-          const editId = prev.editId;
-          setGroupNodes((ns) =>
-            ns.map((node) =>
-              node.id === editId
-                ? {
-                    ...node,
-                    data: {
-                      ...node.data,
-                      label: formData.label,
-                      color: formData.color,
-                      memberIds: formData.memberIds,
-                      memberCount: formData.memberIds.length,
-                      notes: formData.notes,
-                      role: formData.role,
-                    },
-                  }
-                : node,
-            ),
-          );
-        } else {
-          // Create new group — auto-size to member bounding box or default
-          const id = `group-${Date.now()}`;
-          let position = { x: 80, y: 80 };
-          let width = 380;
-          let height = 280;
-
-          if (formData.memberIds.length > 0) {
-            const memberNodes = flowNodesRef.current.filter((n) => formData.memberIds.includes(n.id));
-            if (memberNodes.length > 0) {
-              const PAD = 48;
-              const xs = memberNodes.map((n) => n.position.x);
-              const ys = memberNodes.map((n) => n.position.y);
-              const x2s = memberNodes.map((n) => n.position.x + (n.width ?? 220));
-              const y2s = memberNodes.map((n) => n.position.y + (n.height ?? 90));
-              const minX = Math.min(...xs) - PAD;
-              const minY = Math.min(...ys) - PAD - 36; // 36px for label bar
-              const maxX = Math.max(...x2s) + PAD;
-              const maxY = Math.max(...y2s) + PAD;
-              position = { x: minX, y: minY };
-              width = Math.max(380, maxX - minX);
-              height = Math.max(280, maxY - minY);
-            }
-          }
-
-          setGroupNodes((ns) => [
-            ...ns,
-            {
-              id,
-              type: "group",
-              position,
-              style: { width, height },
-              data: {
-                label: formData.label,
-                color: formData.color,
-                memberIds: formData.memberIds,
-                memberCount: formData.memberIds.length,
-                avgCpu: null,
-                computedStatus: null,
-                notes: formData.notes,
-                role: formData.role,
-                onDelete: handleDeleteGroup,
-                onEdit: handleEditGroup,
-              },
-              draggable: true,
-              selectable: true,
-              zIndex: -1,
-            },
-          ]);
-          toast.success(`Group "${formData.label}" created`);
-        }
-        return { ...prev, open: false };
-      });
-    },
-    [handleDeleteGroup, handleEditGroup],
-  );
-
-  const groupNodeIds = useMemo(() => new Set(groupNodes.map((n) => n.id)), [groupNodes]);
+  const {
+    groupNodes,
+    groupNodeIds,
+    groupModal,
+    setGroupModal,
+    handleDeleteGroup,
+    handleEditGroup,
+    handleOpenCreateModal,
+    handleConfirmGroup,
+    handleGroupNodesChange,
+  } = useCanvasGroups({ projectID, flowNodesRef });
 
   const handleAllNodesChange = useCallback(
     (changes: NodeChange[]) => {
       const infraChanges = changes.filter((c) => !groupNodeIds.has((c as { id: string }).id));
       const groupChanges = changes.filter((c) => groupNodeIds.has((c as { id: string }).id));
       if (infraChanges.length) onNodesChange(infraChanges);
-      if (groupChanges.length) setGroupNodes((ns) => applyNodeChanges(groupChanges, ns) as Node<GroupNodeData>[]);
+      if (groupChanges.length) handleGroupNodesChange(groupChanges);
     },
-    [groupNodeIds, onNodesChange],
+    [groupNodeIds, onNodesChange, handleGroupNodesChange],
   );
 
   const requestRefreshBurst = useCallback(() => {
@@ -346,7 +219,6 @@ function FlowCanvasBody({
   const handleLoadLayout = useCallback(
     (layout: SavedLayout) => {
       applyPositions(layout.positions);
-      // Persist updated positions to DB in background
       for (const [nodeID, pos] of Object.entries(layout.positions)) {
         onPersistNodePosition?.(nodeID, pos);
       }
@@ -395,267 +267,252 @@ function FlowCanvasBody({
   }, []);
 
   return (
-    <div className="relative h-full min-h-0 overflow-hidden">
-      <ReactFlow
-        nodes={[...groupNodes, ...flowNodes]}
-        edges={flowEdges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.18, maxZoom: 1.1 }}
-        panOnScroll={false}
-        panOnDrag
-        zoomOnDoubleClick={false}
-        elevateEdgesOnSelect
-        minZoom={0.5}
-        maxZoom={2}
-        onNodesChange={handleAllNodesChange}
-        onNodeClick={handleNodeClick}
-        onNodeMouseEnter={(_, node) => setHoveredNodeId(node.id)}
-        onNodeMouseLeave={() => setHoveredNodeId(null)}
-        onNodeDrag={handleNodeDrag}
-        onNodeDragStop={(event, node, nodes) => {
-          handleNodeDragStop(event, node, nodes);
-          onPersistNodePosition?.(node.id, node.position);
-        }}
-        onPaneClick={handlePaneClick}
-        onEdgesDelete={handleEdgesDelete}
-        onMove={(_, nextViewport) => setViewport(nextViewport)}
+    <GroupEventProvider onDelete={handleDeleteGroup} onEdit={handleEditGroup}>
+      <div className="relative h-full min-h-0 overflow-hidden">
+        <ReactFlow
+          nodes={[...groupNodes, ...flowNodes]}
+          edges={flowEdges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.18, maxZoom: 1.1 }}
+          panOnScroll
+          panOnScrollMode={PanOnScrollMode.Free}
+          panOnDrag
+          zoomOnDoubleClick={false}
+          elevateEdgesOnSelect
+          minZoom={0.5}
+          maxZoom={2}
+          onNodesChange={handleAllNodesChange}
+          onNodeClick={handleNodeClick}
+          onNodeMouseEnter={(_, node) => setHoveredNodeId(node.id)}
+          onNodeMouseLeave={() => setHoveredNodeId(null)}
+          onNodeDrag={handleNodeDrag}
+          onNodeDragStop={(event, node, nodes) => {
+            handleNodeDragStop(event, node, nodes);
+            onPersistNodePosition?.(node.id, node.position);
+          }}
+          onPaneClick={handlePaneClick}
+          onEdgesDelete={handleEdgesDelete}
           className="bg-transparent"
-        proOptions={{ hideAttribution: true }}
-      >
-        {/* Top-left toolbar */}
-        <Panel position="top-left" className="!m-4 flex flex-wrap items-center gap-2">
-          {projectName ? (
-            <div className="mr-2">
-              <p className="text-sm font-semibold text-[var(--test-foreground)]">{projectName}</p>
-              <p className="text-[11px] text-[var(--test-muted)]">Architecture canvas</p>
-            </div>
-          ) : null}
-
-          {/* Organize dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 rounded-2xl border-[var(--test-border)] bg-[var(--test-panel)] text-[var(--test-foreground)] hover:bg-[var(--test-accent-soft)]"
+          proOptions={{ hideAttribution: true }}
+        >
+          {/* Top-left toolbar */}
+          <Panel position="top-left" className="!m-4 flex flex-wrap items-center gap-2">
+            {/* Organize dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-7 rounded-xl border-[var(--test-border)] bg-[var(--test-panel)] text-xs text-[var(--test-foreground)] hover:bg-[var(--test-accent-soft)]"
+                >
+                  <Waypoints className="h-4 w-4" />
+                  Organize
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="w-56 rounded-xl border border-[var(--test-border)] bg-[var(--test-panel)] text-[var(--test-foreground)]"
               >
-                <Waypoints className="h-4 w-4" />
-                Organize
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="w-56 rounded-xl border border-[var(--test-border)] bg-[var(--test-panel)] text-[var(--test-foreground)]"
-            >
-              <DropdownMenuItem
-                className="gap-2 text-xs"
-                onSelect={handleAutoOrganize}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                Auto-arrange nodes
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="gap-2 text-xs"
-                onSelect={handleCreateGroup}
-              >
-                <Layers className="h-3.5 w-3.5" />
-                Create group box
-              </DropdownMenuItem>
-
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-[var(--test-muted)]">
-                Saved layouts
-              </DropdownMenuLabel>
-
-              {layouts.length === 0 ? (
-                <div className="px-2 py-1.5 text-xs text-[var(--test-muted)]">
-                  No saved layouts yet.
-                </div>
-              ) : (
-                layouts.map((layout) => (
-                  <DropdownMenuItem
-                    key={layout.id}
-                    className="group flex items-center justify-between gap-2 text-xs"
-                    onSelect={() => handleLoadLayout(layout)}
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{layout.name}</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="ml-auto shrink-0 opacity-0 group-hover:opacity-100 hover:text-red-400"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteLayout(layout.id);
-                      }}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </DropdownMenuItem>
-                ))
-              )}
-
-              <DropdownMenuSeparator />
-
-              {saveNamePrompt ? (
-                <div className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
-                  <Input
-                    autoFocus
-                    value={newLayoutName}
-                    onChange={(e) => setNewLayoutName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleSaveLayout();
-                      if (e.key === "Escape") { setSaveNamePrompt(false); setNewLayoutName(""); }
-                    }}
-                    placeholder="Layout name…"
-                    className="h-7 text-xs"
-                  />
-                  <div className="mt-1.5 flex gap-1">
-                    <Button
-                      size="xs"
-                      onClick={handleSaveLayout}
-                      className="flex-1"
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      onClick={() => { setSaveNamePrompt(false); setNewLayoutName(""); }}
-                      className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ) : (
                 <DropdownMenuItem
                   className="gap-2 text-xs"
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    setSaveNamePrompt(true);
-                  }}
+                  onSelect={handleAutoOrganize}
                 >
-                  <BookmarkPlus className="h-3.5 w-3.5" />
-                  Save current layout…
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  Auto-arrange nodes
                 </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuItem
+                  className="gap-2 text-xs"
+                  onSelect={handleOpenCreateModal}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  Create group box
+                </DropdownMenuItem>
 
-          {/* Add Node */}
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 rounded-2xl border-[var(--test-border)] bg-[var(--test-panel)] text-[var(--test-foreground)] hover:bg-[var(--test-accent-soft)]"
-            onClick={() => {
-              if (!projectID) {
-                toast("Node creation mocked", { description: "Choose a project context first." });
-                return;
-              }
-              setNewServerOpen(true);
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            Add Node
-          </Button>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-[var(--test-muted)]">
+                  Saved layouts
+                </DropdownMenuLabel>
 
-          <AnalyzeSystemButton
-            active={analysisActive}
-            issueCount={issueCount}
-            isAnalyzing={isAnalyzing}
-            onClick={handleAnalyzeSystem}
-          />
-        </Panel>
-
-        {/* Top-right: AI findings */}
-        <Panel position="top-right" className="!m-4 flex w-[320px] flex-col gap-3">
-          {analysisActive ? (
-            <motion.div
-              initial={{ opacity: 0, y: -18 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-[1.7rem] border border-amber-300/20 bg-[rgba(47,34,14,0.84)] p-4 shadow-[0_26px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl"
-            >
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-amber-100">AI findings</p>
-                  <p className="text-xs text-amber-50/70">{activeSuggestions.length} recommendations</p>
-                </div>
-                <span className="rounded-full border border-amber-300/20 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100">
-                  active
-                </span>
-              </div>
-              <div className="space-y-2">
-                {activeSuggestions.map((suggestion) => (
-                  <div key={suggestion.id} className="rounded-2xl border border-white/8 bg-black/12 p-3">
-                    <p className="text-sm font-medium text-[var(--test-foreground)]">{suggestion.title}</p>
-                    <p className="mt-1 text-xs leading-6 text-[var(--test-muted)]">{suggestion.description}</p>
+                {layouts.length === 0 ? (
+                  <div className="px-2 py-1.5 text-xs text-[var(--test-muted)]">
+                    No saved layouts yet.
                   </div>
-                ))}
-              </div>
-            </motion.div>
-          ) : null}
-        </Panel>
+                ) : (
+                  layouts.map((layout) => (
+                    <DropdownMenuItem
+                      key={layout.id}
+                      className="group flex items-center justify-between gap-2 text-xs"
+                      onSelect={() => handleLoadLayout(layout)}
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{layout.name}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="ml-auto shrink-0 opacity-0 group-hover:opacity-100 hover:text-red-400"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteLayout(layout.id);
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuItem>
+                  ))
+                )}
 
-        {/* Bottom-left hint */}
-        <Panel position="bottom-left" className="!m-4">
-          <div className="flex items-center gap-2 rounded-full border border-[var(--test-border)] bg-[var(--test-panel)] px-4 py-2 text-xs text-[var(--test-muted)] backdrop-blur-lg">
-            <Network className="h-3 w-3 shrink-0" />
-            Scroll to zoom, drag empty canvas to pan, press C to center, select edge + Delete to remove.
-          </div>
-        </Panel>
+                <DropdownMenuSeparator />
 
-        {/* Bottom-right zoom */}
-        <Panel position="bottom-right" className="!m-4">
-          <div className="rounded-2xl border border-[var(--test-border)] bg-[var(--test-panel)] px-4 py-2 text-sm text-[var(--test-muted)] backdrop-blur-lg">
-            Zoom {viewport.zoom.toFixed(2)}x
-          </div>
-        </Panel>
-      </ReactFlow>
+                {saveNamePrompt ? (
+                  <div className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                    <Input
+                      autoFocus
+                      value={newLayoutName}
+                      onChange={(e) => setNewLayoutName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveLayout();
+                        if (e.key === "Escape") { setSaveNamePrompt(false); setNewLayoutName(""); }
+                      }}
+                      placeholder="Layout name…"
+                      className="h-7 text-xs"
+                    />
+                    <div className="mt-1.5 flex gap-1">
+                      <Button size="xs" onClick={handleSaveLayout} className="flex-1">
+                        Save
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        onClick={() => { setSaveNamePrompt(false); setNewLayoutName(""); }}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <DropdownMenuItem
+                    className="gap-2 text-xs"
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setSaveNamePrompt(true);
+                    }}
+                  >
+                    <BookmarkPlus className="h-3.5 w-3.5" />
+                    Save current layout…
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-      {/* Node detail panel */}
-      {selectedNode ? (
-        <NodeDetailsPanel
-          node={selectedNode}
-          open
-          onOpenChange={closePanel}
-          onAction={handleNodeAction}
-          relatedNodes={relatedNodes}
-          suggestions={selectedNodeSuggestions}
+            {/* Add Node */}
+            <Button
+              type="button"
+              variant="outline"
+              className="h-7 rounded-xl border-[var(--test-border)] bg-[var(--test-panel)] text-xs text-[var(--test-foreground)] hover:bg-[var(--test-accent-soft)]"
+              onClick={() => {
+                if (!projectID) {
+                  toast("Node creation mocked", { description: "Choose a project context first." });
+                  return;
+                }
+                setNewServerOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              Add Node
+            </Button>
+          </Panel>
+
+          {/* Bottom-left help button + expandable hotkeys box */}
+          <Panel position="bottom-left" className="!m-4">
+            <div className="relative flex flex-col items-start gap-2">
+              {hotkeysOpen && (
+                <div className="w-[280px] overflow-hidden rounded-2xl border border-[var(--test-border)] bg-[#0e1117] shadow-2xl">
+                  <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+                    <p className="text-xs font-semibold text-white">Keyboard shortcuts</p>
+                    <button
+                      type="button"
+                      onClick={() => setHotkeysOpen(false)}
+                      className="grid h-5 w-5 place-items-center rounded text-white/40 hover:bg-white/8 hover:text-white/70"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <div className="space-y-0.5 p-2">
+                    {[
+                      ["C", "Center / fit all nodes"],
+                      ["Scroll", "Pan canvas"],
+                      ["Ctrl + Scroll", "Zoom in / out"],
+                      ["Click node", "Open details panel"],
+                      ["Drag node", "Reposition"],
+                      ["Select edge + Del", "Remove connection"],
+                      ["Backspace / Del", "Remove selected node"],
+                    ].map(([key, desc]) => (
+                      <div key={key} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/[0.03]">
+                        <span className="text-[11px] text-white/50">{desc}</span>
+                        <kbd className="ml-3 shrink-0 rounded border border-white/10 bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-white/70">
+                          {key}
+                        </kbd>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setHotkeysOpen((v) => !v)}
+                className="grid h-7 w-7 place-items-center rounded-full border border-[var(--test-border)] bg-[var(--test-panel)] text-[var(--test-muted)] transition-colors hover:bg-[var(--test-accent-soft)] hover:text-[var(--test-foreground)]"
+                title="Keyboard shortcuts"
+              >
+                <HelpCircle className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </Panel>
+        </ReactFlow>
+
+        {/* Node detail panel */}
+        {selectedNode ? (
+          <NodeDetailsPanel
+            node={selectedNode}
+            open
+            onOpenChange={closePanel}
+            onAction={handleNodeAction}
+            relatedNodes={relatedNodes}
+          />
+        ) : null}
+
+        {/* New server wizard */}
+        <NewServerSheet
+          open={newServerOpen}
+          onOpenChange={setNewServerOpen}
+          projectID={projectID ?? null}
+          activeServerNames={activeServerNames ?? []}
+          onCreated={() => { requestRefreshBurst(); }}
         />
-      ) : null}
 
-      {/* New server wizard */}
-      <NewServerSheet
-        open={newServerOpen}
-        onOpenChange={setNewServerOpen}
-        projectID={projectID ?? null}
-        activeServerNames={activeServerNames ?? []}
-        onCreated={() => { requestRefreshBurst(); }}
-      />
-
-      {/* Group manager modal */}
-      <GroupManagerModal
-        open={groupModal.open}
-        mode={groupModal.mode}
-        initialData={groupModal.initialData}
-        nodes={infrastructureNodes}
-        onConfirm={handleConfirmGroup}
-        onCancel={() => setGroupModal((prev) => ({ ...prev, open: false }))}
-        onDelete={
-          groupModal.mode === "edit" && groupModal.editId
-            ? () => {
-                handleDeleteGroup(groupModal.editId!);
-                setGroupModal((prev) => ({ ...prev, open: false }));
-              }
-            : undefined
-        }
-      />
-    </div>
+        {/* Group manager modal */}
+        <GroupManagerModal
+          open={groupModal.open}
+          mode={groupModal.mode}
+          initialData={groupModal.initialData}
+          nodes={infrastructureNodes}
+          onConfirm={(formData) => handleConfirmGroup(formData, groupModal.editId, groupModal.mode)}
+          onCancel={() => setGroupModal((prev) => ({ ...prev, open: false }))}
+          onDelete={
+            groupModal.mode === "edit" && groupModal.editId
+              ? () => {
+                  handleDeleteGroup(groupModal.editId!);
+                  setGroupModal((prev) => ({ ...prev, open: false }));
+                }
+              : undefined
+          }
+        />
+      </div>
+    </GroupEventProvider>
   );
 }
 
@@ -664,7 +521,6 @@ function FlowCanvasBody({
 export function InfrastructureFlowCanvas({
   infrastructureNodes,
   infrastructureEdges,
-  mockAiSuggestions,
   projectID,
   projectName,
   activeServerNames,
@@ -672,12 +528,10 @@ export function InfrastructureFlowCanvas({
   onDeleteEdge,
   onDeleteNode,
   onPersistNodePosition,
-  onCreateConnection,
   simulateMetrics,
 }: {
   infrastructureNodes: InfrastructureNode[];
   infrastructureEdges: InfrastructureEdge[];
-  mockAiSuggestions: AiSuggestion[];
   projectID?: string | null;
   projectName?: string;
   activeServerNames?: string[];
@@ -685,7 +539,6 @@ export function InfrastructureFlowCanvas({
   onDeleteEdge?: (edgeID: string) => Promise<void> | void;
   onDeleteNode?: (nodeID: string) => Promise<void> | void;
   onPersistNodePosition?: (nodeID: string, position: { x: number; y: number }) => void;
-  onCreateConnection?: (sourceID: string, targetID: string, kind: ConnectionDTO["kind"]) => Promise<void>;
   simulateMetrics?: boolean;
 }) {
   return (
@@ -693,7 +546,6 @@ export function InfrastructureFlowCanvas({
       <FlowCanvasBody
         infrastructureNodes={infrastructureNodes}
         infrastructureEdges={infrastructureEdges}
-        mockAiSuggestions={mockAiSuggestions}
         projectID={projectID}
         projectName={projectName}
         activeServerNames={activeServerNames}
@@ -701,7 +553,6 @@ export function InfrastructureFlowCanvas({
         onDeleteEdge={onDeleteEdge}
         onDeleteNode={onDeleteNode}
         onPersistNodePosition={onPersistNodePosition}
-        onCreateConnection={onCreateConnection}
         simulateMetrics={simulateMetrics}
       />
     </ReactFlowProvider>

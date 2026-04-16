@@ -11,7 +11,6 @@ import type {
 
 export type InfrastructureFlowNodeData = {
   node: InfrastructureNode;
-  highlighted: boolean;
   onAction: (nodeId: string, action: NodeAction) => void;
 };
 
@@ -21,10 +20,12 @@ export type InfrastructureFlowEdgeData = {
   dimmed: boolean;
 };
 
+// highlighted kept in edge data for hover-based highlighting (not AI)
+
 export const INFRASTRUCTURE_NODE_TYPE = "infrastructureNode";
 export const INFRASTRUCTURE_EDGE_TYPE = "infrastructureEdge";
-export const INFRASTRUCTURE_NODE_WIDTH = 280;
-export const INFRASTRUCTURE_NODE_HEIGHT = 310;
+export const INFRASTRUCTURE_NODE_WIDTH = 220;
+export const INFRASTRUCTURE_NODE_HEIGHT = 110;
 export const INFRASTRUCTURE_NODE_GAP = 24;
 
 const ORGANIZED_INFRASTRUCTURE_LAYOUT: Record<string, { x: number; y: number }> = {
@@ -120,7 +121,6 @@ export function buildInfrastructureFlowNodes(
       draggable: true,
       data: {
         node,
-        highlighted: highlightedNodeIds.has(node.id),
         onAction,
       },
     };
@@ -158,7 +158,7 @@ export function buildInfrastructureFlowEdges(
     animated: edge.kind === "traffic",
     markerEnd: {
       type: MarkerType.ArrowClosed,
-      color: highlightedEdgeIds.has(edge.id) ? "#f6c177" : "rgba(230, 232, 255, 0.38)",
+      color: "rgba(255,255,255,0.5)",
     },
   }));
 }

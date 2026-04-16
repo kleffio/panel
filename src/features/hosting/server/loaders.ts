@@ -6,7 +6,6 @@ import {
   gameServerDetailData,
   infrastructureEdges,
   infrastructureNodes,
-  mockAiSuggestions,
   overviewActivityFeed,
   overviewDeployments,
   overviewMetricCards,
@@ -34,7 +33,6 @@ export const hostingDetailSlugs = [
 export async function getHostingOverviewPageData() {
   return simulateRequest({
     infrastructureNodes,
-    mockAiSuggestions,
     overviewMetricCards,
     overviewDeployments,
     overviewActivityFeed,
@@ -45,7 +43,6 @@ export async function getHostingArchitecturePageData() {
   return simulateRequest({
     infrastructureNodes: infrastructureNodes.map(({ icon: _icon, ...node }) => node),
     infrastructureEdges,
-    mockAiSuggestions,
   });
 }
 

@@ -4,7 +4,6 @@ import * as React from "react";
 import { Activity, Boxes, Database, Globe, HardDrive, Server, Shield, Swords } from "lucide-react";
 
 import {
-  createConnection,
   deleteConnection,
   deleteWorkload,
   getProject,
@@ -12,19 +11,15 @@ import {
   listGraphNodes,
   listWorkloads,
   upsertGraphNode,
-  type ConnectionDTO,
   type WorkloadDTO,
 } from "@/lib/api";
 import { ArchitectureView } from "@/features/hosting/pages/ArchitectureView";
 import type {
-  AiSuggestion,
   InfrastructureEdge,
   InfrastructureNode,
   NodeKind,
   NodeStatus,
 } from "@/features/hosting/model/types";
-
-const EMPTY_SUGGESTIONS: AiSuggestion[] = [];
 
 const KIND_ICONS: Record<NodeKind, typeof Activity> = {
   app: Globe,
@@ -399,22 +394,6 @@ export function ProjectArchitecturePage({ projectID }: { projectID: string }) {
     void refresh({ background: true });
   }, [refresh]);
 
-  const handleCreateConnection = React.useCallback(
-    async (
-      sourceID: string,
-      targetID: string,
-      kind: ConnectionDTO["kind"],
-    ) => {
-      await createConnection(projectID, {
-        source_workload_id: sourceID,
-        target_workload_id: targetID,
-        kind,
-      });
-      void refresh({ background: true });
-    },
-    [projectID, refresh],
-  );
-
   if (isLoading && nodes.length === 0) {
     return (
       <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center text-sm text-muted-foreground">
@@ -433,7 +412,6 @@ export function ProjectArchitecturePage({ projectID }: { projectID: string }) {
       <ArchitectureView
         infrastructureNodes={nodes}
         infrastructureEdges={edges}
-        mockAiSuggestions={EMPTY_SUGGESTIONS}
         projectID={projectID}
         projectName={projectName}
         activeServerNames={activeServerNames}
@@ -441,7 +419,6 @@ export function ProjectArchitecturePage({ projectID }: { projectID: string }) {
         onDeleteEdge={handleDeleteEdge}
         onDeleteNode={handleDeleteNode}
         onPersistNodePosition={handlePersistNodePosition}
-        onCreateConnection={handleCreateConnection}
         simulateMetrics={false}
       />
     </>

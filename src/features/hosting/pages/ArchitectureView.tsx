@@ -1,16 +1,13 @@
 import { InfrastructureFlowCanvas } from "@/features/hosting/ui/InfrastructureFlowCanvas";
 import { ArchitectureThemeShell } from "@/components/layout/ArchitectureThemeShell";
 import type {
-  AiSuggestion,
   InfrastructureEdge,
   InfrastructureNode,
 } from "@/features/hosting/model/types";
-import type { ConnectionDTO } from "@/lib/api";
 
 export function ArchitectureView({
   infrastructureNodes,
   infrastructureEdges,
-  mockAiSuggestions,
   projectID,
   projectName,
   activeServerNames,
@@ -18,12 +15,10 @@ export function ArchitectureView({
   onDeleteEdge,
   onDeleteNode,
   onPersistNodePosition,
-  onCreateConnection,
   simulateMetrics,
 }: {
   infrastructureNodes: InfrastructureNode[];
   infrastructureEdges: InfrastructureEdge[];
-  mockAiSuggestions: AiSuggestion[];
   projectID?: string | null;
   projectName?: string;
   activeServerNames?: string[];
@@ -31,7 +26,6 @@ export function ArchitectureView({
   onDeleteEdge?: (edgeID: string) => Promise<void> | void;
   onDeleteNode?: (nodeID: string) => Promise<void> | void;
   onPersistNodePosition?: (nodeID: string, position: { x: number; y: number }) => void;
-  onCreateConnection?: (sourceID: string, targetID: string, kind: ConnectionDTO["kind"]) => Promise<void>;
   simulateMetrics?: boolean;
 }) {
   return (
@@ -40,7 +34,6 @@ export function ArchitectureView({
         <InfrastructureFlowCanvas
           infrastructureNodes={infrastructureNodes}
           infrastructureEdges={infrastructureEdges}
-          mockAiSuggestions={mockAiSuggestions}
           projectID={projectID}
           projectName={projectName}
           activeServerNames={activeServerNames}
@@ -48,7 +41,6 @@ export function ArchitectureView({
           onDeleteEdge={onDeleteEdge}
           onDeleteNode={onDeleteNode}
           onPersistNodePosition={onPersistNodePosition}
-          onCreateConnection={onCreateConnection}
           simulateMetrics={simulateMetrics}
         />
       </ArchitectureThemeShell>

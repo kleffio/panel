@@ -10,7 +10,6 @@ export default async function OverviewPage() {
   return (
     <SystemOverviewDashboard
       infrastructureNodes={data.infrastructureNodes}
-      mockAiSuggestions={data.mockAiSuggestions}
       overviewMetricCards={data.overviewMetricCards}
       overviewDeployments={data.overviewDeployments}
       overviewActivityFeed={data.overviewActivityFeed}

@@ -2,7 +2,6 @@ import { Activity, Boxes, Database, Globe, HardDrive, Server, Shield, Swords } f
 
 import { TEST_ROUTES } from "@/lib/config/routes";
 import type {
-  AiSuggestion,
   DetailSection,
   FlowNode,
   GameServerDetailData,
@@ -599,41 +598,6 @@ export const infrastructureEdges: InfrastructureEdge[] = [
   { id: "minecraft-redis", source: "minecraft", target: "redis", kind: "network", label: "Match state", sourceHandle: "right", targetHandle: "left" },
   { id: "backend-observability", source: "backend", target: "observability", kind: "network", label: "Trace stream", sourceHandle: "right", targetHandle: "top" },
   { id: "workers-observability", source: "workers", target: "observability", kind: "network", label: "Job telemetry", sourceHandle: "right", targetHandle: "top" },
-];
-
-export const mockAiSuggestions: AiSuggestion[] = [
-  {
-    id: "ai-backend-scale",
-    nodeId: "backend",
-    title: "Backend API is CPU bound",
-    description: "Ingress bursts are pushing the API container above 90% CPU and increasing retry pressure on database writes.",
-    severity: "critical",
-    actionLabel: "Scale API pool",
-  },
-  {
-    id: "ai-workers-shift",
-    nodeId: "workers",
-    title: "Shift queue work off the API path",
-    description: "Worker replicas are warming successfully; move webhook retries and invoice sync fully off the backend service.",
-    severity: "warning",
-    actionLabel: "Scale workers",
-  },
-  {
-    id: "ai-proxy-route",
-    nodeId: "proxy",
-    title: "Ingress should isolate game traffic",
-    description: "TCP game sessions and API bursts are sharing the same proxy tier. Consider a dedicated proxy lane for gameplay shards.",
-    severity: "info",
-    actionLabel: "Split ingress",
-  },
-  {
-    id: "ai-postgres-guardrail",
-    nodeId: "postgres",
-    title: "Database write headroom is narrowing",
-    description: "The primary cluster is handling elevated write amplification from the API. Connection pressure is still safe but trending upward.",
-    severity: "warning",
-    actionLabel: "Tune connection pool",
-  },
 ];
 
 export const overviewMetricCards: OverviewMetricCard[] = [

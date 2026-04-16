@@ -22,7 +22,12 @@ export function ArchitectureThemeShell({ children }: { children: ReactNode }) {
     <div
       ref={containerRef}
       className="relative h-full w-full overflow-hidden text-[var(--test-foreground)]"
-      style={{ background: "var(--test-background)" }}
+      style={{
+        backgroundColor: "#0c0d11",
+        backgroundImage:
+          "radial-gradient(circle, rgba(255,255,255,0.065) 1px, transparent 1px)",
+        backgroundSize: "28px 28px",
+      }}
     >
       <InteractiveDotField containerRef={containerRef} overlayDotColor={overlayDotColor} />
       <div className="relative z-10 h-full">{children}</div>

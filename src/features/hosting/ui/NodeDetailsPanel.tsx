@@ -1,20 +1,18 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   ArrowUpRight,
   CheckCircle2,
   Circle,
   Maximize2,
   RotateCcw,
-  Sparkles,
   Trash2,
   XCircle,
 } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
-import type { AiSuggestion, InfrastructureNode, NodeAction } from "@/features/hosting/model/types";
+import type { InfrastructureNode, NodeAction } from "@/features/hosting/model/types";
 import { getStatusMeta } from "@/features/hosting/lib/infrastructure-graph";
 import { Button } from "@kleffio/ui";
 import { Sheet, SheetContent } from "@kleffio/ui";
@@ -178,14 +176,12 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
   onOpenChange,
   onAction,
   relatedNodes,
-  suggestions,
 }: {
   node: InfrastructureNode | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAction: (nodeId: string, action: NodeAction) => void;
   relatedNodes: InfrastructureNode[];
-  suggestions: AiSuggestion[];
 }) {
   const [tab, setTab] = useState<Tab>("logs");
   const status = node ? getStatusMeta(node.status) : null;
@@ -228,7 +224,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                     onClick={() => setTab(t)}
                     className={`relative px-4 pb-3 text-[12px] font-medium capitalize transition-colors ${
                       tab === t
-                        ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-white"
+                        ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-[#f5b517]"
                         : "text-white/40 hover:text-white/70"
                     }`}
                   >
@@ -311,21 +307,18 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                     </div>
                   ) : null}
 
-                  {/* AI suggestions */}
-                  {suggestions.length > 0 ? (
-                    <div className="rounded-xl border border-amber-300/15 bg-amber-400/[0.06] p-4">
-                      <div className="mb-3 flex items-center gap-2">
-                        <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-                        <p className="text-[11px] uppercase tracking-wide text-amber-300/80">
-                          AI recommendations
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        {suggestions.map((s) => (
-                          <div key={s.id} className="rounded-lg border border-white/6 bg-black/20 p-3">
-                            <p className="text-xs font-medium text-white/80">{s.title}</p>
-                            <p className="mt-1 text-[11px] leading-5 text-white/45">{s.description}</p>
-                          </div>
+                  {/* Badges / labels */}
+                  {node.badges.length > 0 ? (
+                    <div className="rounded-xl border border-white/8 bg-white/[0.03] p-4">
+                      <p className="mb-3 text-[11px] uppercase tracking-wide text-white/40">Labels</p>
+                      <div className="flex flex-wrap gap-2">
+                        {node.badges.map((badge) => (
+                          <span
+                            key={badge}
+                            className="rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-white/50"
+                          >
+                            {badge}
+                          </span>
                         ))}
                       </div>
                     </div>
@@ -346,7 +339,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                   <Button
                     asChild
                     size="sm"
-                    className="h-8 rounded-lg bg-white/10 text-[12px] text-white/80 hover:bg-white/15"
+                    className="h-8 rounded-lg bg-white/10 text-[12px] text-white/80 hover:bg-[#f5b517]/10 hover:text-[#f5b517]"
                   >
                     <Link href={node.route}>
                       Open
@@ -402,6 +395,5 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
   prev.node?.metrics.ram === next.node?.metrics.ram &&
   prev.node?.metrics.ramLabel === next.node?.metrics.ramLabel &&
   prev.node?.metrics.traffic === next.node?.metrics.traffic &&
-  prev.relatedNodes === next.relatedNodes &&
-  prev.suggestions === next.suggestions
+  prev.relatedNodes === next.relatedNodes
 );
