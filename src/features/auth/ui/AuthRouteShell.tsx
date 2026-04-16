@@ -74,6 +74,7 @@ export function AuthRouteShell({ children }: { children: ReactNode }) {
           >
             <AmbientOrbField
               key={currentMode ?? "auth"}
+              className="pointer-events-none"
               showEdgeScrim={false}
               revealDelayMs={orbRevealDelayMs}
             />
