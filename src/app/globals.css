@@ -13,7 +13,6 @@
   --color-kleff-primary: 245 181 23;
   --color-kleff-primary-dark: 196 143 0;
   --color-kleff-primary-soft: 250 215 130;
-
   --gradient-kleff-brand: linear-gradient(
     135deg,
     rgb(var(--color-kleff-primary-soft)) 0%,

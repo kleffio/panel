@@ -8,7 +8,7 @@ export type { ApiTokenResponse };
  * Removes all oidc-client-ts session entries from localStorage.
  * Call this before hard-navigating to /auth/login after an IDP switch or
  * initial setup so that stale tokens don't auto-redirect the user back to
- * /dashboard with the wrong identity.
+ * /overview with the wrong identity.
  */
 export function clearStoredSession(): void {
   if (typeof window === "undefined") return;

@@ -3,7 +3,13 @@
 import { useMemo, useRef, type ReactNode } from "react";
 import { InteractiveDotField } from "@kleffio/ui";
 
-export function AuthThemeShell({ children }: { children: ReactNode }) {
+export function AuthThemeShell({
+  children,
+  showDots = true,
+}: {
+  children: ReactNode;
+  showDots?: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const overlayDotColor = useMemo(() => {
@@ -25,7 +31,7 @@ export function AuthThemeShell({ children }: { children: ReactNode }) {
       style={{ background: "var(--test-background)" }}
     >
       <div className="pointer-events-none absolute inset-0 bg-kleff-spotlight opacity-80" />
-      <InteractiveDotField containerRef={containerRef} overlayDotColor={overlayDotColor} />
+      {showDots && <InteractiveDotField containerRef={containerRef} overlayDotColor={overlayDotColor} />}
       <div className="relative z-10 w-full">{children}</div>
     </div>
   );
