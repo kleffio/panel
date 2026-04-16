@@ -5,7 +5,6 @@ import { ArrowUpRight, Maximize2, Play, RotateCcw, ScrollText, Trash2 } from "lu
 import { memo } from "react";
 import Link from "next/link";
 import type { NodeProps } from "reactflow";
-import { Handle, Position } from "reactflow";
 
 import { getKindMeta, getStatusMeta, type InfrastructureFlowNodeData } from "@/features/hosting/lib/infrastructure-graph";
 import {
@@ -105,10 +104,6 @@ export const InfrastructureNodeCard = memo(function InfrastructureNodeCard({
   const status = getStatusMeta(node.status);
   const kind = getKindMeta(node.kind);
   const logo = getNodeLogoMeta(node.id);
-  const handleStyle = {
-    background: "rgba(13, 13, 13, 0.94)",
-    border: "1px solid rgba(245, 181, 23, 0.68)",
-  };
 
   return (
     <ContextMenu>
@@ -136,11 +131,6 @@ export const InfrastructureNodeCard = memo(function InfrastructureNodeCard({
           } ${selected ? "ring-2 ring-amber-300/40 ring-offset-2 ring-offset-transparent" : ""}`}
           style={{ backgroundImage: `linear-gradient(180deg, ${kind.accent}, transparent)` }}
         >
-          <Handle id="top" type="source" position={Position.Top} className="!h-3 !w-3 !rounded-full" style={handleStyle} />
-          <Handle id="right" type="source" position={Position.Right} className="!h-3 !w-3 !rounded-full" style={handleStyle} />
-          <Handle id="bottom" type="source" position={Position.Bottom} className="!h-3 !w-3 !rounded-full" style={handleStyle} />
-          <Handle id="left" type="source" position={Position.Left} className="!h-3 !w-3 !rounded-full" style={handleStyle} />
-
           <div className="space-y-4 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 flex-1 items-center gap-3">
