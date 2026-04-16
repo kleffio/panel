@@ -9,10 +9,10 @@ export type HostingPageKey =
   | "workers"
   | "game-server"
   | "observability";
-export type NodeStatus = "running" | "starting" | "error";
+export type NodeStatus = "running" | "starting" | "deleting" | "error";
 export type NodeKind = "app" | "api" | "worker" | "database" | "cache" | "proxy" | "game-server" | "support";
 export type EdgeKind = "network" | "dependency" | "traffic";
-export type NodeAction = "restart" | "logs" | "scale";
+export type NodeAction = "restart" | "logs" | "scale" | "delete";
 
 export type NodeMetricsPreview = {
   cpu: number;

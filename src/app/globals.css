@@ -13,7 +13,6 @@
   --color-kleff-primary: 245 181 23;
   --color-kleff-primary-dark: 196 143 0;
   --color-kleff-primary-soft: 250 215 130;
-
   --gradient-kleff-brand: linear-gradient(
     135deg,
     rgb(var(--color-kleff-primary-soft)) 0%,
@@ -249,5 +248,203 @@
     border: 1px solid rgba(148, 163, 184, 0.16);
     background: rgba(24, 24, 27, 0.96);
     box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+  }
+
+  .kleff-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(245, 181, 23, 0.55) rgba(255, 255, 255, 0.04);
+  }
+
+  .kleff-scrollbar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .kleff-scrollbar::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .kleff-scrollbar::-webkit-scrollbar-thumb {
+    border: 2px solid rgba(8, 8, 8, 0.9);
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(250, 215, 130, 0.62), rgba(196, 143, 0, 0.52));
+  }
+
+  .kleff-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(250, 215, 130, 0.78), rgba(196, 143, 0, 0.7));
+  }
+
+  .kleff-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* ─── Auth backgrounds ───────────────────────────────────────────────────────*/
+  .bg-auth-kleff-shell {
+    background: linear-gradient(180deg, rgba(11, 10, 9, 0.99), rgba(4, 4, 4, 1));
+  }
+
+  .bg-auth-kleff-hero {
+    background:
+      linear-gradient(to right, rgba(224, 164, 56, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(224, 164, 56, 0.06) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
+    background-size: 30px 30px, 30px 30px, auto;
+  }
+
+  .bg-auth-kleff-hero-soft {
+    background:
+      linear-gradient(to right, rgba(224, 164, 56, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(224, 164, 56, 0.06) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+    background-size: 30px 30px, 30px 30px, auto;
+  }
+
+  .bg-auth-kleff-panel {
+    background: rgb(8, 8, 8);
+  }
+
+  @media (min-width: 1024px) {
+    .bg-auth-kleff-hero {
+      background:
+        linear-gradient(to right, rgba(224, 164, 56, 0.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(224, 164, 56, 0.06) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
+      background-size: 30px 30px, 30px 30px, auto;
+    }
+
+    .bg-auth-kleff-hero--panel-left {
+      background:
+        linear-gradient(to right, rgba(224, 164, 56, 0.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(224, 164, 56, 0.06) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
+      background-size: 30px 30px, 30px 30px, auto;
+    }
+
+    .bg-auth-kleff-hero-soft {
+      background:
+        linear-gradient(to right, rgba(224, 164, 56, 0.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(224, 164, 56, 0.06) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+      background-size: 30px 30px, 30px 30px, auto;
+    }
+
+    .bg-auth-kleff-hero-soft--panel-left {
+      background:
+        linear-gradient(to right, rgba(224, 164, 56, 0.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(224, 164, 56, 0.06) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+      background-size: 30px 30px, 30px 30px, auto;
+    }
+
+    .bg-auth-kleff-seam-right {
+      background:
+        radial-gradient(
+          112% 82% at 100% 50%,
+          rgba(8, 8, 8, 0.94) 0%,
+          rgba(8, 8, 8, 0.72) 26%,
+          rgba(8, 8, 8, 0.42) 54%,
+          rgba(8, 8, 8, 0.14) 78%,
+          rgba(8, 8, 8, 0) 100%
+        ),
+        linear-gradient(
+          to left,
+          rgba(8, 8, 8, 0.98) 0%,
+          rgba(8, 8, 8, 0.88) 18%,
+          rgba(8, 8, 8, 0.62) 44%,
+          rgba(8, 8, 8, 0.3) 70%,
+          rgba(8, 8, 8, 0.1) 86%,
+          rgba(8, 8, 8, 0) 100%
+        );
+    }
+
+    .bg-auth-kleff-seam-left {
+      background:
+        radial-gradient(
+          112% 82% at 0% 50%,
+          rgba(8, 8, 8, 0.94) 0%,
+          rgba(8, 8, 8, 0.72) 26%,
+          rgba(8, 8, 8, 0.42) 54%,
+          rgba(8, 8, 8, 0.14) 78%,
+          rgba(8, 8, 8, 0) 100%
+        ),
+        linear-gradient(
+          to right,
+          rgba(8, 8, 8, 0.98) 0%,
+          rgba(8, 8, 8, 0.88) 18%,
+          rgba(8, 8, 8, 0.62) 44%,
+          rgba(8, 8, 8, 0.3) 70%,
+          rgba(8, 8, 8, 0.1) 86%,
+          rgba(8, 8, 8, 0) 100%
+        );
+    }
+
+    .bg-auth-kleff-seam-soft-right {
+      background:
+        radial-gradient(
+          132% 70% at 100% 16%,
+          rgba(8, 8, 8, 0.78) 0%,
+          rgba(8, 8, 8, 0.52) 26%,
+          rgba(8, 8, 8, 0.18) 54%,
+          rgba(8, 8, 8, 0) 82%
+        ),
+        radial-gradient(
+          138% 74% at 100% 82%,
+          rgba(8, 8, 8, 0.72) 0%,
+          rgba(8, 8, 8, 0.44) 28%,
+          rgba(8, 8, 8, 0.14) 58%,
+          rgba(8, 8, 8, 0) 84%
+        ),
+        radial-gradient(
+          124% 92% at 100% 50%,
+          rgba(10, 9, 8, 0.58) 0%,
+          rgba(10, 9, 8, 0.24) 34%,
+          rgba(10, 9, 8, 0.08) 62%,
+          rgba(10, 9, 8, 0) 88%
+        ),
+        linear-gradient(
+          to left,
+          rgba(8, 8, 8, 0.92) 0%,
+          rgba(8, 8, 8, 0.74) 20%,
+          rgba(8, 8, 8, 0.46) 46%,
+          rgba(8, 8, 8, 0.2) 70%,
+          rgba(8, 8, 8, 0.06) 84%,
+          rgba(8, 8, 8, 0) 100%
+        );
+    }
+
+    .bg-auth-kleff-seam-soft-left {
+      background:
+        radial-gradient(
+          132% 70% at 0% 16%,
+          rgba(8, 8, 8, 0.78) 0%,
+          rgba(8, 8, 8, 0.52) 26%,
+          rgba(8, 8, 8, 0.18) 54%,
+          rgba(8, 8, 8, 0) 82%
+        ),
+        radial-gradient(
+          138% 74% at 0% 82%,
+          rgba(8, 8, 8, 0.72) 0%,
+          rgba(8, 8, 8, 0.44) 28%,
+          rgba(8, 8, 8, 0.14) 58%,
+          rgba(8, 8, 8, 0) 84%
+        ),
+        radial-gradient(
+          124% 92% at 0% 50%,
+          rgba(10, 9, 8, 0.58) 0%,
+          rgba(10, 9, 8, 0.24) 34%,
+          rgba(10, 9, 8, 0.08) 62%,
+          rgba(10, 9, 8, 0) 88%
+        ),
+        linear-gradient(
+          to right,
+          rgba(8, 8, 8, 0.92) 0%,
+          rgba(8, 8, 8, 0.74) 20%,
+          rgba(8, 8, 8, 0.46) 46%,
+          rgba(8, 8, 8, 0.2) 70%,
+          rgba(8, 8, 8, 0.06) 84%,
+          rgba(8, 8, 8, 0) 100%
+        );
+    }
   }
 }

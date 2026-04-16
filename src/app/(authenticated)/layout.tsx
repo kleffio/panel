@@ -5,6 +5,7 @@ import { useAuth, AuthConfigContext } from "@/features/auth";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { PluginContextProvider } from "@/features/plugins/ui/PluginContextProvider";
+import { CurrentProjectProvider } from "@/features/projects/model/CurrentProjectProvider";
 import { Skeleton } from "@kleffio/ui";
 
 export default function AuthenticatedLayout({ children }: { children: ReactNode }) {
@@ -32,7 +33,9 @@ export default function AuthenticatedLayout({ children }: { children: ReactNode 
 
   return (
     <PluginContextProvider>
-      <AppShell>{children}</AppShell>
+      <CurrentProjectProvider>
+        <AppShell>{children}</AppShell>
+      </CurrentProjectProvider>
     </PluginContextProvider>
   );
 }

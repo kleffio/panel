@@ -51,7 +51,7 @@ export function GameServerDetailPage({ data }: { data: GameServerDetailData }) {
                   </Link>
                 </Button>
                 <Button asChild>
-                  <Link href={TEST_ROUTES.DASHBOARD}>Back to dashboard</Link>
+                  <Link href={TEST_ROUTES.OVERVIEW}>Back to overview</Link>
                 </Button>
               </div>
             </section>

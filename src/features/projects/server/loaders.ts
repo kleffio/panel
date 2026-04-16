@@ -12,7 +12,7 @@ const fixture: ProjectsDashboardPageData = {
       region: "us-east",
       servicesCount: 4,
       aiSummary: "Everything is running smoothly. Traffic is stable across all edges.",
-      href: "/architecture",
+      href: "/projects/proj-1",
     },
     {
       id: "proj-2",
@@ -21,7 +21,7 @@ const fixture: ProjectsDashboardPageData = {
       region: "eu-west",
       servicesCount: 2,
       aiSummary: "2 services need attention. CPU load is trending high.",
-      href: "/overview",
+      href: "/projects/proj-2",
     },
     {
       id: "proj-3",
@@ -30,7 +30,7 @@ const fixture: ProjectsDashboardPageData = {
       region: "us-east",
       servicesCount: 1,
       aiSummary: "Optimal performance caching at the edge.",
-      href: "/hosting/web",
+      href: "/projects/proj-3",
     },
   ],
 };

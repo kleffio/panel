@@ -118,7 +118,7 @@ export function HostingDetailPage({ section }: { section: DetailSection }) {
                   </Link>
                 </Button>
                 <Button asChild>
-                  <Link href={TEST_ROUTES.DASHBOARD}>Back to dashboard</Link>
+                  <Link href={TEST_ROUTES.OVERVIEW}>Back to overview</Link>
                 </Button>
               </div>
             </section>

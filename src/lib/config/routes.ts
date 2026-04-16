@@ -1,8 +1,7 @@
 export const TEST_ROUTES = {
-  ROOT: "/architecture",
+  ROOT: "/projects",
   PROJECTS: "/projects",
   OVERVIEW: "/overview",
-  DASHBOARD: "/dashboard",
   WEB: "/hosting/web",
   SERVER: "/hosting/server",
   DATABASE: "/hosting/database",

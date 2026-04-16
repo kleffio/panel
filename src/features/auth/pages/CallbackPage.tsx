@@ -17,19 +17,17 @@ export function CallbackPage() {
   useEffect(() => {
     if (!auth.isLoading) {
       // If the token exchange failed for any reason, go to login rather than
-      // dashboard — sending an unauthenticated user to the protected route
+      // overview - sending an unauthenticated user to the protected route
       // causes an infinite signinRedirect loop.
-      router.replace(auth.isAuthenticated ? "/dashboard" : "/auth/login");
+      router.replace(auth.isAuthenticated ? "/overview" : "/auth/login");
     }
   }, [auth.isLoading, auth.isAuthenticated, router]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="w-48 space-y-3">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-4 w-1/2" />
-      </div>
+    <div className="w-48 space-y-3">
+      <Skeleton className="h-4 w-full" />
+      <Skeleton className="h-4 w-3/4" />
+      <Skeleton className="h-4 w-1/2" />
     </div>
   );
 }
