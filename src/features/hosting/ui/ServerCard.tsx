@@ -1,7 +1,7 @@
 import type { GameServer } from "@/types";
 import { REGION_LABELS } from "@/types";
-import { StatusBadge } from "./StatusBadge";
 import { PlanBadge } from "@/features/billing/ui/PlanBadge";
+import { StatusBadge } from "./StatusBadge";
 
 interface ServerCardProps {
   server: GameServer;

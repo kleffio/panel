@@ -1,12 +1,46 @@
 "use client";
 
 import { useState, useEffect, useContext } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  AnimatedPlaceholderInput,
+  Button,
+  LetterWave,
+  Label,
+  Skeleton,
+} from "@kleffio/ui";
+import { ArrowRightIcon, LockIcon, TriangleAlertIcon, UserIcon } from "lucide-react";
+
 import { useAuth, storeApiTokens, login, broadcastSignin } from "@/features/auth";
 import { AuthConfigContext } from "@/features/auth/context";
-import { useBackendPlugins } from "@/features/plugins/model/use-backend-plugins";
-import { useRouter } from "next/navigation";
-import { Button, Input, Label, Skeleton } from "@kleffio/ui";
 import { IDPStartingSpinner } from "@/features/auth/ui/IDPStartingSpinner";
+import { useBackendPlugins } from "@/features/plugins/model/use-backend-plugins";
+
+function LoginSkeleton() {
+  return (
+    <>
+      <div className="mb-10 space-y-2">
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-10 w-3/4" />
+      </div>
+      <div className="space-y-5">
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-12 w-full rounded-full" />
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-12 w-full rounded-full" />
+        </div>
+        <Skeleton className="h-12 w-full rounded-full" />
+      </div>
+    </>
+  );
+}
 
 export function LoginPage() {
   const auth = useAuth();
@@ -19,44 +53,36 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // No IDP installed — send to setup wizard.
+    // No IDP installed - send to setup wizard.
     if (authConfig?.setup_required) {
       router.replace("/setup");
       return;
     }
     if (auth.isAuthenticated) {
-      router.replace("/dashboard");
+      router.replace("/overview");
       return;
     }
     // Redirect mode: hand off to the IDP login page instead of the headless form.
-    // Guard on ready so we don't signinRedirect while the IDP is switching —
+    // Guard on ready so we do not signinRedirect while the IDP is switching -
     // authConfig in context may still point at the previous IDP until the next poll.
     if (!auth.isLoading && authConfig?.enabled && authConfig.ready && authConfig.auth_mode === "redirect") {
       auth.signinRedirect();
     }
   }, [auth.isAuthenticated, auth.isLoading, authConfig?.enabled, authConfig?.ready, authConfig?.auth_mode, authConfig?.setup_required, router]);
 
-  // Setup redirect pending — render nothing while the router replaces the URL.
+  // Setup redirect pending - render nothing while the router replaces the URL.
   if (authConfig?.setup_required) {
     return null;
   }
 
   // IDP plugin active but EnsureSetup still running (Authentik/Keycloak still starting).
-  // AuthProvider polls every 3 s — show spinner until ready: true.
+  // AuthProvider polls every 3 s - show spinner until ready: true.
   if (authConfig?.enabled && !authConfig.ready) {
-    return <IDPStartingSpinner />;
+    return <IDPStartingSpinner variant="pane" />;
   }
 
   if (auth.isLoading && !loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="w-48 space-y-3">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-3/4" />
-          <Skeleton className="h-4 w-1/2" />
-        </div>
-      </div>
-    );
+    return <LoginSkeleton />;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -69,7 +95,7 @@ export function LoginPage() {
       // what OidcProvider will look up on the next page load.
       storeApiTokens(tok, authConfig?.authority ?? "", authConfig?.client_id ?? "");
       broadcastSignin();
-      window.location.replace("/dashboard");
+      window.location.replace("/overview");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
       setLoading(false);
@@ -77,57 +103,73 @@ export function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background bg-kleff-grid">
-      <div className="bg-kleff-spotlight pointer-events-none absolute inset-0" />
-      <div className="glass-panel relative w-full max-w-sm p-8 space-y-6">
-        <div className="space-y-1 text-center">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <span className="text-gradient-kleff text-2xl font-bold tracking-tight">Kleff</span>
-            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-              Panel
-            </span>
-          </div>
-          <h1 className="text-lg font-semibold text-foreground">Welcome back</h1>
-          <p className="text-sm text-muted-foreground">Sign in to manage your game servers</p>
+    <>
+      <div className="mb-10 space-y-2">
+        <p className="text-sm font-medium uppercase tracking-[0.28em] text-muted-foreground">
+          <LetterWave text="Welcome back" />
+        </p>
+        <h1 className="text-4xl font-semibold tracking-tight text-foreground">
+          Sign in to manage your app
+        </h1>
+      </div>
+
+      {error && (
+        <Alert variant="destructive" className="mb-6">
+          <TriangleAlertIcon className="size-4" />
+          <AlertTitle>Could not sign you in</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-2">
+          <Label htmlFor="username">Username or email</Label>
+          <AnimatedPlaceholderInput
+            id="username"
+            icon={UserIcon}
+            autoComplete="username"
+            placeholder="Enter username or email"
+            required
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <AnimatedPlaceholderInput
+            id="password"
+            icon={LockIcon}
+            type="password"
+            autoComplete="current-password"
+            placeholder="Enter password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        <Button
+          type="submit"
+          className="mt-3 h-12 w-full rounded-full bg-gradient-kleff text-primary-foreground shadow-[0_18px_40px_rgba(196,143,0,0.22)] hover:opacity-95"
+          disabled={loading}
+        >
+          {loading ? "Signing in..." : "Sign In"}
+          {!loading && <ArrowRightIcon className="size-4" />}
+        </Button>
+      </form>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="username">Username or email</Label>
-            <Input
-              id="username"
-              autoComplete="username"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Signing in…" : "Sign in"}
-          </Button>
-        </form>
-
+      <div className="mt-8 space-y-3 text-center">
         {!loginConfig?.disable_signup_link && (
-          <p className="text-center text-xs text-muted-foreground">
-            Don&apos;t have an account?{" "}
-            <a href="/auth/signup" className="text-primary underline underline-offset-4 hover:text-primary/80">
-              Create one
-            </a>
+          <p className="text-sm text-muted-foreground">
+            New here?{" "}
+            <Link
+              href="/auth/signup"
+              className="font-medium text-primary underline underline-offset-4 hover:text-primary/80"
+            >
+              Create an account
+            </Link>
           </p>
         )}
       </div>
-    </div>
+    </>
   );
 }
