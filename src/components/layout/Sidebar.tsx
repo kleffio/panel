@@ -7,8 +7,6 @@ import {
   Network,
   FolderKanban,
   Shield,
-  Server,
-  CreditCard,
   Settings,
   ShieldCheck,
   Store,
@@ -24,9 +22,7 @@ const NAV_ITEMS = [
   { href: "/overview",     label: "Overview",     icon: Network },
   { href: "/projects",     label: "Projects",     icon: FolderKanban },
   { href: "/architecture", label: "Architecture", icon: Shield },
-  { href: "/servers",      label: "Servers",      icon: Server },
   { href: "/marketplace",  label: "Marketplace",  icon: Store },
-  { href: "/billing",      label: "Billing",      icon: CreditCard },
   { href: "/settings",     label: "Settings",     icon: Settings },
 ];
 
