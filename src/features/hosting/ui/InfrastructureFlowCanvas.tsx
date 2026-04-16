@@ -4,12 +4,10 @@ import "reactflow/dist/style.css";
 
 import { motion } from "framer-motion";
 import {
-  Check,
   BookmarkPlus,
   FolderOpen,
   LayersIcon as Layers,
   LayoutGrid,
-  Link2,
   Network,
   Plus,
   Trash2,
@@ -17,9 +15,8 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Connection, Edge, EdgeTypes, Node, NodeChange, NodeTypes } from "reactflow";
+import type { Edge, EdgeTypes, Node, NodeChange, NodeTypes } from "reactflow";
 import {
-  ConnectionMode,
   Panel,
   ReactFlow,
   ReactFlowProvider,
@@ -64,59 +61,6 @@ const edgeTypes: EdgeTypes = {
   [INFRASTRUCTURE_EDGE_TYPE]: EdgeConnection,
 };
 
-// ── Handle-visibility CSS injected once per page ──────────────────────────────
-
-const HANDLE_CSS = `
-.react-flow__handle {
-  opacity: 0;
-  pointer-events: none;
-  width: 12px !important;
-  height: 12px !important;
-  border-radius: 50% !important;
-  border: 1px solid rgba(245,181,23,0.72) !important;
-  background: rgba(20,18,12,0.9) !important;
-  box-shadow: 0 0 0 1px rgba(0,0,0,0.45), 0 0 0 0 rgba(245,181,23,0.45);
-  transform: scale(0.92);
-  transition: opacity 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
-  cursor: crosshair !important;
-}
-
-.connection-edit-enabled .react-flow__handle {
-  opacity: 0.36;
-  pointer-events: auto;
-}
-
-.connection-edit-enabled .react-flow__node:hover .react-flow__handle,
-.connection-edit-enabled .react-flow__node.react-flow__node-selectable.selected .react-flow__handle,
-.connection-edit-enabled .react-flow__handle.connecting,
-.connection-edit-enabled .react-flow__handle.connectingfrom,
-.connection-edit-enabled .react-flow__handle.connectingto {
-  opacity: 1;
-  transform: scale(1.12);
-}
-
-.connection-edit-enabled .react-flow__handle:hover {
-  background: rgba(245,181,23,0.42) !important;
-  box-shadow: 0 0 0 4px rgba(245,181,23,0.22) !important;
-}
-
-.connection-edit-enabled .react-flow__handle.connectingto,
-.connection-edit-enabled .react-flow__handle.connectingfrom {
-  background: rgba(245,181,23,0.5) !important;
-}
-`;
-
-function useHandleCSS() {
-  useEffect(() => {
-    if (document.getElementById("kleff-handle-css")) return;
-    const style = document.createElement("style");
-    style.id = "kleff-handle-css";
-    style.textContent = HANDLE_CSS;
-    document.head.appendChild(style);
-    return () => { style.remove(); };
-  }, []);
-}
-
 // ── Saved layouts (localStorage) ──────────────────────────────────────────────
 
 interface SavedLayout {
@@ -137,64 +81,6 @@ function loadLayouts(projectID: string): SavedLayout[] {
 
 function saveLayouts(projectID: string, layouts: SavedLayout[]) {
   localStorage.setItem(`kleff:layouts:${projectID}`, JSON.stringify(layouts));
-}
-
-// ── Connection kind picker ─────────────────────────────────────────────────────
-
-const CONNECTION_KINDS: { kind: ConnectionDTO["kind"]; label: string; description: string }[] = [
-  { kind: "network", label: "Network", description: "Shared Docker bridge / internal network" },
-  { kind: "dependency", label: "Dependency", description: "Config or credential dependency" },
-  { kind: "traffic", label: "Traffic", description: "Routes external traffic through" },
-];
-
-function ConnectionKindPicker({
-  onPick,
-  onCancel,
-}: {
-  onPick: (kind: ConnectionDTO["kind"]) => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm"
-      onClick={onCancel}
-    >
-      <div
-        className="glass-panel w-80 rounded-2xl border border-[var(--test-border)] p-5 shadow-[0_28px_80px_rgba(0,0,0,0.4)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-[var(--test-foreground)]">Connection type</p>
-            <p className="text-xs text-[var(--test-muted)]">What kind of link is this?</p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onCancel}
-            className="text-white/40 hover:bg-white/8 hover:text-white/70"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="space-y-2">
-          {CONNECTION_KINDS.map(({ kind, label, description }) => (
-            <Button
-              key={kind}
-              onClick={() => onPick(kind)}
-              variant="ghost"
-              className="h-auto w-full justify-start rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3 text-left transition-colors hover:border-[#f5b517]/35 hover:bg-[#f5b517]/8"
-            >
-              <div>
-                <p className="text-sm font-medium text-[var(--test-foreground)]">{label}</p>
-                <p className="mt-0.5 text-xs text-[var(--test-muted)]">{description}</p>
-              </div>
-            </Button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ── Main canvas body ───────────────────────────────────────────────────────────
@@ -226,12 +112,8 @@ function FlowCanvasBody({
   onCreateConnection?: (sourceID: string, targetID: string, kind: ConnectionDTO["kind"]) => Promise<void>;
   simulateMetrics?: boolean;
 }) {
-  useHandleCSS();
-
   const { fitView } = useReactFlow();
   const [newServerOpen, setNewServerOpen] = useState(false);
-  const [pendingConnection, setPendingConnection] = useState<{ source: string; target: string } | null>(null);
-  const [connectionEditMode, setConnectionEditMode] = useState(false);
   const [layouts, setLayouts] = useState<SavedLayout[]>(() =>
     projectID ? loadLayouts(projectID) : [],
   );
@@ -439,38 +321,6 @@ function FlowCanvasBody({
     [onDeleteEdge, onRequestRefresh],
   );
 
-  const handleConnect = useCallback(
-    (connection: Connection) => {
-      if (!connection.source || !connection.target || !onCreateConnection) return;
-      if (connection.source === connection.target) return;
-      setPendingConnection({ source: connection.source, target: connection.target });
-    },
-    [onCreateConnection],
-  );
-
-  const handlePickKind = useCallback(
-    (kind: ConnectionDTO["kind"]) => {
-      if (!pendingConnection || !onCreateConnection) return;
-      const { source, target } = pendingConnection;
-      setPendingConnection(null);
-      void (async () => {
-        try {
-          await onCreateConnection(source, target, kind);
-          toast.success("Connection created");
-        } catch {
-          toast.error("Failed to create connection");
-        }
-      })();
-    },
-    [pendingConnection, onCreateConnection],
-  );
-
-  useEffect(() => {
-    if (!connectionEditMode) {
-      setPendingConnection(null);
-    }
-  }, [connectionEditMode]);
-
   // ── Layout helpers ───────────────────────────────────────────────────────────
 
   const handleSaveLayout = useCallback(() => {
@@ -551,8 +401,6 @@ function FlowCanvasBody({
         edges={flowEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        connectionMode={ConnectionMode.Loose}
-        nodesConnectable={connectionEditMode}
         fitView
         fitViewOptions={{ padding: 0.18, maxZoom: 1.1 }}
         panOnScroll={false}
@@ -572,9 +420,8 @@ function FlowCanvasBody({
         }}
         onPaneClick={handlePaneClick}
         onEdgesDelete={handleEdgesDelete}
-        onConnect={connectionEditMode ? handleConnect : undefined}
         onMove={(_, nextViewport) => setViewport(nextViewport)}
-        className={connectionEditMode ? "bg-transparent connection-edit-enabled" : "bg-transparent"}
+          className="bg-transparent"
         proOptions={{ hideAttribution: true }}
       >
         {/* Top-left toolbar */}
@@ -717,20 +564,6 @@ function FlowCanvasBody({
             Add Node
           </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            className={
-              connectionEditMode
-                ? "h-10 rounded-2xl border-amber-300/35 bg-amber-400/12 text-amber-100 hover:bg-amber-400/18"
-                : "h-10 rounded-2xl border-[var(--test-border)] bg-[var(--test-panel)] text-[var(--test-foreground)] hover:bg-[var(--test-accent-soft)]"
-            }
-            onClick={() => setConnectionEditMode((v) => !v)}
-          >
-            {connectionEditMode ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
-            {connectionEditMode ? "Done linking" : "Edit links"}
-          </Button>
-
           <AnalyzeSystemButton
             active={analysisActive}
             issueCount={issueCount}
@@ -772,9 +605,7 @@ function FlowCanvasBody({
         <Panel position="bottom-left" className="!m-4">
           <div className="flex items-center gap-2 rounded-full border border-[var(--test-border)] bg-[var(--test-panel)] px-4 py-2 text-xs text-[var(--test-muted)] backdrop-blur-lg">
             <Network className="h-3 w-3 shrink-0" />
-            {connectionEditMode
-              ? "Link mode on · drag from a gold dot to another node · select edge + Delete to remove"
-              : "Link mode off · click Edit links to show handles and connect containers"}
+            Scroll to zoom, drag empty canvas to pan, press C to center, select edge + Delete to remove.
           </div>
         </Panel>
 
@@ -795,14 +626,6 @@ function FlowCanvasBody({
           onAction={handleNodeAction}
           relatedNodes={relatedNodes}
           suggestions={selectedNodeSuggestions}
-        />
-      ) : null}
-
-      {/* Connection kind picker */}
-      {pendingConnection ? (
-        <ConnectionKindPicker
-          onPick={handlePickKind}
-          onCancel={() => setPendingConnection(null)}
         />
       ) : null}
 
