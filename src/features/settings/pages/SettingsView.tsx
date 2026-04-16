@@ -29,9 +29,9 @@ import {
   SelectValue,
   Separator,
   Skeleton,
-  Spinner,
   Textarea,
 } from "@kleffio/ui";
+import { Spinner } from "@/components/ui/Spinner";
 
 import { getMyProfile, updateMyProfile, uploadAvatar } from "@/lib/api/profiles";
 import type { ThemePreference, UpdateProfilePayload } from "@/types/user";

@@ -7,13 +7,12 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
-  AnimatedPlaceholderInput,
   Button,
-  LetterWave,
+  Input,
   Label,
   Skeleton,
 } from "@kleffio/ui";
-import { ArrowRightIcon, LockIcon, TriangleAlertIcon, UserIcon } from "lucide-react";
+import { ArrowRightIcon, TriangleAlertIcon } from "lucide-react";
 
 import { useAuth, storeApiTokens, login, broadcastSignin } from "@/features/auth";
 import { AuthConfigContext } from "@/features/auth/context";
@@ -106,7 +105,7 @@ export function LoginPage() {
     <>
       <div className="mb-10 space-y-2">
         <p className="text-sm font-medium uppercase tracking-[0.28em] text-muted-foreground">
-          <LetterWave text="Welcome back" />
+          Welcome back
         </p>
         <h1 className="text-4xl font-semibold tracking-tight text-foreground">
           Sign in to manage your app
@@ -124,27 +123,27 @@ export function LoginPage() {
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-2">
           <Label htmlFor="username">Username or email</Label>
-          <AnimatedPlaceholderInput
+          <Input
             id="username"
-            icon={UserIcon}
             autoComplete="username"
-            placeholder="Enter username or email"
+            placeholder="Username or email"
             required
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            className="h-12 rounded-full"
           />
         </div>
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
-          <AnimatedPlaceholderInput
+          <Input
             id="password"
-            icon={LockIcon}
             type="password"
             autoComplete="current-password"
-            placeholder="Enter password"
+            placeholder="Password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            className="h-12 rounded-full"
           />
         </div>
         <Button

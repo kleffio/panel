@@ -8,12 +8,12 @@ import {
   Server,
   ShieldCheck,
   Store,
+  Puzzle,
 } from "lucide-react";
 import { cn } from "@kleffio/ui";
 import { useHasRole, useRoles } from "@/features/auth";
 import { PluginSlot } from "@/features/plugins/ui/PluginSlot";
 import { useBackendPlugins } from "@/features/plugins/model/use-backend-plugins";
-import { Puzzle } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/overview",     label: "Overview",     icon: Network },

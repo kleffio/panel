@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronLeft, Server } from "lucide-react";
+import { ChevronLeft, Server, X } from "lucide-react";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
-  Button, Input, Label,
+  Button,
+  Input,
+  Label,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@kleffio/ui";
 import { toast } from "sonner";
 import { listCrates, listBlueprints } from "@/lib/api/catalog";
 import { createDeployment } from "@/lib/api/deployments";
+import { isApiError } from "@/lib/api/error";
 import type { Crate, Blueprint, ConfigField } from "@/lib/api/catalog";
+import { AnimatePresence, motion } from "framer-motion";
 
 type Step = "crate" | "blueprint" | "config";
 
@@ -22,11 +25,11 @@ interface MojangVersion {
 interface NewServerSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  projectID: string | null;
   onCreated?: (deploymentId: string) => void;
   activeServerNames?: string[];
 }
 
-// Memory options: label → mb value
 const MEMORY_OPTIONS: { label: string; mb: number }[] = [
   { label: "2 GB", mb: 2048 },
   { label: "4 GB", mb: 4096 },
@@ -34,7 +37,6 @@ const MEMORY_OPTIONS: { label: string; mb: number }[] = [
   { label: "16 GB", mb: 16384 },
 ];
 
-// CPU options: label → millicores value
 const CPU_OPTIONS: { label: string; millicores: number }[] = [
   { label: "1 vCPU", millicores: 1000 },
   { label: "2 vCPU", millicores: 2000 },
@@ -45,7 +47,6 @@ const CPU_OPTIONS: { label: string; millicores: number }[] = [
 function nearestMemoryOption(mb: number): number {
   const exact = MEMORY_OPTIONS.find((o) => o.mb === mb);
   if (exact) return exact.mb;
-  // pick closest
   return MEMORY_OPTIONS.reduce((prev, cur) =>
     Math.abs(cur.mb - mb) < Math.abs(prev.mb - mb) ? cur : prev
   ).mb;
@@ -82,46 +83,174 @@ function buildDefaults(fields: ConfigField[]): Record<string, string> {
   return values;
 }
 
+function extractErrorMessage(err: unknown): string {
+  if (isApiError(err)) {
+    const payload = err.data as { error?: string } | null;
+    if (payload?.error) return payload.error;
+    if (err.message) return err.message;
+    return "Failed to create server";
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return "Failed to create server";
+}
+
 async function fetchMojangVersions(): Promise<MojangVersion[]> {
   const res = await fetch("https://launchermeta.mojang.com/mc/game/version_manifest.json");
   const data = await res.json();
   return (data.versions ?? []) as MojangVersion[];
 }
 
-export function NewServerSheet({ open, onOpenChange, onCreated, activeServerNames = [] }: NewServerSheetProps) {
-  const [step, setStep] = useState<Step>("crate");
+function resolveLatestReleaseVersion(versions: MojangVersion[]): string | null {
+  if (versions.length === 0) return null;
+  return versions.find((v) => v.type === "release")?.id ?? versions[0]?.id ?? null;
+}
 
+// Dark styled input for the modal
+function DarkInput({
+  id,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  required,
+}: {
+  id?: string;
+  type?: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  required?: boolean;
+}) {
+  return (
+    <Input
+      id={id}
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      required={required}
+      className="h-12 w-full rounded-full border-input bg-background/85 px-4 text-sm text-foreground placeholder:text-muted-foreground/70 focus-visible:ring-primary/20"
+    />
+  );
+}
+
+function DarkLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
+  return (
+    <Label htmlFor={htmlFor} className="mb-2 block text-sm text-foreground/90">
+      {children}
+    </Label>
+  );
+}
+
+function ConfigFieldInput({
+  field,
+  value,
+  onChange,
+  mojangVersions,
+  showSnapshots,
+  onToggleSnapshots,
+}: {
+  field: ConfigField;
+  value: string;
+  onChange: (v: string) => void;
+  mojangVersions?: MojangVersion[];
+  showSnapshots?: boolean;
+  onToggleSnapshots?: () => void;
+}) {
+  if (mojangVersions && mojangVersions.length > 0) {
+    const filtered = showSnapshots
+      ? mojangVersions
+      : mojangVersions.filter((v) => v.type === "release");
+
+    return (
+      <div>
+        <div className="mb-1.5 flex items-center justify-between">
+          <DarkLabel htmlFor={field.key}>{field.label}</DarkLabel>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onToggleSnapshots}
+            className="h-6 px-2 text-[11px] text-white/50 hover:bg-white/8 hover:text-white/80"
+          >
+            {showSnapshots ? "Hide snapshots" : "Show snapshots"}
+          </Button>
+        </div>
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger id={field.key} className="h-12 rounded-full border-input bg-background/85 px-4 text-foreground">
+            <SelectValue placeholder="Select version…" />
+          </SelectTrigger>
+          <SelectContent className="max-h-64">
+            {filtered.map((v) => (
+              <SelectItem key={v.id} value={v.id}>
+                {v.id}
+                {v.type === "snapshot" && (
+                  <span className="ml-1.5 text-xs text-muted-foreground">snapshot</span>
+                )}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <DarkLabel htmlFor={field.key}>
+        {field.label}{field.required && <span className="ml-0.5 text-red-400">*</span>}
+      </DarkLabel>
+      {field.description && (
+        <p className="mb-1.5 text-xs text-muted-foreground">{field.description}</p>
+      )}
+      {field.type === "select" && field.options ? (
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger id={field.key} className="h-12 rounded-full border-input bg-background/85 px-4 text-foreground">
+            <SelectValue placeholder="Select…" />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options.map((opt) => (
+              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : (
+        <DarkInput
+          id={field.key}
+          type={field.type === "secret" ? "password" : field.type === "number" ? "number" : "text"}
+          value={value}
+          onChange={onChange}
+          required={field.required}
+        />
+      )}
+    </div>
+  );
+}
+
+export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activeServerNames = [] }: NewServerSheetProps) {
+  const [step, setStep] = useState<Step>("crate");
   const [crates, setCrates] = useState<Crate[]>([]);
   const [loadingCrates, setLoadingCrates] = useState(false);
-
   const [selectedCrate, setSelectedCrate] = useState<Crate | null>(null);
   const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
   const [loadingBlueprints, setLoadingBlueprints] = useState(false);
-
   const [selectedBlueprint, setSelectedBlueprint] = useState<Blueprint | null>(null);
-
   const [serverName, setServerName] = useState("");
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
   const [memoryMB, setMemoryMB] = useState(2048);
   const [cpuMillicores, setCpuMillicores] = useState(1000);
-
-  // Mojang versions — only fetched for minecraft crates
   const [mojangVersions, setMojangVersions] = useState<MojangVersion[]>([]);
   const [showSnapshots, setShowSnapshots] = useState(false);
-
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const nameConflict = activeServerNames.includes(serverName.trim());
+  const normalizedServerName = serverName.trim().toLowerCase();
+  const nameConflict = normalizedServerName !== "" && activeServerNames.some((name) => name.trim().toLowerCase() === normalizedServerName);
   const nameInvalid = serverName.trim() !== "" && !/^[a-zA-Z0-9][a-zA-Z0-9_.\-]*$/.test(serverName.trim());
-
   const requiredFieldsFilled = selectedBlueprint
-    ? selectedBlueprint.config
-        .filter((f) => f.required)
-        .every((f) => (configValues[f.key] ?? "").trim() !== "")
+    ? selectedBlueprint.config.filter((f) => f.required).every((f) => (configValues[f.key] ?? "").trim() !== "")
     : true;
 
-  // Reset wizard when sheet closes
   useEffect(() => {
     if (!open) {
       setStep("crate");
@@ -138,7 +267,6 @@ export function NewServerSheet({ open, onOpenChange, onCreated, activeServerName
     }
   }, [open]);
 
-  // Load crates when sheet opens
   useEffect(() => {
     if (!open) return;
     setLoadingCrates(true);
@@ -165,12 +293,18 @@ export function NewServerSheet({ open, onOpenChange, onCreated, activeServerName
     setMemoryMB(nearestMemoryOption(bp.resources.memory_mb));
     setCpuMillicores(nearestCPUOption(bp.resources.cpu_millicores));
     setStep("config");
-
-    // Fetch Mojang versions for minecraft crates
-    if (selectedCrate?.id === "minecraft") {
+    if (selectedCrate?.id === "minecraft" && bp.config.some((field) => field.key === "VERSION")) {
       fetchMojangVersions()
-        .then(setMojangVersions)
-        .catch(() => { /* silently fall back to blueprint options */ });
+        .then((versions) => {
+          setMojangVersions(versions);
+          const latestVersion = resolveLatestReleaseVersion(versions);
+          if (!latestVersion) return;
+          setConfigValues((prev) => {
+            if (prev.VERSION === undefined || prev.VERSION === latestVersion) return prev;
+            return { ...prev, VERSION: latestVersion };
+          });
+        })
+        .catch(() => {});
     }
   }
 
@@ -180,12 +314,11 @@ export function NewServerSheet({ open, onOpenChange, onCreated, activeServerName
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedBlueprint || !serverName.trim()) return;
-
+    if (!selectedBlueprint || !serverName.trim() || !projectID) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const result = await createDeployment({
+      const result = await createDeployment(projectID, {
         blueprint_id: selectedBlueprint.id,
         server_name: serverName.trim(),
         config: configValues,
@@ -194,295 +327,232 @@ export function NewServerSheet({ open, onOpenChange, onCreated, activeServerName
       toast.success("Server is being provisioned");
       onOpenChange(false);
       onCreated?.(result.deployment_id);
-    } catch (err: any) {
-      const msg = err?.response?.data?.error ?? err?.message ?? "Failed to create server";
-      setSubmitError(msg);
+    } catch (err) {
+      const message = extractErrorMessage(err);
+      setSubmitError(message);
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }
   }
 
-  const stepTitle: Record<Step, string> = {
-    crate: "Choose a game",
-    blueprint: "Choose a server type",
-    config: "Configure your server",
-  };
-
-  const stepDesc: Record<Step, string> = {
-    crate: "Pick the game you want to host.",
-    blueprint: `Select a server type for ${selectedCrate?.name ?? "this game"}.`,
-    config: `Set up your ${selectedBlueprint?.name ?? "server"} server.`,
-  };
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader>
-          <div className="flex items-center gap-2">
-            {step !== "crate" && (
-              <button
-                type="button"
-                onClick={() => setStep(step === "config" ? "blueprint" : "crate")}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ChevronLeft className="size-4" />
-              </button>
-            )}
-            <SheetTitle>{stepTitle[step]}</SheetTitle>
-          </div>
-          <SheetDescription>{stepDesc[step]}</SheetDescription>
-        </SheetHeader>
-
-        {/* ── Step 1: Crate picker ───────────────────────────────────────── */}
-        {step === "crate" && (
-          <div className="px-4 py-4 space-y-3">
-            {loadingCrates ? (
-              <p className="text-sm text-muted-foreground">Loading games…</p>
-            ) : crates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No games available.</p>
-            ) : (
-              crates.map((crate) => (
-                <button
-                  key={crate.id}
-                  type="button"
-                  onClick={() => selectCrate(crate)}
-                  className="w-full flex items-center gap-3 rounded-lg border border-border bg-card hover:bg-accent transition-colors p-3 text-left"
-                >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                    {crate.logo ? (
-                      <img src={crate.logo} alt={crate.name} className="h-6 w-6 object-contain" />
-                    ) : (
-                      <Server className="size-5 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">{crate.name}</p>
-                    {crate.description && (
-                      <p className="text-xs text-muted-foreground truncate">{crate.description}</p>
-                    )}
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* ── Step 2: Blueprint picker ───────────────────────────────────── */}
-        {step === "blueprint" && (
-          <div className="px-4 py-4 space-y-3">
-            {loadingBlueprints ? (
-              <p className="text-sm text-muted-foreground">Loading server types…</p>
-            ) : blueprints.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No server types available.</p>
-            ) : (
-              blueprints.map((bp) => (
-                <button
-                  key={bp.id}
-                  type="button"
-                  onClick={() => selectBlueprint(bp)}
-                  className="w-full flex items-center gap-3 rounded-lg border border-border bg-card hover:bg-accent transition-colors p-3 text-left"
-                >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                    <Server className="size-5 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">{bp.name}</p>
-                    {bp.description && (
-                      <p className="text-xs text-muted-foreground truncate">{bp.description}</p>
-                    )}
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* ── Step 3: Config form ────────────────────────────────────────── */}
-        {step === "config" && selectedBlueprint && (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-4 py-4">
-            {/* Server name */}
-            <div className="space-y-1.5">
-              <Label htmlFor="server-name">Server name</Label>
-              <Input
-                id="server-name"
-                placeholder="my-minecraft-server"
-                value={serverName}
-                onChange={(e) => setServerName(e.target.value)}
-                required
-              />
-            </div>
-
-            {/* Blueprint config fields */}
-            {selectedBlueprint.config.map((field) => (
-              <ConfigFieldInput
-                key={field.key}
-                field={field}
-                value={configValues[field.key] ?? ""}
-                onChange={(v) => setField(field.key, v)}
-                mojangVersions={field.key === "VERSION" && selectedCrate?.id === "minecraft" ? mojangVersions : undefined}
-                showSnapshots={showSnapshots}
-                onToggleSnapshots={() => setShowSnapshots((v) => !v)}
-              />
-            ))}
-
-            {/* ── Resources ─────────────────────────────────────────────── */}
-            <div className="space-y-3 pt-1 border-t border-border">
-              <p className="text-sm font-medium text-foreground pt-2">Resources</p>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="memory">Memory</Label>
-                <Select value={String(memoryMB)} onValueChange={(v) => setMemoryMB(Number(v))}>
-                  <SelectTrigger id="memory">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MEMORY_OPTIONS.map((o) => (
-                      <SelectItem key={o.mb} value={String(o.mb)}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="cpu">CPU</Label>
-                <Select value={String(cpuMillicores)} onValueChange={(v) => setCpuMillicores(Number(v))}>
-                  <SelectTrigger id="cpu">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CPU_OPTIONS.map((o) => (
-                      <SelectItem key={o.millicores} value={String(o.millicores)}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {nameInvalid && (
-              <p className="text-sm text-destructive">Name can only contain letters, numbers, underscores, dots, and hyphens (no spaces).</p>
-            )}
-            {nameConflict && (
-              <p className="text-sm text-destructive">A server with that name already exists.</p>
-            )}
-            {submitError && (
-              <p className="text-sm text-destructive">{submitError}</p>
-            )}
-
-            <SheetFooter className="px-0 pt-2">
-              <Button type="submit" disabled={submitting || !serverName.trim() || nameConflict || nameInvalid || !requiredFieldsFilled} className="w-full">
-                {submitting ? "Launching…" : "Launch server"}
-              </Button>
-            </SheetFooter>
-          </form>
-        )}
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function ConfigFieldInput({
-  field,
-  value,
-  onChange,
-  mojangVersions,
-  showSnapshots,
-  onToggleSnapshots,
-}: {
-  field: ConfigField;
-  value: string;
-  onChange: (v: string) => void;
-  mojangVersions?: MojangVersion[];
-  showSnapshots?: boolean;
-  onToggleSnapshots?: () => void;
-}) {
-  // Use Mojang versions when available for the VERSION field
-  if (mojangVersions && mojangVersions.length > 0) {
-    const filtered = showSnapshots
-      ? mojangVersions
-      : mojangVersions.filter((v) => v.type === "release");
-
-    return (
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <Label htmlFor={field.key}>{field.label}</Label>
-          <button
-            type="button"
-            onClick={onToggleSnapshots}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {showSnapshots ? "Hide snapshots" : "Show snapshots"}
-          </button>
-        </div>
-        <Select value={value} onValueChange={onChange}>
-          <SelectTrigger id={field.key}>
-            <SelectValue placeholder="Select version…" />
-          </SelectTrigger>
-          <SelectContent className="max-h-64">
-            {filtered.map((v) => (
-              <SelectItem key={v.id} value={v.id}>
-                {v.id}
-                {v.type === "snapshot" && (
-                  <span className="ml-1.5 text-xs text-muted-foreground">snapshot</span>
-                )}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    );
+  function goBack() {
+    if (step === "config") setStep("blueprint");
+    else if (step === "blueprint") setStep("crate");
   }
 
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={field.key}>
-        {field.label}
-        {field.required && <span className="text-destructive ml-0.5">*</span>}
-      </Label>
-      {field.description && (
-        <p className="text-xs text-muted-foreground">{field.description}</p>
-      )}
+  if (!open) return null;
 
-      {field.type === "select" && field.options ? (
-        <Select value={value} onValueChange={onChange}>
-          <SelectTrigger id={field.key}>
-            <SelectValue placeholder="Select…" />
-          </SelectTrigger>
-          <SelectContent>
-            {field.options.map((opt) => (
-              <SelectItem key={opt} value={opt}>
-                {opt}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : field.type === "secret" ? (
-        <Input
-          id={field.key}
-          type="password"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          required={field.required}
-        />
-      ) : field.type === "number" ? (
-        <Input
-          id={field.key}
-          type="number"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          required={field.required}
-        />
-      ) : (
-        <Input
-          id={field.key}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          required={field.required}
-        />
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6 backdrop-blur-xl"
+          onClick={() => onOpenChange(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ duration: 0.18 }}
+            className="glass-panel relative flex w-full max-w-[500px] flex-col overflow-hidden rounded-[1.85rem] border border-[var(--test-border)] text-[var(--test-foreground)] shadow-[0_30px_80px_rgba(0,0,0,0.58)]"
+            style={{ maxHeight: "min(640px, 90vh)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(245,181,23,0.1),transparent_56%),linear-gradient(180deg,rgba(6,6,7,0.92),rgba(8,8,9,0.97))]" />
+
+            {/* Close */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onOpenChange(false)}
+              className="absolute right-4 top-4 z-20 text-muted-foreground hover:bg-white/10 hover:text-[var(--test-foreground)]"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+
+            {/* Back + title */}
+            <div className="relative z-10 flex items-center gap-2 border-b border-[var(--test-border)] px-5 py-4 pr-12">
+              {step !== "crate" && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={goBack}
+                  className="mr-1 text-muted-foreground hover:bg-white/10 hover:text-[var(--test-foreground)]"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              )}
+              <div>
+                <p className="text-base font-semibold text-[var(--test-foreground)]">
+                  {step === "crate" ? "Add a server" : step === "blueprint" ? `${selectedCrate?.name ?? "Server"} types` : `Configure server`}
+                </p>
+                <p className="text-[11px] text-[var(--test-muted)]">
+                  {step === "crate" ? "Select a game to host" : step === "blueprint" ? "Pick a server variant" : `Setting up ${selectedBlueprint?.name}`}
+                </p>
+              </div>
+            </div>
+
+            {/* Step 1: Crate list */}
+            {step === "crate" && (
+              <div className="kleff-scrollbar relative z-10 flex-1 overflow-y-auto pr-1.5">
+                {loadingCrates ? (
+                  <div className="px-5 py-8 text-center text-sm text-muted-foreground">Loading games...</div>
+                ) : crates.length === 0 ? (
+                  <div className="px-5 py-8 text-center text-sm text-muted-foreground">No games available.</div>
+                ) : (
+                  crates.map((crate) => (
+                    <button
+                      key={crate.id}
+                      type="button"
+                      onClick={() => selectCrate(crate)}
+                      className="group flex w-full items-center gap-3 border-b border-[var(--test-border)] px-5 py-3.5 text-left last:border-0 transition-colors hover:bg-white/[0.035]"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-black/20 transition-colors group-hover:border-[#f5b517]/35 group-hover:bg-[#f5b517]/10">
+                        {crate.logo ? (
+                          <img src={crate.logo} alt={crate.name} className="h-5 w-5 object-contain" />
+                        ) : (
+                          <Server className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-[#f5b517]" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-[var(--test-foreground)]">{crate.name}</p>
+                        {crate.description && (
+                          <p className="mt-0.5 truncate text-[11px] text-[var(--test-muted)]">{crate.description}</p>
+                        )}
+                      </div>
+                      <ChevronLeft className="h-4 w-4 shrink-0 rotate-180 text-muted-foreground/80" />
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Step 2: Blueprint list */}
+            {step === "blueprint" && (
+              <div className="kleff-scrollbar relative z-10 flex-1 overflow-y-auto pr-1.5">
+                {loadingBlueprints ? (
+                  <div className="px-5 py-8 text-center text-sm text-muted-foreground">Loading server types...</div>
+                ) : blueprints.length === 0 ? (
+                  <div className="px-5 py-8 text-center text-sm text-muted-foreground">No server types available.</div>
+                ) : (
+                  blueprints.map((bp) => (
+                    <button
+                      key={bp.id}
+                      type="button"
+                      onClick={() => selectBlueprint(bp)}
+                      className="group flex w-full items-center gap-3 border-b border-[var(--test-border)] px-5 py-3.5 text-left last:border-0 transition-colors hover:bg-white/[0.035]"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-black/20 transition-colors group-hover:border-[#f5b517]/35 group-hover:bg-[#f5b517]/10">
+                        <Server className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-[#f5b517]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-[var(--test-foreground)]">{bp.name}</p>
+                        {bp.description && (
+                          <p className="mt-0.5 truncate text-[11px] text-[var(--test-muted)]">{bp.description}</p>
+                        )}
+                      </div>
+                      <ChevronLeft className="h-4 w-4 shrink-0 rotate-180 text-muted-foreground/80" />
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Step 3: Config form */}
+            {step === "config" && selectedBlueprint && (
+              <form onSubmit={handleSubmit} className="relative z-10 flex flex-col flex-1 min-h-0">
+                <div className="kleff-scrollbar flex-1 overflow-y-auto px-5 py-5 pr-3">
+                  <div className="space-y-5">
+                    {/* Server name */}
+                    <div>
+                    <DarkLabel htmlFor="server-name">Server name <span className="text-red-400">*</span></DarkLabel>
+                    <DarkInput
+                      id="server-name"
+                      value={serverName}
+                      onChange={setServerName}
+                      placeholder="my-server"
+                      required
+                    />
+                    </div>
+
+                    {/* Blueprint config fields */}
+                    <div className="space-y-4">
+                      {selectedBlueprint.config.map((field) => (
+                        <ConfigFieldInput
+                          key={field.key}
+                          field={field}
+                          value={configValues[field.key] ?? ""}
+                          onChange={(v) => setField(field.key, v)}
+                          mojangVersions={field.key === "VERSION" && selectedCrate?.id === "minecraft" ? mojangVersions : undefined}
+                          showSnapshots={showSnapshots}
+                          onToggleSnapshots={() => setShowSnapshots((v) => !v)}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Resources */}
+                    <div className="space-y-4 border-t border-border/70 pt-4">
+                      <p className="text-xs font-medium text-muted-foreground">Resources</p>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <DarkLabel htmlFor="memory">Memory</DarkLabel>
+                          <Select value={String(memoryMB)} onValueChange={(v) => setMemoryMB(Number(v))}>
+                            <SelectTrigger id="memory" className="h-12 rounded-full border-input bg-background/85 px-4 text-foreground">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {MEMORY_OPTIONS.map((o) => (
+                                <SelectItem key={o.mb} value={String(o.mb)}>{o.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <DarkLabel htmlFor="cpu">CPU</DarkLabel>
+                          <Select value={String(cpuMillicores)} onValueChange={(v) => setCpuMillicores(Number(v))}>
+                            <SelectTrigger id="cpu" className="h-12 rounded-full border-input bg-background/85 px-4 text-foreground">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CPU_OPTIONS.map((o) => (
+                                <SelectItem key={o.millicores} value={String(o.millicores)}>{o.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Errors */}
+                    {nameInvalid && <p className="text-xs text-red-400">Name can only contain letters, numbers, underscores, dots, and hyphens.</p>}
+                    {nameConflict && <p className="text-xs text-red-400">A server with that name already exists.</p>}
+                    {submitError && <p className="text-xs text-red-400">{submitError}</p>}
+                    {!projectID && <p className="text-xs text-red-400">Select a project before launching a server.</p>}
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="border-t border-[var(--test-border)] px-5 py-4">
+                  <Button
+                    type="submit"
+                    disabled={submitting || !projectID || !serverName.trim() || nameConflict || nameInvalid || !requiredFieldsFilled}
+                    className="h-12 w-full rounded-full bg-gradient-kleff text-primary-foreground text-sm font-semibold shadow-[0_18px_40px_rgba(196,143,0,0.22)] transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {submitting ? "Launching…" : "Launch server"}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </motion.div>
+        </motion.div>
       )}
-    </div>
+    </AnimatePresence>
   );
 }

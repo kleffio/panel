@@ -52,10 +52,14 @@ export function useInfrastructureFlowWorkspace({
   initialInfrastructureNodes = infrastructureNodes,
   initialInfrastructureEdges = infrastructureEdges,
   initialMockAiSuggestions = mockAiSuggestions,
+  simulateMetrics = true,
+  onDeleteNode,
 }: {
   initialInfrastructureNodes?: InfrastructureNode[];
   initialInfrastructureEdges?: InfrastructureEdge[];
   initialMockAiSuggestions?: AiSuggestion[];
+  simulateMetrics?: boolean;
+  onDeleteNode?: (nodeID: string) => Promise<void> | void;
 } = {}) {
   const [domainNodes, setDomainNodes] = useState(initialInfrastructureNodes);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -88,6 +92,63 @@ export function useInfrastructureFlowWorkspace({
   const handleNodeAction = useCallback((nodeId: string, action: NodeAction) => {
     const targetNode = domainNodesRef.current.find((node) => node.id === nodeId);
     if (!targetNode) {
+      return;
+    }
+
+    if (action === "delete") {
+      if (!onDeleteNode) {
+        toast.error("Delete unavailable", {
+          description: "This architecture view does not support deleting nodes.",
+        });
+        return;
+      }
+
+      const toastID = `delete-node-${nodeId}`;
+      toast.loading("Deleting server", {
+        id: toastID,
+        description: `Removing ${targetNode.name} from this project.`,
+      });
+
+      setDomainNodes((currentNodes) =>
+        currentNodes.map((node) => {
+          if (node.id !== nodeId) {
+            return node;
+          }
+          return {
+            ...node,
+            status: "deleting",
+            badges: ["deleting"],
+            actions: node.actions.filter(
+              (candidateAction) =>
+                candidateAction !== "restart" &&
+                candidateAction !== "scale" &&
+                candidateAction !== "delete",
+            ),
+          };
+        }),
+      );
+
+      void (async () => {
+        try {
+          await onDeleteNode(nodeId);
+          toast.success("Delete requested", {
+            id: toastID,
+            description: `${targetNode.name} will disappear once teardown completes.`,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Failed to delete server";
+          setDomainNodes((currentNodes) =>
+            currentNodes.map((node) =>
+              node.id === nodeId ? targetNode : node,
+            ),
+          );
+          toast.error("Delete failed", {
+            id: toastID,
+            description: message,
+          });
+        }
+      })();
+
       return;
     }
 
@@ -148,7 +209,7 @@ export function useInfrastructureFlowWorkspace({
     toast("Restart queued", {
       description: `${targetNode.name} is rolling through a mocked restart.`,
     });
-  }, []);
+  }, [onDeleteNode]);
 
   const initialFlowNodes = useMemo(
     () =>
@@ -163,6 +224,10 @@ export function useInfrastructureFlowWorkspace({
     useNodesState<InfrastructureFlowNodeData>(initialFlowNodes);
   const flowNodesRef = useRef(flowNodes);
   flowNodesRef.current = flowNodes;
+
+  useEffect(() => {
+    setDomainNodes(initialInfrastructureNodes);
+  }, [initialInfrastructureNodes]);
 
   useEffect(() => {
     if (isAnimatingRepulsionRef.current) {
@@ -204,6 +269,10 @@ export function useInfrastructureFlowWorkspace({
   }, [setFlowNodes]);
 
   useEffect(() => {
+    if (!simulateMetrics) {
+      return;
+    }
+
     const intervalId = window.setInterval(() => {
       setDomainNodes((currentNodes) => currentNodes.map(nudgeNodeMetrics));
     }, 8000);
@@ -211,7 +280,7 @@ export function useInfrastructureFlowWorkspace({
     return () => {
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [simulateMetrics]);
 
   useEffect(() => {
     return () => {
@@ -401,9 +470,28 @@ export function useInfrastructureFlowWorkspace({
     }
   }, []);
 
+  const applyPositions = useCallback(
+    (positions: Record<string, { x: number; y: number }>) => {
+      setFlowNodes((currentNodes) =>
+        currentNodes.map((node) => {
+          const pos = positions[node.id];
+          return pos ? { ...node, position: pos } : node;
+        }),
+      );
+      setDomainNodes((currentDomainNodes) =>
+        currentDomainNodes.map((domainNode) => {
+          const pos = positions[domainNode.id];
+          return pos ? { ...domainNode, position: pos } : domainNode;
+        }),
+      );
+    },
+    [setFlowNodes],
+  );
+
   return {
     analysisActive,
     activeSuggestions,
+    applyPositions,
     closePanel,
     flowEdges,
     flowNodes,

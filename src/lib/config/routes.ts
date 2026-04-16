@@ -1,5 +1,5 @@
 export const TEST_ROUTES = {
-  ROOT: "/architecture",
+  ROOT: "/projects",
   PROJECTS: "/projects",
   OVERVIEW: "/overview",
   WEB: "/hosting/web",

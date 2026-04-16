@@ -5,6 +5,7 @@ import { Plus, Square, Play, RotateCcw, Trash2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PluginSlot } from "@/features/plugins/ui/PluginSlot";
 import { PluginWrapper } from "@/features/plugins/ui/PluginWrapper";
+import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
 import { NewServerSheet } from "@/features/hosting/ui/NewServerSheet";
 import { Button } from "@kleffio/ui";
 import { Input } from "@kleffio/ui";
@@ -42,32 +43,32 @@ function statusClasses(status: Deployment["status"]): { dot: string; badge: stri
   }
 }
 
-function DeploymentCard({ deployment }: { deployment: Deployment }) {
+function DeploymentCard({ deployment, projectID }: { deployment: Deployment; projectID: string }) {
   const queryClient = useQueryClient();
 
   const optimisticUpdate = (id: string, status: Deployment["status"]) => {
-    queryClient.setQueryData<Deployment[]>(["deployments"], (old) =>
+    queryClient.setQueryData<Deployment[]>(["deployments", projectID], (old) =>
       old ? old.map((d) => d.id === id ? { ...d, status } : d) : old
     );
   };
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["deployments"] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["deployments", projectID] });
 
   const stop = useMutation({
-    mutationFn: () => stopServer(deployment.id),
+    mutationFn: () => stopServer(projectID, deployment.id),
     onMutate: () => optimisticUpdate(deployment.id, "rolled_back"),
     onSettled: invalidate,
   });
   const start = useMutation({
-    mutationFn: () => startServer(deployment.id),
+    mutationFn: () => startServer(projectID, deployment.id),
     onMutate: () => optimisticUpdate(deployment.id, "in_progress"),
     onSettled: invalidate,
   });
   const restart = useMutation({
-    mutationFn: () => restartServer(deployment.id),
+    mutationFn: () => restartServer(projectID, deployment.id),
     onMutate: () => optimisticUpdate(deployment.id, "restarting"),
     onSettled: invalidate,
   });
-  const destroy = useMutation({ mutationFn: () => deleteDeployment(deployment.id), onSuccess: invalidate });
+  const destroy = useMutation({ mutationFn: () => deleteDeployment(projectID, deployment.id), onSuccess: invalidate });
 
   const busy = stop.isPending || start.isPending || restart.isPending || destroy.isPending;
   const isRunning = deployment.status === "succeeded";
@@ -125,9 +126,11 @@ function DeploymentCard({ deployment }: { deployment: Deployment }) {
 
 export function ServersView() {
   const [newServerOpen, setNewServerOpen] = useState(false);
+  const { currentProjectID } = useCurrentProject();
   const { data: deployments = [], isLoading } = useQuery({
-    queryKey: ["deployments"],
-    queryFn: listDeployments,
+    queryKey: ["deployments", currentProjectID],
+    queryFn: () => listDeployments(currentProjectID ?? ""),
+    enabled: !!currentProjectID,
     refetchInterval: 5000,
   });
 
@@ -146,27 +149,34 @@ export function ServersView() {
             {deployments.length} server{deployments.length !== 1 ? "s" : ""} in your organization
           </p>
         </div>
-        <Button size="sm" onClick={() => setNewServerOpen(true)}>
+        <Button size="sm" disabled={!currentProjectID} onClick={() => setNewServerOpen(true)}>
           <Plus className="size-4" />
           New Server
         </Button>
       </PluginWrapper>
 
-      <NewServerSheet open={newServerOpen} onOpenChange={setNewServerOpen} activeServerNames={activeServerNames} />
+      <NewServerSheet
+        open={newServerOpen}
+        onOpenChange={setNewServerOpen}
+        activeServerNames={activeServerNames}
+        projectID={currentProjectID}
+      />
 
       <Input
         placeholder="Search servers…"
         className="max-w-sm"
       />
 
-      {isLoading ? (
+      {!currentProjectID ? (
+        <p className="text-sm text-muted-foreground">Select a project in the top bar to manage servers.</p>
+      ) : isLoading ? (
         <p className="text-sm text-muted-foreground">Loading servers…</p>
       ) : deployments.length === 0 ? (
         <p className="text-sm text-muted-foreground">No servers yet. Create one to get started.</p>
       ) : (
         <PluginWrapper name="servers.list" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" slotProps={{ servers: deployments }}>
           {deployments.map((d) => (
-            <DeploymentCard key={d.id} deployment={d} />
+            <DeploymentCard key={d.id} deployment={d} projectID={currentProjectID} />
           ))}
         </PluginWrapper>
       )}

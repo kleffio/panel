@@ -11,6 +11,8 @@ class PluginRegistry {
   markSettled(): void {
     if (this._settled) return;
     this._settled = true;
+    // Bump the snapshot reference so useSyncExternalStore re-renders subscribers.
+    this._plugins = [...this._plugins];
     this._listeners.forEach((fn) => fn());
   }
 

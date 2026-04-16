@@ -20,29 +20,66 @@ export interface Deployment {
   created_at: string;
 }
 
-export function createDeployment(payload: CreateDeploymentPayload) {
+interface WorkloadDTO {
+  id: string;
+  name: string;
+  endpoint: string;
+  state: "pending" | "running" | "stopped" | "deleted" | "failed";
+  created_at: string;
+}
+
+function toDeploymentStatus(state: WorkloadDTO["state"]): Deployment["status"] {
+  switch (state) {
+    case "running":
+      return "succeeded";
+    case "stopped":
+      return "rolled_back";
+    case "failed":
+      return "failed";
+    case "deleted":
+      return "rolled_back";
+    default:
+      return "pending";
+  }
+}
+
+export function createDeployment(projectID: string, payload: CreateDeploymentPayload) {
   return post<{ deployment_id: string }, CreateDeploymentPayload>(
-    "/api/v1/deployments",
+    `/api/v1/projects/${projectID}/workloads`,
     payload
   );
 }
 
-export function listDeployments() {
-  return get<Deployment[]>("/api/v1/deployments");
+export async function listDeployments(projectID: string) {
+  if (!projectID) {
+    return [];
+  }
+  const response = await get<{ workloads: WorkloadDTO[] }>(
+    `/api/v1/projects/${projectID}/workloads`
+  );
+  return (response.workloads ?? [])
+    .filter((workload) => workload.state !== "deleted")
+    .map((workload) => ({
+      id: workload.id,
+      server_name: workload.name || workload.id,
+      status: toDeploymentStatus(workload.state),
+      address: workload.endpoint,
+      created_at: workload.created_at,
+    }));
 }
 
-export function deleteDeployment(id: string) {
-  return del<void>(`/api/v1/deployments/${id}`);
+export function deleteDeployment(projectID: string, id: string) {
+  return del<void>(`/api/v1/projects/${projectID}/workloads/${id}`);
 }
 
-export function stopServer(id: string) {
-  return post<void, undefined>(`/api/v1/deployments/${id}/stop`, undefined);
+export function stopServer(projectID: string, id: string) {
+  return post<void, undefined>(`/api/v1/projects/${projectID}/workloads/${id}/stop`, undefined);
 }
 
-export function startServer(id: string) {
-  return post<void, undefined>(`/api/v1/deployments/${id}/start`, undefined);
+export function startServer(projectID: string, id: string) {
+  return post<void, undefined>(`/api/v1/projects/${projectID}/workloads/${id}/start`, undefined);
 }
 
-export function restartServer(id: string) {
-  return post<void, undefined>(`/api/v1/deployments/${id}/restart`, undefined);
+export function restartServer(projectID: string, id: string) {
+  return post<void, undefined>(`/api/v1/projects/${projectID}/workloads/${id}/restart`, undefined);
 }

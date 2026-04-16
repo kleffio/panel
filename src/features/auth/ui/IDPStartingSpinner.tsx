@@ -1,4 +1,4 @@
-import { Spinner } from "@kleffio/ui";
+import { Spinner } from "@/components/ui/Spinner";
 
 export function IDPStartingSpinner({
   variant = "page",
