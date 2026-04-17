@@ -149,7 +149,7 @@ export function LoginPage() {
         </div>
         <Button
           type="submit"
-          className="mt-3 h-12 w-full rounded-full bg-gradient-kleff text-primary-foreground shadow-[0_18px_40px_rgba(196,143,0,0.22)] hover:opacity-95"
+          className="mt-3 h-12 w-full rounded-full bg-gradient-kleff text-primary-foreground shadow-[0_12px_27px_rgba(196,143,0,0.22)] hover:opacity-95"
           disabled={loading}
         >
           {loading ? "Signing in..." : "Sign In"}
