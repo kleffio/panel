@@ -275,6 +275,36 @@
     background: transparent;
   }
 
+  .kleff-scrollbar-subtle {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  }
+
+  .kleff-scrollbar-subtle::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .kleff-scrollbar-subtle::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .kleff-scrollbar-subtle::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.16);
+    background-clip: padding-box;
+  }
+
+  .kleff-scrollbar-subtle::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.28);
+    background-clip: padding-box;
+  }
+
+  .kleff-scrollbar-subtle::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   /* ─── Auth backgrounds ───────────────────────────────────────────────────────*/
   .bg-auth-kleff-shell {
     background: linear-gradient(180deg, rgba(11, 10, 9, 0.99), rgba(4, 4, 4, 1));

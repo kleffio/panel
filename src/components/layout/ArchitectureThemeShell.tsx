@@ -1,32 +1,20 @@
 "use client";
 
-import { useMemo, useRef, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { InteractiveDotField } from "@kleffio/ui";
 
 export function ArchitectureThemeShell({ children }: { children: ReactNode }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-
-  const overlayDotColor = useMemo(() => {
-    if (typeof window === "undefined") {
-      return "rgba(255, 255, 255, 0.08)";
-    }
-
-    return (
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--test-overlay-dot")
-        .trim() || "rgba(255, 255, 255, 0.08)"
-    );
-  }, []);
+  const overlayDotColor = "rgba(245, 181, 23, 0.24)";
 
   return (
     <div
       ref={containerRef}
       className="relative h-full w-full overflow-hidden text-[var(--test-foreground)]"
       style={{
-        backgroundColor: "#0c0d11",
+        backgroundColor: "#050505",
         backgroundImage:
-          "radial-gradient(circle, rgba(255,255,255,0.065) 1px, transparent 1px)",
-        backgroundSize: "28px 28px",
+          "radial-gradient(110% 120% at 50% 0%, rgba(245,181,23,0.14) 0%, rgba(245,181,23,0.04) 30%, rgba(6,6,7,0.93) 68%), linear-gradient(180deg, rgba(4,4,4,0.96) 0%, rgba(2,2,2,1) 100%)",
       }}
     >
       <InteractiveDotField containerRef={containerRef} overlayDotColor={overlayDotColor} />

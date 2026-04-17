@@ -297,23 +297,39 @@ function FlowCanvasBody({
           className="bg-transparent"
           proOptions={{ hideAttribution: true }}
         >
-          {/* Top-left toolbar */}
-          <Panel position="top-left" className="!m-4 flex flex-wrap items-center gap-2">
+          {/* Top-right stacked controls */}
+          <Panel position="top-right" className="!mr-4 !mt-4 flex flex-col items-stretch gap-2 sm:!mr-6 sm:!mt-5">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 min-w-[138px] justify-start rounded-[0.3rem] border-[var(--test-border)] bg-[var(--test-panel)] px-3 text-xs text-[var(--test-foreground)] hover:bg-[var(--test-accent-soft)]"
+              onClick={() => {
+                if (!projectID) {
+                  toast("Node creation mocked", { description: "Choose a project context first." });
+                  return;
+                }
+                setNewServerOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              Add Node
+            </Button>
+
             {/* Organize dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-7 rounded-xl border-[var(--test-border)] bg-[var(--test-panel)] text-xs text-[var(--test-foreground)] hover:bg-[var(--test-accent-soft)]"
+                  className="h-9 min-w-[138px] justify-start rounded-[0.3rem] border-[var(--test-border)] bg-[var(--test-panel)] px-3 text-xs text-[var(--test-foreground)] hover:bg-[var(--test-accent-soft)]"
                 >
                   <Waypoints className="h-4 w-4" />
                   Organize
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
-                align="start"
-                className="w-56 rounded-xl border border-[var(--test-border)] bg-[var(--test-panel)] text-[var(--test-foreground)]"
+                align="end"
+                className="w-56 rounded-[0.3rem] border border-[var(--test-border)] bg-[var(--test-panel)] text-[var(--test-foreground)]"
               >
                 <DropdownMenuItem
                   className="gap-2 text-xs"
@@ -407,30 +423,13 @@ function FlowCanvasBody({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-
-            {/* Add Node */}
-            <Button
-              type="button"
-              variant="outline"
-              className="h-7 rounded-xl border-[var(--test-border)] bg-[var(--test-panel)] text-xs text-[var(--test-foreground)] hover:bg-[var(--test-accent-soft)]"
-              onClick={() => {
-                if (!projectID) {
-                  toast("Node creation mocked", { description: "Choose a project context first." });
-                  return;
-                }
-                setNewServerOpen(true);
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Add Node
-            </Button>
           </Panel>
 
           {/* Bottom-left help button + expandable hotkeys box */}
-          <Panel position="bottom-left" className="!m-4">
+          <Panel position="bottom-left" className="!mb-2 !ml-4 sm:!mb-3 sm:!ml-6">
             <div className="relative flex flex-col items-start gap-2">
               {hotkeysOpen && (
-                <div className="w-[280px] overflow-hidden rounded-2xl border border-[var(--test-border)] bg-[#0e1117] shadow-2xl">
+                <div className="w-[280px] overflow-hidden rounded-[0.4rem] border border-[var(--test-border)] bg-[#0e1117] shadow-2xl">
                   <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
                     <p className="text-xs font-semibold text-white">Keyboard shortcuts</p>
                     <button
@@ -451,7 +450,7 @@ function FlowCanvasBody({
                       ["Select edge + Del", "Remove connection"],
                       ["Backspace / Del", "Remove selected node"],
                     ].map(([key, desc]) => (
-                      <div key={key} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/[0.03]">
+                      <div key={key} className="flex items-center justify-between rounded-[0.2rem] px-2 py-1.5 hover:bg-white/[0.03]">
                         <span className="text-[11px] text-white/50">{desc}</span>
                         <kbd className="ml-3 shrink-0 rounded border border-white/10 bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-white/70">
                           {key}
@@ -464,7 +463,7 @@ function FlowCanvasBody({
               <button
                 type="button"
                 onClick={() => setHotkeysOpen((v) => !v)}
-                className="grid h-7 w-7 place-items-center rounded-full border border-[var(--test-border)] bg-[var(--test-panel)] text-[var(--test-muted)] transition-colors hover:bg-[var(--test-accent-soft)] hover:text-[var(--test-foreground)]"
+                className="grid h-9 w-9 place-items-center rounded-[0.3rem] border border-[var(--test-border)] bg-[var(--test-panel)] text-[var(--test-muted)] transition-colors hover:bg-[var(--test-accent-soft)] hover:text-[var(--test-foreground)]"
                 title="Keyboard shortcuts"
               >
                 <HelpCircle className="h-3.5 w-3.5" />
