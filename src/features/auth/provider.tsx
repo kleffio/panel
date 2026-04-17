@@ -50,7 +50,7 @@ function CurrentUserProvider({ children }: { children: ReactNode }) {
       if (e.data === "signout") auth.removeUser();
       // Another tab signed in (possibly as a different user) — navigate to
       // dashboard so this tab picks up the new token from localStorage.
-      if (e.data === "signin") window.location.replace("/overview");
+      if (e.data === "signin") window.location.replace("/");
     };
     return () => channel.close();
   }, [auth.removeUser]);

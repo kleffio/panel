@@ -19,7 +19,7 @@ export function CallbackPage() {
       // If the token exchange failed for any reason, go to login rather than
       // overview - sending an unauthenticated user to the protected route
       // causes an infinite signinRedirect loop.
-      router.replace(auth.isAuthenticated ? "/overview" : "/auth/login");
+      router.replace(auth.isAuthenticated ? "/" : "/auth/login");
     }
   }, [auth.isLoading, auth.isAuthenticated, router]);
 

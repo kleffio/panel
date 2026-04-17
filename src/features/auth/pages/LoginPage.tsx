@@ -59,7 +59,7 @@ export function LoginPage() {
       return;
     }
     if (auth.isAuthenticated) {
-      router.replace("/overview");
+      router.replace("/");
       return;
     }
     // Redirect mode: hand off to the IDP login page instead of the headless form.
@@ -95,7 +95,7 @@ export function LoginPage() {
       // what OidcProvider will look up on the next page load.
       storeApiTokens(tok, authConfig?.authority ?? "", authConfig?.client_id ?? "");
       broadcastSignin();
-      window.location.replace("/overview");
+      window.location.replace("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
       setLoading(false);
@@ -149,7 +149,7 @@ export function LoginPage() {
         </div>
         <Button
           type="submit"
-          className="mt-3 h-12 w-full rounded-full bg-gradient-kleff text-primary-foreground shadow-[0_18px_40px_rgba(196,143,0,0.22)] hover:opacity-95"
+          className="mt-3 h-12 w-full rounded-full bg-gradient-kleff text-primary-foreground shadow-[0_12px_27px_rgba(196,143,0,0.22)] hover:opacity-95"
           disabled={loading}
         >
           {loading ? "Signing in..." : "Sign In"}

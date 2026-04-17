@@ -9,6 +9,8 @@ import { initPluginGlobals } from "@/features/plugins/lib/globals";
 import { loadPluginScript } from "@/features/plugins/lib/loader";
 import { pluginRegistry } from "@/features/plugins/lib/registry";
 import { getInstalledPlugins } from "@/lib/api/plugins";
+import { isApiError } from "@/lib/api";
+
 
 // ─── API client ───────────────────────────────────────────────────────────────
 
@@ -110,6 +112,8 @@ export function PluginContextProvider({ children }: PluginContextProviderProps) 
           return Promise.all(loads);
         })
         .catch((err) => {
+          // 403 = non-admin user; no plugins to load, not an error.
+          if (isApiError(err) && err.status === 403) return;
           console.error("[kleff] Failed to fetch installed plugins:", err);
         })
         .finally(() => {

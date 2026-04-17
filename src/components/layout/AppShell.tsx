@@ -1,15 +1,30 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
-import { TopBar } from "./TopBar";
+import { AdminShell } from "./AdminShell";
+import { PersonalHubShell } from "./PersonalHubShell";
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+
+  if (pathname.startsWith("/admin")) {
+    return <AdminShell>{children}</AdminShell>;
+  }
+
+  if (pathname.startsWith("/account") || pathname.startsWith("/settings")) {
+    return <PersonalHubShell>{children}</PersonalHubShell>;
+  }
+
+  const isFullBleed = pathname.endsWith("/workspace");
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <TopBar />
-        <main className="flex-1 overflow-y-auto px-6 py-6">{children}</main>
-      </div>
+      <main className={isFullBleed ? "flex-1 overflow-hidden" : "flex-1 overflow-y-auto px-6 py-6"}>
+        {children}
+      </main>
     </div>
   );
 }
