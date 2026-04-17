@@ -109,7 +109,7 @@ export function Sidebar() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-sidebar-accent transition-colors focus-visible:outline-none group">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/20 ring-1 ring-primary/30">
+              <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/15 ring-1 ring-primary/25 shadow-[0_0_12px_oklch(0.80_0.17_90_/_0.15)]">
                 <span className="text-sm font-black text-primary leading-none">K</span>
               </div>
               <div className="flex-1 min-w-0">
@@ -117,7 +117,7 @@ export function Sidebar() {
                   {currentProject?.name ?? (projects.length === 0 ? "No projects" : "Select project")}
                 </p>
               </div>
-              <ChevronsUpDown className="size-3.5 text-sidebar-foreground/30 shrink-0" />
+              <ChevronsUpDown className="size-3.5 text-sidebar-foreground/25 shrink-0" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-52">
@@ -183,18 +183,18 @@ export function Sidebar() {
       <div className="px-3 pb-3">
         <button
           type="button"
-          className="flex w-full items-center gap-2 rounded-md bg-sidebar-accent/50 border border-sidebar-border px-2.5 py-1.5 text-xs text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground/60 transition-colors"
+          className="flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-white/[0.03] px-2.5 py-1.5 text-xs text-sidebar-foreground/35 hover:bg-white/[0.05] hover:text-sidebar-foreground/55 transition-colors"
         >
           <Search className="size-3.5 shrink-0" />
           <span className="flex-1 text-left">Search…</span>
-          <kbd className="hidden sm:inline-flex items-center rounded border border-sidebar-border bg-sidebar-accent/50 px-1 py-0.5 text-[10px] font-mono text-sidebar-foreground/30">
+          <kbd className="hidden sm:inline-flex items-center rounded border border-sidebar-border bg-white/[0.04] px-1 py-0.5 text-[10px] font-mono text-sidebar-foreground/25">
             ⌘K
           </kbd>
         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-0.5 px-2 overflow-y-auto">
+      <nav className="flex-1 space-y-px px-2 overflow-y-auto">
         {navItems.map(({ href, label, icon: Icon, exact }) => {
           const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
           return (
@@ -202,13 +202,20 @@ export function Sidebar() {
               key={href}
               href={href}
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                "flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm font-medium transition-all",
                 active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/55 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  ? "bg-white/[0.07] text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/50 hover:bg-white/[0.04] hover:text-sidebar-foreground/80"
               )}
             >
-              <Icon className={cn("size-4 shrink-0", active ? "text-primary" : "")} />
+              <span className={cn(
+                "flex size-6 shrink-0 items-center justify-center rounded-md transition-all",
+                active
+                  ? "bg-primary/20 text-primary shadow-[0_0_10px_oklch(0.80_0.17_90_/_0.2)]"
+                  : "bg-white/[0.04] text-sidebar-foreground/40 group-hover:text-sidebar-foreground/60"
+              )}>
+                <Icon className="size-3.5" />
+              </span>
               {label}
             </Link>
           );
@@ -225,13 +232,20 @@ export function Sidebar() {
                 key={item.path}
                 href={item.path}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                  "flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm font-medium transition-all",
                   active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/55 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                    ? "bg-white/[0.07] text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/50 hover:bg-white/[0.04] hover:text-sidebar-foreground/80"
                 )}
               >
-                <Puzzle className={cn("size-4 shrink-0", active ? "text-primary" : "")} />
+                <span className={cn(
+                  "flex size-6 shrink-0 items-center justify-center rounded-md transition-all",
+                  active
+                    ? "bg-primary/20 text-primary shadow-[0_0_10px_oklch(0.80_0.17_90_/_0.2)]"
+                    : "bg-white/[0.04] text-sidebar-foreground/40"
+                )}>
+                  <Puzzle className="size-3.5" />
+                </span>
                 {item.label}
               </Link>
             );
@@ -243,16 +257,16 @@ export function Sidebar() {
         <PluginSlot name="topbar.right" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-sidebar-accent focus-visible:outline-none">
+            <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-white/[0.05] focus-visible:outline-none">
               <Avatar size="sm">
-                <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
+                <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold ring-1 ring-primary/20">
                   {initial}
                 </AvatarFallback>
               </Avatar>
-              <span className="flex-1 truncate text-left text-xs font-medium text-sidebar-foreground/70">
+              <span className="flex-1 truncate text-left text-xs font-medium text-sidebar-foreground/60">
                 {displayName}
               </span>
-              <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/30" />
+              <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/25" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-48 mb-1">
