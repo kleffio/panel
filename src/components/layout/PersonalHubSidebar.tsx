@@ -118,6 +118,10 @@ export function PersonalHubSidebar() {
               <LayoutGrid className="size-4" />
               Workspace
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push("/account")}>
+              <Settings className="size-4" />
+              Account
+            </DropdownMenuItem>
             {isAdmin && (
               <DropdownMenuItem onClick={() => router.push("/admin")}>
                 <ShieldCheck className="size-4" />

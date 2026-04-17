@@ -17,7 +17,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <PersonalHubShell>{children}</PersonalHubShell>;
   }
 
-  const isFullBleed = pathname.endsWith("/workspace");
+  const isFullBleed = pathname.endsWith("/canvas");
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

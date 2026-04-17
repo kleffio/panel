@@ -3,7 +3,7 @@
 import { useContext } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Puzzle, Users, ScrollText, Settings, LogOut, ChevronsUpDown, LayoutGrid } from "lucide-react";
+import { LayoutDashboard, Puzzle, Users, ScrollText, Settings, ShieldCheck, LogOut, ChevronsUpDown, LayoutGrid } from "lucide-react";
 import {
   cn,
   DropdownMenu,
@@ -14,7 +14,7 @@ import {
   Avatar,
   AvatarFallback,
 } from "@kleffio/ui";
-import { useAuth, broadcastSignout, AuthConfigContext } from "@/features/auth";
+import { useAuth, broadcastSignout, useHasRole, AuthConfigContext } from "@/features/auth";
 
 const ADMIN_NAV = [
   { href: "/admin",         label: "Dashboard",  icon: LayoutDashboard },
@@ -28,6 +28,7 @@ export function AdminSidebar() {
   const router = useRouter();
   const auth = useAuth();
   const authConfig = useContext(AuthConfigContext);
+  const isAdmin = useHasRole("admin");
 
   const user = auth.user;
   const displayName = user?.profile?.name ?? user?.profile?.email ?? "User";
@@ -110,6 +111,12 @@ export function AdminSidebar() {
               <Settings className="size-4" />
               Account
             </DropdownMenuItem>
+            {isAdmin && (
+              <DropdownMenuItem onClick={() => router.push("/admin")}>
+                <ShieldCheck className="size-4" />
+                Admin
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onClick={handleSignOut}>
               <LogOut className="size-4" />
