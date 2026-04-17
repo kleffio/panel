@@ -108,6 +108,10 @@ export function getPluginUIManifests() {
 }
 
 export function getInstalledPlugins() {
+  return get<{ data: InstalledPluginsResponse }>("/api/v1/plugins/installed").then((r) => r.data);
+}
+
+export function getInstalledPluginsAdmin() {
   return get<{ data: InstalledPluginsResponse }>("/api/v1/admin/plugins").then((r) => r.data);
 }
 

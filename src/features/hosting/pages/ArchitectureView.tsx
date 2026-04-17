@@ -29,7 +29,7 @@ export function ArchitectureView({
   simulateMetrics?: boolean;
 }) {
   return (
-    <div className="-mx-6 -my-6 h-[calc(100vh-3.5rem)] min-h-[720px] overflow-hidden">
+    <div className="h-full min-h-[720px] overflow-hidden">
       <ArchitectureThemeShell>
         <InfrastructureFlowCanvas
           infrastructureNodes={infrastructureNodes}
