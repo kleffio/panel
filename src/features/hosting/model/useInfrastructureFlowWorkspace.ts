@@ -8,12 +8,10 @@ import { toast } from "sonner";
 import {
   infrastructureEdges,
   infrastructureNodes,
-  mockAiSuggestions,
 } from "@/features/hosting/model/content";
 import type {
   InfrastructureNode,
   InfrastructureEdge,
-  AiSuggestion,
   NodeAction,
 } from "@/features/hosting/model/types";
 import {
@@ -51,43 +49,23 @@ function nudgeNodeMetrics(node: InfrastructureNode) {
 export function useInfrastructureFlowWorkspace({
   initialInfrastructureNodes = infrastructureNodes,
   initialInfrastructureEdges = infrastructureEdges,
-  initialMockAiSuggestions = mockAiSuggestions,
   simulateMetrics = true,
   onDeleteNode,
 }: {
   initialInfrastructureNodes?: InfrastructureNode[];
   initialInfrastructureEdges?: InfrastructureEdge[];
-  initialMockAiSuggestions?: AiSuggestion[];
   simulateMetrics?: boolean;
   onDeleteNode?: (nodeID: string) => Promise<void> | void;
 } = {}) {
   const [domainNodes, setDomainNodes] = useState(initialInfrastructureNodes);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const [analysisActive, setAnalysisActive] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
   const restartTimersRef = useRef<number[]>([]);
   const repulsionAnimationFrameRef = useRef<number | null>(null);
   const isAnimatingRepulsionRef = useRef(false);
   const domainNodesRef = useRef(domainNodes);
   domainNodesRef.current = domainNodes;
-
-  const highlightedNodeIds = useMemo(
-    () =>
-      analysisActive
-        ? new Set(initialMockAiSuggestions.map((suggestion) => suggestion.nodeId))
-        : new Set<string>(),
-    [analysisActive, initialMockAiSuggestions],
-  );
-
-  const highlightedEdgeIds = useMemo(
-    () =>
-      analysisActive
-        ? new Set(["proxy-backend", "backend-postgres", "workers-postgres"])
-        : new Set<string>(),
-    [analysisActive],
-  );
 
   const handleNodeAction = useCallback((nodeId: string, action: NodeAction) => {
     const targetNode = domainNodesRef.current.find((node) => node.id === nodeId);
@@ -237,12 +215,12 @@ export function useInfrastructureFlowWorkspace({
     setFlowNodes((currentNodes) =>
       buildInfrastructureFlowNodes(
         domainNodes,
-        highlightedNodeIds,
+        new Set<string>(),
         handleNodeAction,
         currentNodes,
       ),
     );
-  }, [domainNodes, handleNodeAction, highlightedNodeIds, setFlowNodes]);
+  }, [domainNodes, handleNodeAction, setFlowNodes]);
 
   useEffect(() => {
     setFlowNodes((currentNodes) => {
@@ -360,8 +338,8 @@ export function useInfrastructureFlowWorkspace({
   );
 
   const flowEdges = useMemo(
-    () => buildInfrastructureFlowEdges(initialInfrastructureEdges, highlightedEdgeIds, hoveredNodeId),
-    [highlightedEdgeIds, hoveredNodeId, initialInfrastructureEdges],
+    () => buildInfrastructureFlowEdges(initialInfrastructureEdges, new Set<string>(), hoveredNodeId),
+    [hoveredNodeId, initialInfrastructureEdges],
   );
 
   const selectedNode = useMemo(
@@ -388,45 +366,6 @@ export function useInfrastructureFlowWorkspace({
 
     return domainNodes.filter((node) => relatedIds.includes(node.id));
   }, [domainNodes, initialInfrastructureEdges, selectedNode]);
-
-  const activeSuggestions = useMemo(
-    () => (analysisActive ? initialMockAiSuggestions : []),
-    [analysisActive, initialMockAiSuggestions],
-  );
-
-  const selectedNodeSuggestions = useMemo(
-    () =>
-      activeSuggestions.filter((suggestion) => suggestion.nodeId === selectedNode?.id),
-    [activeSuggestions, selectedNode],
-  );
-
-  const handleAnalyzeSystem = useCallback(() => {
-    if (isAnalyzing) {
-      return;
-    }
-
-    if (analysisActive) {
-      setAnalysisActive(false);
-      toast.success("Analysis cleared", {
-        description: "The mocked AI highlights were dismissed.",
-      });
-      return;
-    }
-
-    setIsAnalyzing(true);
-    toast.loading("Analyzing infrastructure", {
-      description: "Scanning hot paths, queue pressure, and storage trends.",
-    });
-
-    window.setTimeout(() => {
-      setIsAnalyzing(false);
-      setAnalysisActive(true);
-      setSelectedNodeId("backend");
-      toast.success("Analysis ready", {
-        description: "The AI surfaced four recommendations across the graph.",
-      });
-    }, 1300);
-  }, [analysisActive, isAnalyzing]);
 
   const handleOrganizeCanvas = useCallback(() => {
     const currentNodes = flowNodesRef.current;
@@ -489,24 +428,19 @@ export function useInfrastructureFlowWorkspace({
   );
 
   return {
-    analysisActive,
-    activeSuggestions,
     applyPositions,
     closePanel,
     flowEdges,
     flowNodes,
-    handleAnalyzeSystem,
     handleNodeAction,
     handleNodeClick,
     handleNodeDrag,
     handleNodeDragStop,
     handleOrganizeCanvas,
     handlePaneClick,
-    isAnalyzing,
     onNodesChange,
     relatedNodes,
     selectedNode,
-    selectedNodeSuggestions,
     setHoveredNodeId,
     setViewport,
     viewport,

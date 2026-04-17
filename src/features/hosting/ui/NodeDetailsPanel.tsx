@@ -1,20 +1,19 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   ArrowUpRight,
   CheckCircle2,
   Circle,
   Maximize2,
   RotateCcw,
-  Sparkles,
   Trash2,
   XCircle,
 } from "lucide-react";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
 
-import type { AiSuggestion, InfrastructureNode, NodeAction } from "@/features/hosting/model/types";
+import type { InfrastructureNode, NodeAction } from "@/features/hosting/model/types";
 import { getStatusMeta } from "@/features/hosting/lib/infrastructure-graph";
 import { Button } from "@kleffio/ui";
 import { Sheet, SheetContent } from "@kleffio/ui";
@@ -144,13 +143,13 @@ function LogViewer({ node }: { node: InfrastructureNode }) {
 function MetricBar({ label, value, detail }: { label: string; value: number; detail: string }) {
   const color = value > 80 ? "bg-red-500" : value > 60 ? "bg-amber-400" : "bg-emerald-400";
   return (
-    <div className="space-y-1.5 rounded-xl border border-white/8 bg-white/[0.03] p-3">
+    <div className="space-y-1.5 rounded-[0.35rem] border border-white/8 bg-white/[0.03] p-3">
       <div className="flex items-center justify-between text-[11px]">
         <span className="uppercase tracking-wide text-white/40">{label}</span>
         <span className="font-medium text-white/70">{value}%</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
-        <div className={`h-full rounded-full ${color} transition-all duration-700`} style={{ width: `${value}%` }} />
+      <div className="h-1.5 overflow-hidden rounded-[0.2rem] bg-white/8">
+        <div className={`h-full rounded-[0.2rem] ${color} transition-all duration-700`} style={{ width: `${value}%` }} />
       </div>
       <p className="text-[11px] text-white/35">{detail}</p>
     </div>
@@ -178,28 +177,102 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
   onOpenChange,
   onAction,
   relatedNodes,
-  suggestions,
 }: {
   node: InfrastructureNode | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAction: (nodeId: string, action: NodeAction) => void;
   relatedNodes: InfrastructureNode[];
-  suggestions: AiSuggestion[];
 }) {
   const [tab, setTab] = useState<Tab>("logs");
+  const [isSheetOpen, setIsSheetOpen] = useState(open);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const status = node ? getStatusMeta(node.status) : null;
+
+  const endpointValue = useMemo(() => {
+    if (!node) return "";
+
+    const fromHighlights = node.panel.highlights
+      .find((line) => line.toLowerCase().startsWith("endpoint:"))
+      ?.replace(/^endpoint:\s*/i, "")
+      .trim();
+
+    return (node.footer?.trim() || fromHighlights || "").trim();
+  }, [node]);
+
+  const showEndpoint = useMemo(() => {
+    if (!endpointValue) return false;
+    if (endpointValue.toLowerCase().includes("pending")) return false;
+
+    return /(https?:\/\/|localhost|:\d{2,5}\b|\b\d{1,3}(?:\.\d{1,3}){3}\b|\b[a-z0-9.-]+\.[a-z]{2,}\b)/i.test(endpointValue);
+  }, [endpointValue]);
+
+  const overviewHighlights = useMemo(() => {
+    if (!node) return [];
+
+    return node.panel.highlights.filter((line) => {
+      const normalized = line.toLowerCase();
+      if (normalized.startsWith("endpoint:")) return false;
+      if (normalized.startsWith("state:")) return false;
+
+      return true;
+    });
+  }, [node]);
 
   // Reset to logs tab when a new node is selected
   useEffect(() => {
     setTab("logs");
   }, [node?.id]);
 
+  useEffect(() => {
+    if (open) {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      setIsSheetOpen(true);
+      return;
+    }
+
+    setIsSheetOpen(false);
+  }, [open, node?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleSheetOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      setIsSheetOpen(true);
+      onOpenChange(true);
+      return;
+    }
+
+    setIsSheetOpen(false);
+
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+    }
+
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      onOpenChange(false);
+    }, 260);
+  };
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={isSheetOpen} onOpenChange={handleSheetOpenChange}>
       <SheetContent
         side="right"
-        className="flex w-[580px] flex-col border-[var(--test-border)] bg-[#0e1117] p-0 text-white sm:max-w-[580px]"
+        className="origin-right flex !right-8 !top-5 !bottom-5 !h-auto w-[640px] max-w-[calc(100vw-5rem)] flex-col overflow-hidden rounded-[0.45rem] border border-white/14 bg-[linear-gradient(180deg,rgba(10,14,22,0.99)_0%,rgba(6,9,15,0.99)_100%)] p-0 text-white ring-1 ring-white/8 shadow-[0_84px_190px_rgba(0,0,0,0.9),_-44px_0_130px_rgba(0,0,0,0.68),0_0_0_1px_rgba(255,255,255,0.02)] backdrop-blur-sm data-[state=open]:duration-520 data-[state=open]:ease-[cubic-bezier(0.16,1,0.3,1)] data-[state=open]:slide-in-from-right-8 data-[state=open]:zoom-in-[97%] data-[state=closed]:duration-260 data-[state=closed]:ease-[cubic-bezier(0.4,0,1,1)] data-[state=closed]:slide-out-to-right-5 data-[state=closed]:zoom-out-[99%]"
       >
         {node ? (
           <>
@@ -214,7 +287,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                     {node.subtitle || node.kind}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px]">
+                <div className="flex shrink-0 items-center gap-1.5 rounded-[0.3rem] border border-white/10 bg-white/5 px-2.5 py-1 text-[11px]">
                   <StatusIcon status={node.status} />
                   <span className={status?.textClassName ?? "text-white/60"}>{status?.label}</span>
                 </div>
@@ -228,7 +301,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                     onClick={() => setTab(t)}
                     className={`relative px-4 pb-3 text-[12px] font-medium capitalize transition-colors ${
                       tab === t
-                        ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-white"
+                        ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-sky-300"
                         : "text-white/40 hover:text-white/70"
                     }`}
                   >
@@ -240,98 +313,127 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
 
             {/* ── Tab body ─────────────────────────────────────────── */}
             <div className="min-h-0 flex-1 overflow-hidden">
-              {tab === "logs" ? (
-                <LogViewer node={node} />
-              ) : tab === "metrics" ? (
-                <div className="space-y-3 overflow-y-auto p-5">
-                  <MetricBar label="CPU" value={node.metrics.cpu} detail={node.metrics.traffic} />
-                  <MetricBar label="RAM" value={node.metrics.ram} detail={node.metrics.ramLabel} />
+              <AnimatePresence mode="wait" initial={false}>
+                {tab === "logs" ? (
+                  <motion.div
+                    key="logs"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.17, ease: [0.22, 1, 0.36, 1] }}
+                    className="h-full"
+                  >
+                    <LogViewer node={node} />
+                  </motion.div>
+                ) : null}
 
-                  {node.footer ? (
-                    <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                      <p className="text-[11px] uppercase tracking-wide text-white/40">Endpoint</p>
-                      <p className="mt-1 break-all text-xs text-white/70">{node.footer}</p>
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                /* overview */
-                <div className="space-y-4 overflow-y-auto p-5">
-                  <div className="rounded-2xl border border-amber-300/20 bg-[rgba(47,34,14,0.52)] p-4">
-                    <p className="mb-3 text-[11px] uppercase tracking-wide text-amber-100/75">
-                      Container information
-                    </p>
-                    <div className="space-y-2">
-                      <div className="flex items-start justify-between gap-3 rounded-xl border border-white/8 bg-black/20 px-3 py-2">
-                        <span className="text-[10px] uppercase tracking-wide text-white/40">Name</span>
-                        <span className="text-xs text-white/80">{node.name}</span>
-                      </div>
-                      <div className="flex items-start justify-between gap-3 rounded-xl border border-white/8 bg-black/20 px-3 py-2">
-                        <span className="text-[10px] uppercase tracking-wide text-white/40">Image</span>
-                        <span className="max-w-[65%] truncate text-right text-xs text-white/80">{node.subtitle || "n/a"}</span>
-                      </div>
-                      <div className="flex items-start justify-between gap-3 rounded-xl border border-white/8 bg-black/20 px-3 py-2">
-                        <span className="text-[10px] uppercase tracking-wide text-white/40">Container ID</span>
-                        <span className="break-all text-right font-mono text-[11px] text-white/70">{node.id}</span>
-                      </div>
-                      <div className="flex items-start justify-between gap-3 rounded-xl border border-white/8 bg-black/20 px-3 py-2">
-                        <span className="text-[10px] uppercase tracking-wide text-white/40">Endpoint</span>
-                        <span className="max-w-[65%] break-all text-right text-xs text-white/80">{node.footer ?? node.metrics.traffic}</span>
-                      </div>
-                    </div>
-                  </div>
+                {tab === "metrics" ? (
+                  <motion.div
+                    key="metrics"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.17, ease: [0.22, 1, 0.36, 1] }}
+                    className="h-full space-y-3 overflow-y-auto p-5"
+                  >
+                    <MetricBar label="CPU" value={node.metrics.cpu} detail={node.metrics.traffic} />
+                    <MetricBar label="RAM" value={node.metrics.ram} detail={node.metrics.ramLabel} />
 
-                  {/* Operational notes */}
-                  <div className="rounded-xl border border-white/8 bg-white/[0.03] p-4">
-                    <p className="mb-3 text-[11px] uppercase tracking-wide text-white/40">Details</p>
-                    <ul className="space-y-2">
-                      {node.panel.highlights.map((h) => (
-                        <li key={h} className="text-xs leading-5 text-white/60">{h}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Related services */}
-                  {relatedNodes.length > 0 ? (
-                    <div className="rounded-xl border border-white/8 bg-white/[0.03] p-4">
-                      <p className="mb-3 text-[11px] uppercase tracking-wide text-white/40">
-                        Connected services
+                    <div className="rounded-[0.35rem] border border-white/8 bg-white/[0.03] p-3">
+                      <p className="text-[11px] uppercase tracking-wide text-white/40">Load profile</p>
+                      <p className="mt-1 text-xs text-white/70">{node.metrics.traffic}</p>
+                      <p className="mt-1 text-[11px] text-white/45">
+                        {showEndpoint ? "Public endpoint is available" : "No public endpoint exposed"}
                       </p>
-                      <div className="space-y-2">
-                        {relatedNodes.map((rn) => (
-                          <div
-                            key={rn.id}
-                            className="rounded-lg border border-white/6 bg-black/20 px-3 py-2"
-                          >
-                            <p className="text-xs font-medium text-white/80">{rn.name}</p>
-                            <p className="mt-0.5 text-[11px] text-white/35">{rn.subtitle}</p>
-                          </div>
-                        ))}
-                      </div>
                     </div>
-                  ) : null}
+                  </motion.div>
+                ) : null}
 
-                  {/* AI suggestions */}
-                  {suggestions.length > 0 ? (
-                    <div className="rounded-xl border border-amber-300/15 bg-amber-400/[0.06] p-4">
-                      <div className="mb-3 flex items-center gap-2">
-                        <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-                        <p className="text-[11px] uppercase tracking-wide text-amber-300/80">
-                          AI recommendations
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        {suggestions.map((s) => (
-                          <div key={s.id} className="rounded-lg border border-white/6 bg-black/20 p-3">
-                            <p className="text-xs font-medium text-white/80">{s.title}</p>
-                            <p className="mt-1 text-[11px] leading-5 text-white/45">{s.description}</p>
+                {tab === "overview" ? (
+                  <motion.div
+                    key="overview"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.17, ease: [0.22, 1, 0.36, 1] }}
+                    className="h-full space-y-4 overflow-y-auto p-5"
+                  >
+                    <div className="rounded-[0.4rem] border border-white/12 bg-[rgba(14,20,31,0.76)] p-4">
+                      <p className="mb-2 text-[11px] uppercase tracking-wide text-white/70">
+                        Container information
+                      </p>
+                      <div className="divide-y divide-white/8 text-xs">
+                        <div className="flex items-center justify-between gap-3 py-2.5">
+                          <span className="text-[10px] uppercase tracking-wide text-white/40">Name</span>
+                          <span className="text-right text-white/82">{node.name}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 py-2.5">
+                          <span className="text-[10px] uppercase tracking-wide text-white/40">Image</span>
+                          <span className="max-w-[65%] truncate text-right text-white/82">{node.subtitle || "n/a"}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 py-2.5">
+                          <span className="text-[10px] uppercase tracking-wide text-white/40">Container ID</span>
+                          <span className="max-w-[70%] truncate text-right font-mono text-[11px] text-white/74">{node.id}</span>
+                        </div>
+                        {showEndpoint ? (
+                          <div className="flex items-center justify-between gap-3 py-2.5">
+                            <span className="text-[10px] uppercase tracking-wide text-white/40">Endpoint</span>
+                            <span className="max-w-[65%] break-all text-right text-white/82">{endpointValue}</span>
                           </div>
-                        ))}
+                        ) : null}
                       </div>
                     </div>
-                  ) : null}
-                </div>
-              )}
+
+                    <div className="rounded-[0.35rem] border border-white/8 bg-white/[0.03] p-4">
+                      <p className="mb-3 text-[11px] uppercase tracking-wide text-white/40">Details</p>
+                      {overviewHighlights.length > 0 ? (
+                        <ul className="space-y-2">
+                          {overviewHighlights.map((h) => (
+                            <li key={h} className="text-xs leading-5 text-white/60">{h}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs leading-5 text-white/55">No runtime issues reported.</p>
+                      )}
+                    </div>
+
+                    {relatedNodes.length > 0 ? (
+                      <div className="rounded-[0.35rem] border border-white/8 bg-white/[0.03] p-4">
+                        <p className="mb-3 text-[11px] uppercase tracking-wide text-white/40">
+                          Connected services
+                        </p>
+                        <div className="space-y-2">
+                          {relatedNodes.map((rn) => (
+                            <div
+                              key={rn.id}
+                              className="rounded-[0.25rem] border border-white/6 bg-black/20 px-3 py-2"
+                            >
+                              <p className="text-xs font-medium text-white/80">{rn.name}</p>
+                              <p className="mt-0.5 text-[11px] text-white/35">{rn.subtitle}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {node.badges.length > 0 ? (
+                      <div className="rounded-[0.35rem] border border-white/8 bg-white/[0.03] p-4">
+                        <p className="mb-3 text-[11px] uppercase tracking-wide text-white/40">Labels</p>
+                        <div className="flex flex-wrap gap-2">
+                          {node.badges.map((badge) => (
+                            <span
+                              key={badge}
+                              className="rounded-[0.22rem] border border-white/8 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-white/50"
+                            >
+                              {badge}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
             </div>
 
             {/* ── Footer action bar ─────────────────────────────────── */}
@@ -346,7 +448,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                   <Button
                     asChild
                     size="sm"
-                    className="h-8 rounded-lg bg-white/10 text-[12px] text-white/80 hover:bg-white/15"
+                    className="h-8 rounded-[0.3rem] bg-white/10 text-[12px] text-white/80 hover:bg-sky-400/12 hover:text-sky-300"
                   >
                     <Link href={node.route}>
                       Open
@@ -358,7 +460,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-8 rounded-lg text-[12px] text-white/60 hover:bg-white/8 hover:text-white/80"
+                    className="h-8 rounded-[0.3rem] text-[12px] text-white/60 hover:bg-white/8 hover:text-white/80"
                     onClick={() => onAction(node.id, "scale")}
                   >
                     <Maximize2 className="h-3.5 w-3.5" />
@@ -369,7 +471,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-8 rounded-lg text-[12px] text-white/60 hover:bg-white/8 hover:text-white/80"
+                    className="h-8 rounded-[0.3rem] text-[12px] text-white/60 hover:bg-white/8 hover:text-white/80"
                     onClick={() => onAction(node.id, "restart")}
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
@@ -380,7 +482,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-8 rounded-lg text-[12px] text-red-400/70 hover:bg-red-400/10 hover:text-red-300"
+                    className="h-8 rounded-[0.3rem] text-[12px] text-red-400/70 hover:bg-red-400/10 hover:text-red-300"
                     onClick={() => onAction(node.id, "delete")}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -402,6 +504,5 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
   prev.node?.metrics.ram === next.node?.metrics.ram &&
   prev.node?.metrics.ramLabel === next.node?.metrics.ramLabel &&
   prev.node?.metrics.traffic === next.node?.metrics.traffic &&
-  prev.relatedNodes === next.relatedNodes &&
-  prev.suggestions === next.suggestions
+  prev.relatedNodes === next.relatedNodes
 );

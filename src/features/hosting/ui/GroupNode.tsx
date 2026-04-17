@@ -6,6 +6,7 @@ import type { NodeProps } from "reactflow";
 
 import type { NodeStatus } from "@/features/hosting/model/types";
 import { GROUP_ROLES } from "./GroupManagerModal";
+import { useGroupEvents } from "./GroupEventContext";
 
 export const GROUP_COLORS = [
   "#6366f1", // indigo
@@ -25,8 +26,8 @@ export interface GroupNodeData {
   computedStatus: NodeStatus | null;
   notes: string;
   role: string;
-  onDelete: (id: string) => void;
-  onEdit: (id: string) => void;
+  onDelete?: (id: string) => void;
+  onEdit?: (id: string) => void;
 }
 
 function StatusDot({ status }: { status: NodeStatus | null }) {
@@ -48,6 +49,7 @@ export const GroupNode = memo(function GroupNode({
   id,
   data,
 }: NodeProps<GroupNodeData>) {
+  const { onDelete, onEdit } = useGroupEvents();
   const roleInfo = GROUP_ROLES.find((r) => r.id === data.role);
 
   return (
@@ -106,7 +108,7 @@ export const GroupNode = memo(function GroupNode({
           title="Edit group"
           onClick={(e) => {
             e.stopPropagation();
-            data.onEdit(id);
+            onEdit(id);
           }}
         >
           <Edit2 className="h-3 w-3" />
@@ -119,7 +121,7 @@ export const GroupNode = memo(function GroupNode({
           title="Delete group"
           onClick={(e) => {
             e.stopPropagation();
-            data.onDelete(id);
+            onDelete(id);
           }}
         >
           <X className="h-3.5 w-3.5" />

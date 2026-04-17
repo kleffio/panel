@@ -16,24 +16,24 @@ import {
   ContextMenuTrigger,
 } from "@kleffio/ui";
 
-function getNodeLogoMeta(nodeId: string) {
-  switch (nodeId) {
-    case "frontend":
+function getNodeLogoMeta(kind: string) {
+  switch (kind) {
+    case "app":
       return {
         token: "JS",
         className: "bg-[#e7d04c] text-[#151515] shadow-[0_0_0_1px_rgba(255,255,255,0.04)]",
       };
-    case "backend":
+    case "api":
       return {
         token: "PY",
         className: "bg-[linear-gradient(135deg,#4da3ff,#f4c84e)] text-[#111827] shadow-[0_0_0_1px_rgba(255,255,255,0.04)]",
       };
-    case "postgres":
+    case "database":
       return {
         token: "PG",
         className: "bg-[#2f7adf] text-white shadow-[0_0_0_1px_rgba(255,255,255,0.04)]",
       };
-    case "redis":
+    case "cache":
       return {
         token: "RD",
         className: "bg-[#d94b5b] text-white shadow-[0_0_0_1px_rgba(255,255,255,0.04)]",
@@ -43,17 +43,17 @@ function getNodeLogoMeta(nodeId: string) {
         token: "EN",
         className: "bg-[#7a849b] text-[#0e1220] shadow-[0_0_0_1px_rgba(255,255,255,0.04)]",
       };
-    case "workers":
+    case "worker":
       return {
         token: "WK",
         className: "bg-[#e0a54f] text-[#161616] shadow-[0_0_0_1px_rgba(255,255,255,0.04)]",
       };
-    case "minecraft":
+    case "game-server":
       return {
         token: "MC",
         className: "bg-[#57c26d] text-[#102114] shadow-[0_0_0_1px_rgba(255,255,255,0.04)]",
       };
-    case "observability":
+    case "support":
       return {
         token: "OB",
         className: "bg-[linear-gradient(135deg,#43d4d0,#4f8cff)] text-[#08131f] shadow-[0_0_0_1px_rgba(255,255,255,0.04)]",
@@ -66,150 +66,65 @@ function getNodeLogoMeta(nodeId: string) {
   }
 }
 
-const MetricBar = memo(function MetricBar({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
-  const barColor =
-    value > 80
-      ? "bg-red-400"
-      : value > 60
-        ? "bg-amber-400"
-        : "bg-yellow-400";
-
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-[var(--test-muted)]">
-        <span>{label}</span>
-        <span>{value}%</span>
-      </div>
-      <div className="h-1.5 rounded-full bg-white/6">
-        <div
-          className={`h-full rounded-full ${barColor} transition-all duration-700`}
-          style={{ width: `${value}%` }}
-        />
-      </div>
-    </div>
-  );
-});
-
 export const InfrastructureNodeCard = memo(function InfrastructureNodeCard({
   data,
   selected,
 }: NodeProps<InfrastructureFlowNodeData>) {
-  const { node, highlighted, onAction } = data;
+  const { node, onAction } = data;
   const status = getStatusMeta(node.status);
   const kind = getKindMeta(node.kind);
-  const logo = getNodeLogoMeta(node.id);
+  const logo = getNodeLogoMeta(node.kind);
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <motion.div
           animate={{
-            y: highlighted ? [0, -4, 0] : 0,
-            boxShadow: highlighted
-              ? [
-                  "0 24px 48px rgba(0, 0, 0, 0.28)",
-                  "0 26px 60px rgba(246, 193, 119, 0.28)",
-                  "0 24px 48px rgba(0, 0, 0, 0.28)",
-                ]
-              : "0 24px 48px rgba(0, 0, 0, 0.28)",
+            boxShadow: "0 12px 32px rgba(0, 0, 0, 0.28)",
           }}
-          transition={{
-            duration: highlighted ? 2.4 : 0.2,
-            repeat: highlighted ? Number.POSITIVE_INFINITY : 0,
-            ease: "easeInOut",
-          }}
-          className={`relative min-w-[280px] max-w-[280px] rounded-[22px] border backdrop-blur-xl ${
-            highlighted
-              ? "border-amber-300/28 bg-[rgba(33,28,23,0.92)]"
-              : "border-white/8 bg-[#111214]"
-          } ${selected ? "ring-2 ring-amber-300/40 ring-offset-2 ring-offset-transparent" : ""}`}
+          transition={{ duration: 0.2 }}
+          className={`relative min-w-[220px] max-w-[220px] rounded-[18px] border backdrop-blur-xl border-white/8 bg-[#111214] ${
+            selected ? "ring-2 ring-[#f5b517]/40 ring-offset-2 ring-offset-transparent" : ""
+          }`}
           style={{ backgroundImage: `linear-gradient(180deg, ${kind.accent}, transparent)` }}
         >
-          <div className="space-y-4 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-[8px] text-[11px] font-bold tracking-[0.02em] ${logo.className}`}>
-                  {logo.token}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <strong className="text-[15px] font-semibold text-[var(--test-foreground)]">
-                      {node.name}
-                    </strong>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-[var(--test-muted)]">
-                      {kind.label}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[12px] text-[var(--test-muted)]">{node.subtitle}</p>
-                </div>
+          <div className="space-y-2.5 p-3">
+            {/* Top row: logo + name + kind + link */}
+            <div className="flex items-center gap-2">
+              <div className={`grid h-6 w-6 shrink-0 place-items-center rounded-[7px] text-[10px] font-bold tracking-[0.02em] ${logo.className}`}>
+                {logo.token}
               </div>
-
-              <div className="flex shrink-0 items-center gap-2">
-                {highlighted ? (
-                  <span className="rounded-full border border-amber-300/30 bg-amber-400/12 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-amber-100">
-                    AI flag
-                  </span>
-                ) : null}
-                {node.route ? (
-                  <Link
-                    href={node.route}
-                    className="grid h-8 w-8 place-items-center rounded-xl border border-white/8 bg-white/[0.04] text-[var(--test-muted)] transition-colors hover:bg-white/[0.08] hover:text-[var(--test-foreground)]"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </Link>
-                ) : null}
+              <div className="min-w-0 flex-1">
+                <strong className="block truncate text-[13px] font-semibold leading-tight text-[var(--test-foreground)]">
+                  {node.name}
+                </strong>
+                <span className="text-[10px] uppercase tracking-[0.1em] text-[var(--test-muted)]">
+                  {kind.label}
+                </span>
               </div>
+              {node.route ? (
+                <Link
+                  href={node.route}
+                  className="grid h-6 w-6 shrink-0 place-items-center rounded-lg border border-white/8 bg-white/[0.04] text-[var(--test-muted)] transition-colors hover:bg-white/[0.08] hover:text-[var(--test-foreground)]"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <ArrowUpRight className="h-3 w-3" />
+                </Link>
+              ) : null}
             </div>
 
-            <div className="flex items-center justify-between rounded-2xl border border-white/6 bg-white/[0.03] px-3 py-2">
-              <div className="flex items-center gap-2 text-xs">
-                <span className={`h-2.5 w-2.5 rounded-full ${status.dotClassName}`} />
+            {/* Status + endpoint row */}
+            <div className="flex items-center justify-between rounded-xl border border-white/6 bg-white/[0.03] px-2.5 py-1.5">
+              <div className="flex items-center gap-1.5 text-[11px]">
+                <span className={`h-2 w-2 rounded-full ${status.dotClassName}`} />
                 <span className={status.textClassName}>{status.label}</span>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--test-muted)]">Endpoint</p>
-                <p className="text-xs text-[var(--test-muted)]">{node.metrics.traffic}</p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/6 bg-black/12 px-3 py-2.5">
-              <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-[0.12em] text-[var(--test-muted)]">
-                <span>Container</span>
-                <span className="text-[var(--test-foreground)]">{node.name}</span>
-              </div>
-              <p className="truncate text-[11px] text-[var(--test-muted)]">{node.subtitle}</p>
-            </div>
-
-            <div className="grid gap-3">
-              <MetricBar label="CPU" value={node.metrics.cpu} />
-              <MetricBar label="RAM" value={node.metrics.ram} />
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {node.badges.map((badge) => (
-                <span
-                  key={badge}
-                  className="rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-[var(--test-muted)]"
-                >
-                  {badge}
-                </span>
-              ))}
+              <p className="truncate max-w-[90px] text-right text-[10px] text-[var(--test-muted)]">
+                {node.metrics.traffic}
+              </p>
             </div>
           </div>
-
-          {node.footer ? (
-            <div className="overflow-hidden rounded-b-[22px] border-t border-white/6 bg-black/12 px-4 py-2.5 text-xs text-[var(--test-muted)]">
-              {node.footer}
-            </div>
-          ) : null}
         </motion.div>
       </ContextMenuTrigger>
 
@@ -260,6 +175,5 @@ export const InfrastructureNodeCard = memo(function InfrastructureNodeCard({
   );
 }, (prev, next) =>
   prev.data.node === next.data.node &&
-  prev.data.highlighted === next.data.highlighted &&
   prev.selected === next.selected,
 );
