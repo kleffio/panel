@@ -289,7 +289,11 @@ export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activ
 
   function selectBlueprint(bp: Blueprint) {
     setSelectedBlueprint(bp);
-    setConfigValues(buildDefaults(bp.config));
+    const defaults = buildDefaults(bp.config);
+    if (bp.constructs && Object.keys(bp.constructs).length > 0) {
+      defaults["IMAGE"] = Object.keys(bp.constructs)[0];
+    }
+    setConfigValues(defaults);
     setMemoryMB(nearestMemoryOption(bp.resources.memory_mb));
     setCpuMillicores(nearestCPUOption(bp.resources.cpu_millicores));
     setStep("config");
@@ -481,6 +485,26 @@ export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activ
                       required
                     />
                     </div>
+
+                    {/* Construct selector (runtime/image picker) */}
+                    {selectedBlueprint.constructs && Object.keys(selectedBlueprint.constructs).length > 1 && (
+                      <div>
+                        <DarkLabel htmlFor="construct-select">Runtime</DarkLabel>
+                        <Select
+                          value={configValues["IMAGE"] ?? ""}
+                          onValueChange={(v) => setField("IMAGE", v)}
+                        >
+                          <SelectTrigger id="construct-select" className="h-12 rounded-full border-input bg-background/85 px-4 text-foreground">
+                            <SelectValue placeholder="Select runtime…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.keys(selectedBlueprint.constructs).map((label) => (
+                              <SelectItem key={label} value={label}>{label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
                     {/* Blueprint config fields */}
                     <div className="space-y-4">
