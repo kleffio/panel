@@ -68,7 +68,12 @@ export function AuthRouteShell({ children }: { children: ReactNode }) {
                 : "bg-auth-kleff-hero lg:order-1 lg:basis-[52%]"
             )}
           >
-            <AmbientOrbField showEdgeScrim={false} />
+            <AmbientOrbField
+              key={currentMode ?? "auth"}
+              className="pointer-events-none"
+              showEdgeScrim={false}
+              revealDelayMs={orbRevealDelayMs}
+            />
           </section>
 
           <motion.section

@@ -7,15 +7,18 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
+  AnimatedPlaceholderInput,
   Button,
-  Input,
+  LetterWave,
   Label,
   Skeleton,
 } from "@kleffio/ui";
 import {
   ArrowRightIcon,
+  LockIcon,
   MailIcon,
   TriangleAlertIcon,
+  UserIcon,
 } from "lucide-react";
 
 import { useAuth, storeApiTokens, login, register, broadcastSignin } from "@/features/auth";
@@ -118,7 +121,7 @@ export function SignupPage() {
     <>
       <div className="mb-10 space-y-2">
         <p className="text-sm font-medium uppercase tracking-[0.28em] text-muted-foreground">
-          Get started
+          <LetterWave text="Get started" />
         </p>
         <h1 className="text-4xl font-semibold tracking-tight text-foreground">
           Create your account
@@ -148,27 +151,27 @@ export function SignupPage() {
               {!signupConfig?.hide_first_name && (
                 <div className="space-y-2">
                   <Label htmlFor="firstName">First name</Label>
-                  <Input
+                  <AnimatedPlaceholderInput
                     id="firstName"
+                    icon={UserIcon}
                     autoComplete="given-name"
                     placeholder="Your first name"
                     required
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    className="h-12 rounded-full"
                   />
                 </div>
               )}
               {!signupConfig?.hide_last_name && (
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Last name</Label>
-                  <Input
+                  <AnimatedPlaceholderInput
                     id="lastName"
+                    icon={UserIcon}
                     autoComplete="family-name"
                     placeholder="Your last name"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    className="h-12 rounded-full"
                   />
                 </div>
               )}
@@ -178,57 +181,57 @@ export function SignupPage() {
           {!signupConfig?.hide_username && (
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
-              <Input
+              <AnimatedPlaceholderInput
                 id="username"
+                icon={UserIcon}
                 autoComplete="username"
                 placeholder="Choose a username"
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="h-12 rounded-full"
               />
             </div>
           )}
 
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input
+            <AnimatedPlaceholderInput
               id="email"
+              icon={MailIcon}
               type="email"
               autoComplete="email"
               placeholder="Enter your email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-12 rounded-full"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input
+            <AnimatedPlaceholderInput
               id="password"
+              icon={LockIcon}
               type="password"
               autoComplete="new-password"
               placeholder="Create a password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-12 rounded-full"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="confirm">Confirm password</Label>
-            <Input
+            <AnimatedPlaceholderInput
               id="confirm"
+              icon={LockIcon}
               type="password"
               autoComplete="new-password"
               placeholder="Confirm your password"
               required
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="h-12 rounded-full"
             />
           </div>
 
