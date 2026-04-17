@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
+  LayoutGrid,
   Share2,
   ShieldCheck,
   Store,
@@ -15,6 +16,9 @@ import {
   ChevronsUpDown,
   Check,
   Plus,
+  ChevronDown,
+  Network,
+  Activity,
 } from "lucide-react";
 import {
   cn,
@@ -44,6 +48,141 @@ function slugify(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function NavItem({
+  href,
+  label,
+  icon: Icon,
+  exact,
+  pathname,
+}: {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  exact?: boolean;
+  pathname: string;
+}) {
+  const active = exact
+    ? pathname === href
+    : pathname === href || pathname.startsWith(`${href}/`);
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "group flex items-center gap-2.5 rounded-lg px-2 py-[7px] text-sm font-medium transition-all",
+        active
+          ? "bg-primary/[0.1] text-primary"
+          : "text-sidebar-foreground/50 hover:bg-white/[0.04] hover:text-sidebar-foreground/80"
+      )}
+    >
+      <span
+        className={cn(
+          "flex size-[22px] shrink-0 items-center justify-center rounded-md transition-all",
+          active
+            ? "bg-primary/[0.2] text-primary shadow-[0_0_10px_oklch(0.80_0.17_90_/_0.22)]"
+            : "bg-white/[0.05] text-sidebar-foreground/40 group-hover:bg-white/[0.07] group-hover:text-sidebar-foreground/60"
+        )}
+      >
+        <Icon className="size-3" />
+      </span>
+      {label}
+    </Link>
+  );
+}
+
+function NavSection({
+  label,
+  icon: Icon,
+  children,
+  isActive,
+  defaultOpen = true,
+}: {
+  label: string;
+  icon: React.ElementType;
+  children: React.ReactNode;
+  isActive?: boolean;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = React.useState(isActive ?? defaultOpen);
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "group flex w-full items-center gap-2.5 rounded-lg px-2 py-[7px] text-sm font-medium transition-all",
+          isActive
+            ? "text-sidebar-foreground/90"
+            : "text-sidebar-foreground/50 hover:bg-white/[0.04] hover:text-sidebar-foreground/80"
+        )}
+      >
+        <span
+          className={cn(
+            "flex size-[22px] shrink-0 items-center justify-center rounded-md transition-all",
+            isActive
+              ? "bg-primary/[0.2] text-primary shadow-[0_0_10px_oklch(0.80_0.17_90_/_0.22)]"
+              : "bg-white/[0.05] text-sidebar-foreground/40 group-hover:bg-white/[0.07] group-hover:text-sidebar-foreground/60"
+          )}
+        >
+          <Icon className="size-3" />
+        </span>
+        <span className="flex-1 text-left">{label}</span>
+        <ChevronDown
+          className={cn(
+            "size-3.5 text-sidebar-foreground/25 transition-transform duration-200",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+
+      {open && (
+        <div className="ml-[18px] mt-px mb-1 border-l border-sidebar-border/60 pl-3 space-y-px">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NavChild({
+  href,
+  label,
+  icon: Icon,
+  pathname,
+}: {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  pathname: string;
+}) {
+  const active = pathname === href || pathname.startsWith(`${href}/`);
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "group flex items-center gap-2 rounded-md px-2 py-[6px] text-[13px] font-medium transition-all",
+        active
+          ? "bg-primary/[0.1] text-primary"
+          : "text-sidebar-foreground/45 hover:bg-white/[0.04] hover:text-sidebar-foreground/70"
+      )}
+    >
+      <span
+        className={cn(
+          "flex size-[18px] shrink-0 items-center justify-center rounded transition-all",
+          active
+            ? "text-primary"
+            : "text-sidebar-foreground/30 group-hover:text-sidebar-foreground/60"
+        )}
+      >
+        <Icon className="size-3" />
+      </span>
+      {label}
+    </Link>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -59,18 +198,14 @@ export function Sidebar() {
   const [newProjectLoading, setNewProjectLoading] = React.useState(false);
 
   const currentProject = projects.find((p) => p.id === currentProjectID);
-  const username = (auth.user?.profile?.preferred_username as string | undefined)
-    ?? (auth.user?.profile?.sub as string | undefined)
-    ?? "user";
+  const username =
+    (auth.user?.profile?.preferred_username as string | undefined) ??
+    (auth.user?.profile?.sub as string | undefined) ??
+    "user";
 
-  const projectBase = currentProject ? `/project/${username}/${currentProject.slug}` : null;
-  const navItems = projectBase
-    ? [
-        { href: projectBase,                  label: "Overview",   icon: LayoutDashboard, exact: true },
-        { href: `${projectBase}/workspace`,   label: "Workspace",  icon: Share2 },
-        { href: `${projectBase}/plugins`,     label: "Plugins",    icon: Store },
-      ]
-    : [];
+  const projectBase = currentProject
+    ? `/project/${username}/${currentProject.slug}`
+    : null;
 
   const user = auth.user;
   const displayName = user?.profile?.name ?? user?.profile?.email ?? "User";
@@ -104,20 +239,21 @@ export function Sidebar() {
   return (
     <aside className="flex h-full w-56 flex-col bg-sidebar border-r border-sidebar-border">
 
-      {/* Workspace / Project Switcher */}
+      {/* Project switcher */}
       <div className="px-2 pt-3 pb-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-sidebar-accent transition-colors focus-visible:outline-none group">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/20 ring-1 ring-primary/30">
+            <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-white/[0.04] transition-colors focus-visible:outline-none">
+              <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/15 ring-1 ring-primary/25 shadow-[0_0_12px_oklch(0.80_0.17_90_/_0.15)]">
                 <span className="text-sm font-black text-primary leading-none">K</span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-sidebar-foreground truncate leading-tight">
-                  {currentProject?.name ?? (projects.length === 0 ? "No projects" : "Select project")}
+                  {currentProject?.name ??
+                    (projects.length === 0 ? "No projects" : "Select project")}
                 </p>
               </div>
-              <ChevronsUpDown className="size-3.5 text-sidebar-foreground/30 shrink-0" />
+              <ChevronsUpDown className="size-3.5 text-sidebar-foreground/25 shrink-0" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-52">
@@ -133,7 +269,9 @@ export function Sidebar() {
                 <Check
                   className={cn(
                     "size-3.5 shrink-0",
-                    currentProjectID === project.id ? "opacity-100 text-primary" : "opacity-0"
+                    currentProjectID === project.id
+                      ? "opacity-100 text-primary"
+                      : "opacity-0"
                   )}
                 />
                 <span className="truncate">{project.name}</span>
@@ -171,7 +309,11 @@ export function Sidebar() {
               />
             </div>
             <SheetFooter className="px-0">
-              <Button type="submit" disabled={!newProjectName.trim() || newProjectLoading} className="w-full">
+              <Button
+                type="submit"
+                disabled={!newProjectName.trim() || newProjectLoading}
+                className="w-full"
+              >
                 {newProjectLoading ? "Creating…" : "Create project"}
               </Button>
             </SheetFooter>
@@ -180,58 +322,91 @@ export function Sidebar() {
       </Sheet>
 
       {/* Search */}
-      <div className="px-3 pb-3">
+      <div className="px-2 pb-2">
         <button
           type="button"
-          className="flex w-full items-center gap-2 rounded-md bg-sidebar-accent/50 border border-sidebar-border px-2.5 py-1.5 text-xs text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground/60 transition-colors"
+          className="flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-white/[0.03] px-2.5 py-1.5 text-xs text-sidebar-foreground/35 hover:bg-white/[0.05] hover:text-sidebar-foreground/55 transition-colors"
         >
           <Search className="size-3.5 shrink-0" />
           <span className="flex-1 text-left">Search…</span>
-          <kbd className="hidden sm:inline-flex items-center rounded border border-sidebar-border bg-sidebar-accent/50 px-1 py-0.5 text-[10px] font-mono text-sidebar-foreground/30">
+          <kbd className="hidden sm:inline-flex items-center rounded border border-sidebar-border bg-white/[0.04] px-1 py-0.5 text-[10px] font-mono text-sidebar-foreground/25">
             ⌘K
           </kbd>
         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-0.5 px-2 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon, exact }) => {
-          const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
-                active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/55 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-              )}
+      <nav className="flex-1 px-2 pb-2 overflow-y-auto">
+        {projectBase ? (
+          <>
+            <NavItem
+              href={projectBase}
+              label="Overview"
+              icon={LayoutDashboard}
+              exact
+              pathname={pathname}
+            />
+
+            <NavSection
+              label="Workspace"
+              icon={Share2}
+              isActive={pathname.startsWith(`${projectBase}/canvas`) || pathname.startsWith(`${projectBase}/monitoring`)}
             >
-              <Icon className={cn("size-4 shrink-0", active ? "text-primary" : "")} />
-              {label}
-            </Link>
-          );
-        })}
+              <NavChild
+                href={`${projectBase}/canvas`}
+                label="Canvas"
+                icon={Network}
+                pathname={pathname}
+              />
+              <NavChild
+                href={`${projectBase}/monitoring`}
+                label="Monitoring"
+                icon={Activity}
+                pathname={pathname}
+              />
+            </NavSection>
+
+            <NavItem
+              href={`${projectBase}/plugins`}
+              label="Plugins"
+              icon={Store}
+              pathname={pathname}
+            />
+          </>
+        ) : (
+          <p className="px-2.5 py-2 text-xs text-sidebar-foreground/30">
+            Select a project to get started.
+          </p>
+        )}
 
         <PluginSlot name="navbar.item" />
 
         {backendNavItems
           .filter((item) => !item.permission || roles.includes(item.permission))
           .map((item) => {
-            const active = pathname === item.path || pathname.startsWith(`${item.path}/`);
+            const active =
+              pathname === item.path || pathname.startsWith(`${item.path}/`);
             return (
               <Link
                 key={item.path}
                 href={item.path}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                  "group flex items-center gap-2.5 rounded-lg px-2 py-[7px] text-sm font-medium transition-all",
                   active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/55 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                    ? "bg-primary/[0.1] text-primary"
+                    : "text-sidebar-foreground/50 hover:bg-white/[0.04] hover:text-sidebar-foreground/80"
                 )}
               >
-                <Puzzle className={cn("size-4 shrink-0", active ? "text-primary" : "")} />
+                <span
+                  className={cn(
+                    "flex size-[22px] shrink-0 items-center justify-center rounded-md transition-all",
+                    active
+                      ? "bg-primary/[0.2] text-primary shadow-[0_0_10px_oklch(0.80_0.17_90_/_0.22)]"
+                      : "bg-white/[0.05] text-sidebar-foreground/40 group-hover:bg-white/[0.07]"
+                  )}
+                >
+                  <Puzzle className="size-3" />
+                </span>
                 {item.label}
               </Link>
             );
@@ -243,19 +418,27 @@ export function Sidebar() {
         <PluginSlot name="topbar.right" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-sidebar-accent focus-visible:outline-none">
+            <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-white/[0.05] focus-visible:outline-none">
               <Avatar size="sm">
-                <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
+                <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold ring-1 ring-primary/20">
                   {initial}
                 </AvatarFallback>
               </Avatar>
-              <span className="flex-1 truncate text-left text-xs font-medium text-sidebar-foreground/70">
+              <span className="flex-1 truncate text-left text-xs font-medium text-sidebar-foreground/60">
                 {displayName}
               </span>
-              <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/30" />
+              <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/25" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-48 mb-1">
+            <DropdownMenuItem
+              onClick={() =>
+                projectBase ? router.push(projectBase) : router.push("/")
+              }
+            >
+              <LayoutGrid className="size-4" />
+              Workspace
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push("/account")}>
               <Settings className="size-4" />
               Account

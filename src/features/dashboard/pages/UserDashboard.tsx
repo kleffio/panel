@@ -127,11 +127,13 @@ export function UserDashboard() {
         {metrics.map((m) => (
           <div
             key={m.label}
-            className="rounded-xl border border-border bg-card p-5 flex flex-col gap-3"
+            className="rounded-xl border border-white/[0.07] bg-card p-5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.02)_inset]"
           >
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted-foreground">{m.label}</p>
-              <m.icon className="size-4 text-muted-foreground/50" />
+              <span className="flex size-7 items-center justify-center rounded-md bg-white/[0.04]">
+                <m.icon className="size-4 text-muted-foreground/60" />
+              </span>
             </div>
             <p className="text-3xl font-semibold tracking-tight text-foreground">{m.value}</p>
             <p className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -150,8 +152,8 @@ export function UserDashboard() {
         <div className="lg:col-span-2 space-y-6">
 
           {/* Spending overview */}
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="border-b border-border px-6 py-4 flex items-center justify-between">
+          <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
+            <div className="border-b border-white/[0.06] px-6 py-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold flex items-center gap-2">
                 <CreditCard className="size-4 text-primary" />
                 Spending Overview
@@ -196,14 +198,14 @@ export function UserDashboard() {
           </div>
 
           {/* Transaction history */}
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="border-b border-border px-6 py-4 flex items-center justify-between">
+          <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
+            <div className="border-b border-white/[0.06] px-6 py-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold">Transaction History</h2>
               <button className="text-xs text-primary hover:text-primary/80 flex items-center gap-1 transition-colors">
                 View all <ArrowUpRight className="size-3" />
               </button>
             </div>
-            <div className="divide-y divide-border">
+            <div className="divide-y divide-white/[0.05]">
               {MOCK_TRANSACTIONS.map((tx) => (
                 <div key={tx.id} className="flex items-center justify-between px-6 py-3 hover:bg-accent/30 transition-colors">
                   <div className="flex items-center gap-3">
@@ -233,8 +235,8 @@ export function UserDashboard() {
         <div className="space-y-6">
 
           {/* Project health */}
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="border-b border-border px-6 py-4">
+          <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
+            <div className="border-b border-white/[0.06] px-6 py-4">
               <h2 className="text-sm font-semibold">Projects</h2>
             </div>
             <div className="p-4 space-y-2">
@@ -261,8 +263,8 @@ export function UserDashboard() {
           </div>
 
           {/* Activity feed */}
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="border-b border-border px-6 py-4">
+          <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
+            <div className="border-b border-white/[0.06] px-6 py-4">
               <h2 className="text-sm font-semibold">Recent Activity</h2>
             </div>
             <div className="p-4 space-y-4">

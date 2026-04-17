@@ -270,6 +270,42 @@ function buildSyntheticCratesFromBlueprints(blueprints: Blueprint[]): Crate[] {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function mergeCrates(primary: Crate[], fallback: Crate[]): Crate[] {
+  if (primary.length === 0) return fallback;
+  if (fallback.length === 0) return primary;
+
+  const byID = new Map<string, Crate>();
+
+  for (const crate of fallback) {
+    byID.set(crate.id, crate);
+  }
+
+  for (const crate of primary) {
+    byID.set(crate.id, crate);
+  }
+
+  return Array.from(byID.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function loadFallbackCratesFromBlueprints(): Promise<Crate[]> {
+  try {
+    const blueprintRes = await listBlueprints("");
+    const synthetic = buildSyntheticCratesFromBlueprints(blueprintRes.blueprints ?? []);
+    if (synthetic.length > 0) {
+      return synthetic;
+    }
+  } catch {
+    // Fall through to minecraft-specific fallback.
+  }
+
+  try {
+    const minecraftBlueprintRes = await listBlueprints("minecraft");
+    return buildSyntheticCratesFromBlueprints(minecraftBlueprintRes.blueprints ?? []);
+  } catch {
+    return [];
+  }
+}
+
 // Dark styled input for the modal
 function DarkInput({
   id,
@@ -505,17 +541,19 @@ export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activ
       setLoadingCrates(true);
 
       try {
-        const crateRes = await listCrates();
-        let nextCrates = crateRes.crates ?? [];
+        const [crateResult, fallbackCrates] = await Promise.all([
+          listCrates().catch(() => null),
+          loadFallbackCratesFromBlueprints(),
+        ]);
 
-        // Some environments expose blueprints but don't yet return crates; synthesize a crate list.
-        if (nextCrates.length === 0) {
-          const blueprintRes = await listBlueprints("");
-          nextCrates = buildSyntheticCratesFromBlueprints(blueprintRes.blueprints ?? []);
-        }
+        const apiCrates = crateResult?.crates ?? [];
+        const nextCrates = mergeCrates(apiCrates, fallbackCrates);
 
         if (!cancelled) {
           setCrates(nextCrates);
+          if (nextCrates.length === 0) {
+            toast.error("Failed to load catalog");
+          }
         }
       } catch {
         if (!cancelled) {
@@ -562,7 +600,11 @@ export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activ
 
   function selectBlueprint(bp: Blueprint) {
     setSelectedBlueprint(bp);
-    setConfigValues(buildDefaults(bp.config));
+    const defaults = buildDefaults(bp.config);
+    if (bp.constructs && Object.keys(bp.constructs).length > 0) {
+      defaults["IMAGE"] = Object.keys(bp.constructs)[0];
+    }
+    setConfigValues(defaults);
     setMemoryMB(nearestMemoryOption(bp.resources.memory_mb));
     setCpuMillicores(nearestCPUOption(bp.resources.cpu_millicores));
     setStep("config");
@@ -837,6 +879,25 @@ export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activ
                           required
                         />
                       </div>
+
+                      {selectedBlueprint.constructs && Object.keys(selectedBlueprint.constructs).length > 1 ? (
+                        <div className="space-y-2">
+                          <DarkLabel htmlFor="construct-select">Runtime</DarkLabel>
+                          <Select
+                            value={configValues["IMAGE"] ?? ""}
+                            onValueChange={(v) => setField("IMAGE", v)}
+                          >
+                            <SelectTrigger id="construct-select" className="h-11 rounded-[0.35rem] border border-white/12 bg-black/25 px-3.5 text-[var(--test-foreground)]">
+                              <SelectValue placeholder="Select runtime..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.keys(selectedBlueprint.constructs).map((label) => (
+                                <SelectItem key={label} value={label}>{label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : null}
 
                       <div className="space-y-4">
                         <p className="text-[11px] uppercase tracking-[0.14em] text-[#f6d274]/80">Template settings</p>

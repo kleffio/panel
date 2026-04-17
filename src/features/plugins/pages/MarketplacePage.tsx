@@ -88,7 +88,7 @@ export function MarketplacePage() {
     const canAct = tierIsAdminOnly ? isAdmin : true;
 
     return (
-      <div className="flex flex-col rounded-xl border border-border bg-card hover:border-primary/20 transition-colors">
+      <div className="flex flex-col rounded-xl border border-white/[0.07] bg-card hover:border-primary/25 transition-all shadow-[0_1px_3px_rgba(0,0,0,0.35)]">
         <div className="p-5 flex-1 flex flex-col gap-3">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2.5">
@@ -147,7 +147,7 @@ export function MarketplacePage() {
           )}
         </div>
 
-        <div className="border-t border-border px-5 py-3 flex items-center justify-between">
+        <div className="border-t border-white/[0.06] bg-white/[0.015] px-5 py-3 flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">v{plugin.version}</span>
           <div className="flex items-center gap-2">
             {!canAct && !isInstalled && (
