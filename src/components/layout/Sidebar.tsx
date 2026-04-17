@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Network,
   Activity,
+  Users,
 } from "lucide-react";
 import {
   cn,
@@ -370,6 +371,13 @@ export function Sidebar() {
               href={`${projectBase}/plugins`}
               label="Plugins"
               icon={Store}
+              pathname={pathname}
+            />
+
+            <NavItem
+              href={`${projectBase}/settings`}
+              label="Team"
+              icon={Users}
               pathname={pathname}
             />
           </>
