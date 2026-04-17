@@ -12,7 +12,6 @@ type AuthMode = "login" | "signup";
 
 const AUTH_PANEL_EASE = [0.12, 0.9, 0.22, 1] as const;
 const AUTH_PANE_EASE = [0.1, 0.88, 0.2, 1] as const;
-const AUTH_ORB_REVEAL_DELAY_MS = 2000;
 const AUTH_PANEL_LAYOUT_TRANSITION = {
   duration: 0.52,
   ease: AUTH_PANEL_EASE,
@@ -51,9 +50,6 @@ export function AuthRouteShell({ children }: { children: ReactNode }) {
   const previousMode = previousModeRef.current;
   const direction = getDirection(previousMode, currentMode);
   const shouldAnimate = !shouldReduceMotion && !isInitialRenderRef.current && direction !== 0;
-  const orbRevealDelayMs = shouldAnimate
-    ? Math.round(AUTH_PANEL_LAYOUT_TRANSITION.duration * 1000) + AUTH_ORB_REVEAL_DELAY_MS
-    : 0;
 
   useEffect(() => {
     previousModeRef.current = currentMode;
@@ -112,7 +108,7 @@ export function AuthRouteShell({ children }: { children: ReactNode }) {
               />
             </div>
             <div className="relative z-10 mx-auto flex h-full w-full max-w-md flex-col justify-center">
-              <div className="relative min-h-[34rem] w-full overflow-hidden sm:min-h-[36rem]">
+              <div className="relative min-h-[34rem] w-full sm:min-h-[36rem]">
                 {currentMode ? (
                   <AnimatePresence initial={false} mode="popLayout" custom={direction}>
                     <motion.div
@@ -122,7 +118,7 @@ export function AuthRouteShell({ children }: { children: ReactNode }) {
                         shouldAnimate
                           ? {
                               x: direction > 0 ? 18 : -18,
-                              opacity: 0.8,
+                              opacity: 0,
                             }
                           : false
                       }
@@ -138,7 +134,7 @@ export function AuthRouteShell({ children }: { children: ReactNode }) {
                         shouldAnimate
                           ? {
                               x: direction > 0 ? -18 : 18,
-                              opacity: 0.68,
+                              opacity: 0,
                               transition: {
                                 duration: 0.38,
                                 ease: AUTH_PANE_EASE,
