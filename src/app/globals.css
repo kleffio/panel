@@ -13,12 +13,10 @@
   --color-kleff-primary: 245 181 23;
   --color-kleff-primary-dark: 196 143 0;
   --color-kleff-primary-soft: 250 215 130;
-  --gradient-kleff-brand: linear-gradient(
-    135deg,
-    rgb(var(--color-kleff-primary-soft)) 0%,
-    rgb(var(--color-kleff-primary)) 40%,
-    rgb(var(--color-kleff-primary-dark)) 100%
-  );
+  --gradient-kleff-brand: linear-gradient(135deg,
+      rgb(var(--color-kleff-primary-soft)) 0%,
+      rgb(var(--color-kleff-primary)) 40%,
+      rgb(var(--color-kleff-primary-dark)) 100%);
 }
 
 /* ─── Semantic tokens — dark (default) ──────────────────────────────────────*/
@@ -361,112 +359,123 @@
 
     .bg-auth-kleff-seam-right {
       background:
-        radial-gradient(
-          112% 82% at 100% 50%,
+        radial-gradient(112% 82% at 100% 50%,
           rgba(8, 8, 8, 0.94) 0%,
           rgba(8, 8, 8, 0.72) 26%,
           rgba(8, 8, 8, 0.42) 54%,
           rgba(8, 8, 8, 0.14) 78%,
-          rgba(8, 8, 8, 0) 100%
-        ),
-        linear-gradient(
-          to left,
+          rgba(8, 8, 8, 0) 100%),
+        linear-gradient(to left,
           rgba(8, 8, 8, 0.98) 0%,
           rgba(8, 8, 8, 0.88) 18%,
           rgba(8, 8, 8, 0.62) 44%,
           rgba(8, 8, 8, 0.3) 70%,
           rgba(8, 8, 8, 0.1) 86%,
-          rgba(8, 8, 8, 0) 100%
-        );
+          rgba(8, 8, 8, 0) 100%);
     }
 
     .bg-auth-kleff-seam-left {
       background:
-        radial-gradient(
-          112% 82% at 0% 50%,
+        radial-gradient(112% 82% at 0% 50%,
           rgba(8, 8, 8, 0.94) 0%,
           rgba(8, 8, 8, 0.72) 26%,
           rgba(8, 8, 8, 0.42) 54%,
           rgba(8, 8, 8, 0.14) 78%,
-          rgba(8, 8, 8, 0) 100%
-        ),
-        linear-gradient(
-          to right,
+          rgba(8, 8, 8, 0) 100%),
+        linear-gradient(to right,
           rgba(8, 8, 8, 0.98) 0%,
           rgba(8, 8, 8, 0.88) 18%,
           rgba(8, 8, 8, 0.62) 44%,
           rgba(8, 8, 8, 0.3) 70%,
           rgba(8, 8, 8, 0.1) 86%,
-          rgba(8, 8, 8, 0) 100%
-        );
+          rgba(8, 8, 8, 0) 100%);
     }
 
     .bg-auth-kleff-seam-soft-right {
       background:
-        radial-gradient(
-          132% 70% at 100% 16%,
+        radial-gradient(132% 70% at 100% 16%,
           rgba(8, 8, 8, 0.78) 0%,
           rgba(8, 8, 8, 0.52) 26%,
           rgba(8, 8, 8, 0.18) 54%,
-          rgba(8, 8, 8, 0) 82%
-        ),
-        radial-gradient(
-          138% 74% at 100% 82%,
+          rgba(8, 8, 8, 0) 82%),
+        radial-gradient(138% 74% at 100% 82%,
           rgba(8, 8, 8, 0.72) 0%,
           rgba(8, 8, 8, 0.44) 28%,
           rgba(8, 8, 8, 0.14) 58%,
-          rgba(8, 8, 8, 0) 84%
-        ),
-        radial-gradient(
-          124% 92% at 100% 50%,
+          rgba(8, 8, 8, 0) 84%),
+        radial-gradient(124% 92% at 100% 50%,
           rgba(10, 9, 8, 0.58) 0%,
           rgba(10, 9, 8, 0.24) 34%,
           rgba(10, 9, 8, 0.08) 62%,
-          rgba(10, 9, 8, 0) 88%
-        ),
-        linear-gradient(
-          to left,
+          rgba(10, 9, 8, 0) 88%),
+        linear-gradient(to left,
           rgba(8, 8, 8, 0.92) 0%,
           rgba(8, 8, 8, 0.74) 20%,
           rgba(8, 8, 8, 0.46) 46%,
           rgba(8, 8, 8, 0.2) 70%,
           rgba(8, 8, 8, 0.06) 84%,
-          rgba(8, 8, 8, 0) 100%
-        );
+          rgba(8, 8, 8, 0) 100%);
     }
 
     .bg-auth-kleff-seam-soft-left {
       background:
-        radial-gradient(
-          132% 70% at 0% 16%,
+        radial-gradient(132% 70% at 0% 16%,
           rgba(8, 8, 8, 0.78) 0%,
           rgba(8, 8, 8, 0.52) 26%,
           rgba(8, 8, 8, 0.18) 54%,
-          rgba(8, 8, 8, 0) 82%
-        ),
-        radial-gradient(
-          138% 74% at 0% 82%,
+          rgba(8, 8, 8, 0) 82%),
+        radial-gradient(138% 74% at 0% 82%,
           rgba(8, 8, 8, 0.72) 0%,
           rgba(8, 8, 8, 0.44) 28%,
           rgba(8, 8, 8, 0.14) 58%,
-          rgba(8, 8, 8, 0) 84%
-        ),
-        radial-gradient(
-          124% 92% at 0% 50%,
+          rgba(8, 8, 8, 0) 84%),
+        radial-gradient(124% 92% at 0% 50%,
           rgba(10, 9, 8, 0.58) 0%,
           rgba(10, 9, 8, 0.24) 34%,
           rgba(10, 9, 8, 0.08) 62%,
-          rgba(10, 9, 8, 0) 88%
-        ),
-        linear-gradient(
-          to right,
+          rgba(10, 9, 8, 0) 88%),
+        linear-gradient(to right,
           rgba(8, 8, 8, 0.92) 0%,
           rgba(8, 8, 8, 0.74) 20%,
           rgba(8, 8, 8, 0.46) 46%,
           rgba(8, 8, 8, 0.2) 70%,
           rgba(8, 8, 8, 0.06) 84%,
-          rgba(8, 8, 8, 0) 100%
-        );
+          rgba(8, 8, 8, 0) 100%);
     }
   }
+}
+
+/* ---break---*/
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
 }
