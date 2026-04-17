@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { useAuth, storeApiTokens, login, register, broadcastSignin } from "@/features/auth";
+import { createProject } from "@/lib/api/projects";
 import { AuthConfigContext } from "@/features/auth/context";
 import { IDPStartingSpinner } from "@/features/auth/ui/IDPStartingSpinner";
 import { useBackendPlugins } from "@/features/plugins/model/use-backend-plugins";
@@ -68,7 +69,7 @@ export function SignupPage() {
     }
 
     if (auth.isAuthenticated) {
-      router.replace("/overview");
+      router.replace("/");
       return;
     }
 
@@ -109,8 +110,15 @@ export function SignupPage() {
       await register({ username, email, password, firstName, lastName });
       const tok = await login(username, password);
       storeApiTokens(tok, authConfig?.authority ?? "", authConfig?.client_id ?? "");
+      // Create a default personal project named after the username
+      try {
+        const slug = username.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+        await createProject({ name: username, slug });
+      } catch {
+        // Non-fatal — user can create projects manually
+      }
       broadcastSignin();
-      window.location.replace("/overview");
+      window.location.replace("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed. Please try again.");
       setLoading(false);

@@ -59,7 +59,7 @@ export function LoginPage() {
       return;
     }
     if (auth.isAuthenticated) {
-      router.replace("/overview");
+      router.replace("/");
       return;
     }
     // Redirect mode: hand off to the IDP login page instead of the headless form.
@@ -95,7 +95,7 @@ export function LoginPage() {
       // what OidcProvider will look up on the next page load.
       storeApiTokens(tok, authConfig?.authority ?? "", authConfig?.client_id ?? "");
       broadcastSignin();
-      window.location.replace("/overview");
+      window.location.replace("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
       setLoading(false);
