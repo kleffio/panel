@@ -19,6 +19,7 @@ import {
   useUnreadCount,
 } from "../hooks/useNotifications";
 import { useNotificationStream } from "../hooks/useNotificationStream";
+import { AcceptInviteDialog } from "../components/AcceptInviteDialog";
 import type { Notification, NotificationType } from "../api";
 
 const typeIcon: Record<NotificationType, React.ElementType> = {
@@ -56,10 +57,12 @@ function NotificationRow({
   notification,
   onMarkRead,
   onDelete,
+  onAcceptInvite,
 }: {
   notification: Notification;
   onMarkRead: (id: string) => void;
   onDelete: (id: string) => void;
+  onAcceptInvite?: (token: string) => void;
 }) {
   const Icon = typeIcon[notification.type] ?? Bell;
   const isUnread = !notification.read_at;
@@ -114,6 +117,14 @@ function NotificationRow({
           <span className="inline-flex items-center rounded-md bg-white/[0.05] px-1.5 py-0.5 text-[11px] text-muted-foreground/50">
             {typeLabel[notification.type] ?? notification.type}
           </span>
+          {notification.type === "project_invitation" && notification.data?.token && !notification.read_at && (
+            <button
+              className="text-xs font-medium text-primary hover:underline"
+              onClick={(e) => { e.stopPropagation(); onAcceptInvite?.(notification.data!.token as string); }}
+            >
+              Accept invite →
+            </button>
+          )}
         </div>
       </div>
 
@@ -184,6 +195,7 @@ export function NotificationsInboxPage() {
   useNotificationStream();
 
   const [tab, setTab] = React.useState<Tab>("all");
+  const [inviteToken, setInviteToken] = React.useState<string | null>(null);
   const { data: unreadCount = 0 } = useUnreadCount();
   const { data: all = [], isLoading: allLoading } = useNotifications();
   const { data: unread = [], isLoading: unreadLoading } = useNotifications({ unread: true });
@@ -251,10 +263,19 @@ export function NotificationsInboxPage() {
               notification={n}
               onMarkRead={(id) => markRead.mutate(id)}
               onDelete={(id) => remove.mutate(id)}
+              onAcceptInvite={(token) => setInviteToken(token)}
             />
           ))
         )}
       </div>
+
+      {inviteToken && (
+        <AcceptInviteDialog
+          token={inviteToken}
+          open={!!inviteToken}
+          onOpenChange={(open) => { if (!open) setInviteToken(null); }}
+        />
+      )}
     </div>
   );
 }

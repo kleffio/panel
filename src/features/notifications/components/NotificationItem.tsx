@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { cn, Button } from "@kleffio/ui";
 import {
   Bell,
@@ -84,6 +85,15 @@ export function NotificationItem({ notification, onMarkRead, onDelete }: Props) 
           <p className="mt-0.5 text-xs text-muted-foreground/70 line-clamp-2">
             {notification.body}
           </p>
+        )}
+        {notification.type === "project_invitation" && notification.data?.token && (
+          <Link
+            href={`/project-invite/${notification.data.token}`}
+            className="mt-1.5 inline-block text-xs font-medium text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            Accept invite →
+          </Link>
         )}
         <p className="mt-1 text-[11px] text-muted-foreground/40">
           {relativeTime(notification.created_at)}

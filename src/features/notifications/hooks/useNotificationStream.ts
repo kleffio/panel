@@ -41,6 +41,8 @@ export function useNotificationStream() {
         try {
           const payload = JSON.parse(e.data) as { unread_count: number };
           queryClient.setQueryData(UNREAD_COUNT_KEY, payload.unread_count);
+          // Sync the list cache so existing notifications appear immediately.
+          queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
         } catch {
           // ignore malformed payload
         }

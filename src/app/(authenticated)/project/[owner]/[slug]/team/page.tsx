@@ -17,5 +17,5 @@ export default function ProjectSettingsRoute() {
 
   if (!project) return null;
 
-  return <ProjectSettingsPage orgID={project.organization_id} />;
+  return <ProjectSettingsPage projectID={project.id} />;
 }

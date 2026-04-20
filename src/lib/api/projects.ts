@@ -1,4 +1,4 @@
-import { get, post, put, del } from "./request";
+import { get, post, put, del, patch } from "./request";
 
 export interface ProjectDTO {
   id: string;
@@ -143,5 +143,82 @@ export function upsertGraphNode(
   return put<GraphNodeDTO, typeof position>(
     `/api/v1/projects/${projectID}/graph-nodes/${encodeURIComponent(workloadID)}`,
     position
+  );
+}
+
+// ── Project members ───────────────────────────────────────────────────────────
+
+export interface ProjectMemberDTO {
+  project_id: string;
+  user_id: string;
+  email: string;
+  display_name: string;
+  role: string;
+  invited_by: string;
+  created_at: string;
+}
+
+export interface ProjectInviteDTO {
+  id: string;
+  project_id: string;
+  invited_email: string;
+  role: string;
+  token?: string;
+  invited_by: string;
+  expires_at: string;
+  accepted_at?: string;
+  created_at: string;
+}
+
+export function listProjectMembers(projectID: string) {
+  return get<{ members: ProjectMemberDTO[] }>(`/api/v1/projects/${projectID}/members`);
+}
+
+export function addProjectMember(
+  projectID: string,
+  payload: { user_id: string; email?: string; display_name?: string; role?: string }
+) {
+  return post<ProjectMemberDTO, typeof payload>(`/api/v1/projects/${projectID}/members`, payload);
+}
+
+export function updateProjectMemberRole(projectID: string, userID: string, role: string) {
+  return patch<void, { role: string }>(
+    `/api/v1/projects/${projectID}/members/${encodeURIComponent(userID)}`,
+    { role }
+  );
+}
+
+export function removeProjectMember(projectID: string, userID: string) {
+  return del<void>(`/api/v1/projects/${projectID}/members/${encodeURIComponent(userID)}`);
+}
+
+export function listProjectInvites(projectID: string) {
+  return get<{ invites: ProjectInviteDTO[] }>(`/api/v1/projects/${projectID}/invites`);
+}
+
+export function createProjectInvite(projectID: string, payload: { email: string; role?: string }) {
+  return post<ProjectInviteDTO, typeof payload>(`/api/v1/projects/${projectID}/invites`, payload);
+}
+
+export function revokeProjectInvite(projectID: string, inviteID: string) {
+  return del<void>(`/api/v1/projects/${projectID}/invites/${encodeURIComponent(inviteID)}`);
+}
+
+export function resolveProjectInvite(token: string) {
+  return get<{
+    id: string;
+    project_id: string;
+    project_name?: string;
+    project_slug?: string;
+    invited_email: string;
+    role: string;
+    expires_at: string;
+  }>(`/api/v1/project-invites/${encodeURIComponent(token)}`);
+}
+
+export function acceptProjectInvite(token: string) {
+  return post<{ project_id: string }, Record<string, never>>(
+    `/api/v1/project-invites/${encodeURIComponent(token)}/accept`,
+    {}
   );
 }
