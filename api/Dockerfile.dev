@@ -1,24 +1,22 @@
 # Development image — uses Air for live reload on source changes.
-# Source is volume-mounted by docker compose at /build/platform and /build/plugin-sdk.
+# Build context: panel/api/
+# Source is volume-mounted at /app by docker compose.
 FROM golang:1.25-alpine
 
 RUN apk add --no-cache git curl ca-certificates
 
-# Install Air (live reload) and Delve (debugger)
 ENV GOTOOLCHAIN=auto
 RUN go install github.com/air-verse/air@latest && \
     go install github.com/go-delve/delve/cmd/dlv@latest
 
-WORKDIR /build
+WORKDIR /app
 
 # Pre-download workspace dependencies for faster first-run.
-COPY plugins/plugin-sdk-go/go.mod plugins/plugin-sdk-go/go.sum plugins/plugin-sdk-go/
-COPY platform/go.work platform/go.work.sum platform/
-COPY platform/go.mod platform/go.sum platform/
-COPY platform/packages/go.mod platform/packages/
+COPY go.work go.work.sum ./
+COPY go.mod go.sum ./
+COPY packages/go.mod packages/
 
-WORKDIR /build/platform
-RUN go work sync
+RUN GOWORK=off go mod download
 
 EXPOSE 8080 2345
 
