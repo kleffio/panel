@@ -17,119 +17,72 @@ import type { InfrastructureNode, NodeAction } from "@/features/hosting/model/ty
 import { getStatusMeta } from "@/features/hosting/lib/infrastructure-graph";
 import { Button } from "@kleffio/ui";
 import { Sheet, SheetContent } from "@kleffio/ui";
-
-// ── Fake log generation ────────────────────────────────────────────────────────
-
-type LogLevel = "info" | "ok" | "warn" | "error";
-interface LogLine { time: string; text: string; level: LogLevel }
-
-function fakeTs(now: Date, offsetMs: number) {
-  const d = new Date(now.getTime() - offsetMs);
-  return d.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-function generateFakeLogs(node: InfrastructureNode): LogLine[] {
-  const now = new Date();
-  const t = (ms: number) => fakeTs(now, ms);
-  const image = node.subtitle || node.name;
-
-  if (node.kind === "game-server") {
-    return [
-      { time: t(48000), text: `Pulling image: ${image}`, level: "info" },
-      { time: t(44000), text: "Image pulled successfully", level: "ok" },
-      { time: t(40000), text: "Creating container...", level: "info" },
-      { time: t(34000), text: "[Server] Starting Minecraft server version 1.21", level: "info" },
-      { time: t(28000), text: "[Server] Default game type: SURVIVAL", level: "info" },
-      { time: t(22000), text: "[Server] Generating keypair", level: "info" },
-      { time: t(16000), text: "[Server] Preparing start region for dimension minecraft:overworld", level: "info" },
-      { time: t(10000), text: "[Server] Time elapsed: 6345 ms", level: "info" },
-      { time: t(6000),  text: "[Server] Done! For help, type 'help'", level: "ok" },
-      { time: t(1000),  text: "Server is running and accepting connections on *:25565", level: "ok" },
-    ];
-  }
-
-  if (node.kind === "database") {
-    return [
-      { time: t(56000), text: `Pulling image: ${image}`, level: "info" },
-      { time: t(51000), text: "Image pulled successfully", level: "ok" },
-      { time: t(46000), text: "Initializing database cluster...", level: "info" },
-      { time: t(40000), text: "Files belonging to this database system will be owned by user 'postgres'", level: "info" },
-      { time: t(34000), text: "Data page checksums are enabled.", level: "info" },
-      { time: t(28000), text: "fixing permissions on existing directory /var/lib/postgresql/data ... ok", level: "ok" },
-      { time: t(20000), text: "creating subdirectories ... ok", level: "ok" },
-      { time: t(14000), text: "LOG: starting PostgreSQL 16.2 on x86_64-pc-linux-musl", level: "info" },
-      { time: t(8000),  text: "LOG: listening on IPv4 address '0.0.0.0', port 5432", level: "info" },
-      { time: t(2000),  text: "LOG: database system is ready to accept connections", level: "ok" },
-    ];
-  }
-
-  if (node.kind === "cache") {
-    return [
-      { time: t(32000), text: `Pulling image: ${image}`, level: "info" },
-      { time: t(28000), text: "Image pulled successfully", level: "ok" },
-      { time: t(24000), text: "# oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo", level: "info" },
-      { time: t(20000), text: `Redis version=7.2.4, bits=64, pid=1`, level: "info" },
-      { time: t(15000), text: "Configuration loaded", level: "info" },
-      { time: t(10000), text: "* monotonic clock: POSIX clock_gettime", level: "info" },
-      { time: t(5000),  text: "* Server initialized", level: "ok" },
-      { time: t(1000),  text: "* Ready to accept connections tcp", level: "ok" },
-    ];
-  }
-
-  if (node.kind === "proxy") {
-    return [
-      { time: t(38000), text: `Pulling image: ${image}`, level: "info" },
-      { time: t(34000), text: "Image pulled successfully", level: "ok" },
-      { time: t(30000), text: 'level=info msg="Configuration loaded from file: /etc/traefik/traefik.yml"', level: "info" },
-      { time: t(25000), text: 'level=info msg="Traefik version 3.0.0 built"', level: "info" },
-      { time: t(20000), text: 'level=info msg="Starting provider aggregator service provider"', level: "info" },
-      { time: t(15000), text: 'level=info msg="Starting provider *docker.Provider"', level: "info" },
-      { time: t(9000),  text: 'level=info msg="Entrypoint opened" entryPointName=web address=:80', level: "ok" },
-      { time: t(4000),  text: 'level=info msg="Entrypoint opened" entryPointName=websecure address=:443', level: "ok" },
-      { time: t(500),   text: "Proxy is ready — routing traffic", level: "ok" },
-    ];
-  }
-
-  // api / app / worker / support
-  return [
-    { time: t(70000), text: `Pulling image: ${image}`, level: "info" },
-    { time: t(64000), text: "Image pulled successfully", level: "ok" },
-    { time: t(60000), text: "Creating container...", level: "info" },
-    { time: t(54000), text: "Installing dependencies...", level: "info" },
-    { time: t(46000), text: "added 312 packages in 4.2s", level: "info" },
-    { time: t(38000), text: "Building application...", level: "info" },
-    { time: t(28000), text: "Build complete in 9.7s", level: "ok" },
-    { time: t(20000), text: "Running start script", level: "info" },
-    { time: t(12000), text: "Server listening on port 3000", level: "ok" },
-    { time: t(6000),  text: "Health check passed", level: "ok" },
-    { time: t(800),   text: "Deployment successful", level: "ok" },
-  ];
-}
+import { getProjectMetrics, type WorkloadMetricsDTO } from "@/lib/api/usage";
+import { getWorkloadLogs, type LogLineDTO } from "@/lib/api/logs";
+import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
 
 // ── Log viewer ─────────────────────────────────────────────────────────────────
 
-const LEVEL_COLOR: Record<LogLevel, string> = {
-  info:  "text-white/70",
-  ok:    "text-emerald-400",
-  warn:  "text-amber-400",
-  error: "text-red-400",
-};
+const LOG_POLL_MS = 5_000;
+
+function streamColor(stream: "stdout" | "stderr" | string) {
+  return stream === "stderr" ? "text-red-400/80" : "text-white/70";
+}
 
 function LogViewer({ node }: { node: InfrastructureNode }) {
+  const { currentProjectID } = useCurrentProject();
   const bottomRef = useRef<HTMLDivElement>(null);
-  const logs = generateFakeLogs(node);
+  const [lines, setLines] = useState<LogLineDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const autoScroll = useRef(true);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "instant" });
-  }, [node.id]);
+    if (!currentProjectID) return;
+    let cancelled = false;
+    setLoading(true);
+    setLines([]);
+    autoScroll.current = true;
+
+    const fetch = () => {
+      getWorkloadLogs(currentProjectID, node.id).then((res) => {
+        if (cancelled) return;
+        setLines(res.lines ?? []);
+        setLoading(false);
+      }).catch(() => { if (!cancelled) setLoading(false); });
+    };
+
+    fetch();
+    const id = setInterval(fetch, LOG_POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [node.id, currentProjectID]);
+
+  useEffect(() => {
+    if (autoScroll.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "instant" });
+    }
+  }, [lines]);
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0a0c10] font-mono text-[11px] leading-5">
+    <div
+      className="h-full overflow-y-auto bg-[#0a0c10] font-mono text-[11px] leading-5"
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        autoScroll.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      }}
+    >
       <div className="p-4 pb-6">
-        {logs.map((line, i) => (
-          <div key={i} className="flex gap-3 py-[1px]">
-            <span className="w-16 shrink-0 select-none text-white/25">{line.time}</span>
-            <span className={LEVEL_COLOR[line.level]}>{line.text}</span>
+        {loading && (
+          <p className="text-white/25 animate-pulse">Loading logs…</p>
+        )}
+        {!loading && lines.length === 0 && (
+          <p className="text-white/25">No logs yet. Logs appear within ~5 seconds of output.</p>
+        )}
+        {lines.map((l) => (
+          <div key={l.id} className="flex gap-3 py-[1px]">
+            <span className="w-16 shrink-0 select-none text-white/25">
+              {new Date(l.ts).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </span>
+            <span className={streamColor(l.stream)}>{l.line}</span>
           </div>
         ))}
         <div ref={bottomRef} />
@@ -140,18 +93,113 @@ function LogViewer({ node }: { node: InfrastructureNode }) {
 
 // ── Metric bar ─────────────────────────────────────────────────────────────────
 
-function MetricBar({ label, value, detail }: { label: string; value: number; detail: string }) {
-  const color = value > 80 ? "bg-red-500" : value > 60 ? "bg-amber-400" : "bg-emerald-400";
+function MetricBar({ label, pct, primary, secondary }: { label: string; pct: number; primary: string; secondary?: string }) {
+  const clampedPct = Math.min(100, Math.max(0, pct));
+  const color = clampedPct > 80 ? "bg-red-500" : clampedPct > 60 ? "bg-amber-400" : "bg-emerald-400";
   return (
     <div className="space-y-1.5 rounded-[0.35rem] border border-white/8 bg-white/[0.03] p-3">
       <div className="flex items-center justify-between text-[11px]">
         <span className="uppercase tracking-wide text-white/40">{label}</span>
-        <span className="font-medium text-white/70">{value}%</span>
+        <span className="font-medium text-white/70">{primary}</span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-[0.2rem] bg-white/8">
-        <div className={`h-full rounded-[0.2rem] ${color} transition-all duration-700`} style={{ width: `${value}%` }} />
+        <div className={`h-full rounded-[0.2rem] ${color} transition-all duration-700`} style={{ width: `${clampedPct}%` }} />
       </div>
-      <p className="text-[11px] text-white/35">{detail}</p>
+      {secondary && <p className="text-[11px] text-white/35">{secondary}</p>}
+    </div>
+  );
+}
+
+function StatRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between py-2 text-[11px]">
+      <span className="uppercase tracking-wide text-white/40">{label}</span>
+      <span className="font-medium tabular-nums text-white/70">{value}</span>
+    </div>
+  );
+}
+
+// ── Live metrics fetcher ────────────────────────────────────────────────────────
+
+function fmtMemory(mb: number): { primary: string; secondary: string } {
+  if (mb >= 1000) {
+    return { primary: `${(mb / 1024).toFixed(2)} GB`, secondary: `${mb} MB` };
+  }
+  return { primary: `${mb} MB`, secondary: `${(mb / 1024).toFixed(2)} GB` };
+}
+
+function WorkloadMetricsTab({
+  workloadId,
+  cpuLimitMillicores,
+  memoryLimitBytes,
+}: {
+  workloadId: string;
+  cpuLimitMillicores?: number;
+  memoryLimitBytes?: number;
+}) {
+  const { currentProjectID } = useCurrentProject();
+  const [data, setData] = useState<WorkloadMetricsDTO | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!currentProjectID) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+    getProjectMetrics(currentProjectID)
+      .then((res) => {
+        if (cancelled) return;
+        const found = res.workloads?.find((w) => w.workload_id === workloadId) ?? null;
+        setData(found);
+      })
+      .catch(() => { if (!cancelled) setError(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [workloadId, currentProjectID]);
+
+  if (loading) {
+    return <p className="text-[11px] text-white/40 p-5">Loading metrics…</p>;
+  }
+  if (error || !data) {
+    return <p className="text-[11px] text-white/40 p-5">No metrics available yet. Start the workload and wait up to 30 s.</p>;
+  }
+
+  const fmt = (n: number, d = 1) => n.toFixed(d);
+  const cpuLimitM = (data.cpu_limit_millicores > 0 ? data.cpu_limit_millicores : cpuLimitMillicores) ?? 1000;
+  const memLimitMB = data.memory_limit_bytes > 0
+    ? data.memory_limit_bytes / (1024 * 1024)
+    : memoryLimitBytes ? memoryLimitBytes / (1024 * 1024) : 2048;
+  const cpuM = Math.min(data.cpu_millicores, cpuLimitM);
+  const memMB = Math.min(data.memory_mb, memLimitMB);
+  const cpuPct = (cpuM / cpuLimitM) * 100;
+  const memPct = (memMB / memLimitMB) * 100;
+  const memDisplay = fmtMemory(memMB);
+  const memLimitDisplay = fmtMemory(memLimitMB);
+
+  return (
+    <div className="space-y-3 p-5">
+      <MetricBar
+        label="CPU"
+        pct={cpuPct}
+        primary={`${fmt(cpuM / 1000, 2)} cores`}
+        secondary={`${fmt(cpuM / 1000, 2)} / ${fmt(cpuLimitM / 1000, 2)} cores`}
+      />
+      <MetricBar
+        label="Memory"
+        pct={memPct}
+        primary={memDisplay.primary}
+        secondary={`${memDisplay.secondary} / ${memLimitDisplay.primary}`}
+      />
+      <div className="rounded-[0.35rem] border border-white/8 bg-white/[0.03] px-3 divide-y divide-white/8">
+        <StatRow label="Net In"    value={`${fmt(data.network_in_kbps)} KB/s`} />
+        <StatRow label="Net Out"   value={`${fmt(data.network_out_kbps)} KB/s`} />
+        <StatRow label="Disk Read" value={`${fmt(data.disk_read_kbps)} KB/s`} />
+        <StatRow label="Disk Write" value={`${fmt(data.disk_write_kbps)} KB/s`} />
+      </div>
+      <p className="text-[10px] text-white/25">
+        Last update: {new Date(data.recorded_at).toLocaleTimeString()}
+      </p>
     </div>
   );
 }
@@ -334,18 +382,13 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.17, ease: [0.22, 1, 0.36, 1] }}
-                    className="h-full space-y-3 overflow-y-auto p-5"
+                    className="h-full overflow-y-auto"
                   >
-                    <MetricBar label="CPU" value={node.metrics.cpu} detail={node.metrics.traffic} />
-                    <MetricBar label="RAM" value={node.metrics.ram} detail={node.metrics.ramLabel} />
-
-                    <div className="rounded-[0.35rem] border border-white/8 bg-white/[0.03] p-3">
-                      <p className="text-[11px] uppercase tracking-wide text-white/40">Load profile</p>
-                      <p className="mt-1 text-xs text-white/70">{node.metrics.traffic}</p>
-                      <p className="mt-1 text-[11px] text-white/45">
-                        {showEndpoint ? "Public endpoint is available" : "No public endpoint exposed"}
-                      </p>
-                    </div>
+                    <WorkloadMetricsTab
+                      workloadId={node.id}
+                      cpuLimitMillicores={node.cpuLimitMillicores}
+                      memoryLimitBytes={node.memoryLimitBytes}
+                    />
                   </motion.div>
                 ) : null}
 
