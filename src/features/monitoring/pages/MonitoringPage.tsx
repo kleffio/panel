@@ -1,20 +1,106 @@
 "use client";
 
-import { Activity, AlertTriangle, CheckCircle2, Clock, Cpu, HardDrive, MemoryStick, Wifi } from "lucide-react";
+import * as React from "react";
+import { Activity, Cpu, HardDrive, MemoryStick, RefreshCw, Wifi } from "lucide-react";
+import { getProjectMetrics, type WorkloadMetricsDTO } from "@/lib/api/usage";
+import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
 
-const PLACEHOLDER_METRICS = [
-  { label: "CPU Usage",      value: "—",  unit: "%",  icon: Cpu,         status: "neutral" as const },
-  { label: "Memory",         value: "—",  unit: "GB", icon: MemoryStick, status: "neutral" as const },
-  { label: "Network In",     value: "—",  unit: "MB/s", icon: Wifi,      status: "neutral" as const },
-  { label: "Disk I/O",       value: "—",  unit: "MB/s", icon: HardDrive, status: "neutral" as const },
-];
+const POLL_INTERVAL_MS = 30_000;
 
-const PLACEHOLDER_ALERTS = [
-  { id: 1, severity: "info"    as const, message: "Monitoring agent not yet connected",    time: "—" },
-  { id: 2, severity: "info"    as const, message: "Metrics collection coming soon",         time: "—" },
-];
+function fmt(n: number, decimals = 1) {
+  return n.toFixed(decimals);
+}
+
+function cpuCores(millicores: number) {
+  return fmt(millicores / 1000, 2);
+}
+
+function memDisplay(mb: number): { value: string; unit: string; sub: string } {
+  if (mb >= 1000) {
+    return { value: fmt(mb / 1024, 2), unit: "GB", sub: `${fmt(mb)} MB` };
+  }
+  return { value: fmt(mb), unit: "MB", sub: `${fmt(mb / 1024, 2)} GB` };
+}
 
 export function MonitoringPage() {
+  const { currentProjectID } = useCurrentProject();
+  const [workloads, setWorkloads] = React.useState<WorkloadMetricsDTO[]>([]);
+  const [lastUpdated, setLastUpdated] = React.useState<Date | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const fetchMetrics = React.useCallback(async () => {
+    if (!currentProjectID) return;
+    try {
+      const data = await getProjectMetrics(currentProjectID);
+      setWorkloads(data.workloads ?? []);
+      setLastUpdated(new Date());
+      setError(null);
+    } catch {
+      setError("Failed to fetch metrics");
+    } finally {
+      setLoading(false);
+    }
+  }, [currentProjectID]);
+
+  React.useEffect(() => {
+    setLoading(true);
+    fetchMetrics();
+    const id = setInterval(fetchMetrics, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [fetchMetrics]);
+
+  // Aggregate totals across all workloads
+  const totals = React.useMemo(() => {
+    return workloads.reduce(
+      (acc, w) => {
+        const cpuM = w.cpu_limit_millicores > 0 ? Math.min(w.cpu_millicores, w.cpu_limit_millicores) : w.cpu_millicores;
+        const memLimitMB = w.memory_limit_bytes > 0 ? w.memory_limit_bytes / (1024 * 1024) : Infinity;
+        const memMB = w.memory_limit_bytes > 0 ? Math.min(w.memory_mb, memLimitMB) : w.memory_mb;
+        return {
+          cpuMillicores: acc.cpuMillicores + cpuM,
+          memoryMB: acc.memoryMB + memMB,
+          networkInKbps: acc.networkInKbps + w.network_in_kbps,
+          networkOutKbps: acc.networkOutKbps + w.network_out_kbps,
+          diskReadKbps: acc.diskReadKbps + w.disk_read_kbps,
+          diskWriteKbps: acc.diskWriteKbps + w.disk_write_kbps,
+        };
+      },
+      { cpuMillicores: 0, memoryMB: 0, networkInKbps: 0, networkOutKbps: 0, diskReadKbps: 0, diskWriteKbps: 0 }
+    );
+  }, [workloads]);
+
+  const hasData = workloads.length > 0;
+
+  const metricCards = [
+    {
+      label: "CPU Usage",
+      value: hasData ? cpuCores(totals.cpuMillicores) : "—",
+      unit: "cores",
+      sub: hasData ? `${cpuCores(totals.cpuMillicores)} cores total` : "no data",
+      icon: Cpu,
+    },
+    {
+      label: "Memory",
+      ...(hasData ? memDisplay(totals.memoryMB) : { value: "—", unit: "MB", sub: "no data" }),
+      icon: MemoryStick,
+    },
+    {
+      label: "Network In",
+      value: hasData ? fmt(totals.networkInKbps) : "—",
+      unit: "KB/s",
+      sub: hasData ? `out: ${fmt(totals.networkOutKbps)} KB/s` : "no data",
+      icon: Wifi,
+    },
+    {
+      label: "Disk I/O",
+      value: hasData ? fmt(totals.diskReadKbps) : "—",
+      unit: "KB/s read",
+      sub: hasData ? `write: ${fmt(totals.diskWriteKbps)} KB/s` : "no data",
+      icon: HardDrive,
+    },
+  ];
+
   return (
     <div className="mx-auto max-w-7xl space-y-8 animate-in fade-in duration-500">
 
@@ -23,18 +109,35 @@ export function MonitoringPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Monitoring</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Real-time metrics and alerts for your project workloads.
+            Real-time metrics for your project workloads.
           </p>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-xs text-muted-foreground">
-          <span className="size-1.5 rounded-full bg-amber-500/70" />
-          Coming soon
-        </span>
+        <div className="flex items-center gap-2">
+          {lastUpdated && (
+            <span className="text-xs text-muted-foreground/50">
+              Updated {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
+          <button
+            onClick={fetchMetrics}
+            className="flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-xs text-muted-foreground hover:bg-white/[0.08] transition-colors"
+          >
+            <RefreshCw className="size-3" />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {/* Error */}
+      {error && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {PLACEHOLDER_METRICS.map((m) => (
+        {metricCards.map((m) => (
           <div
             key={m.label}
             className="rounded-xl border border-white/[0.07] bg-card p-5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.4)]"
@@ -45,78 +148,91 @@ export function MonitoringPage() {
                 <m.icon className="size-4 text-muted-foreground/50" />
               </span>
             </div>
-            <p className="text-3xl font-semibold tracking-tight text-foreground/30">{m.value}</p>
-            <p className="text-xs text-muted-foreground/50">{m.unit}</p>
+            <p className={`text-3xl font-semibold tracking-tight ${hasData ? "text-foreground" : "text-foreground/30"}`}>
+              {loading ? <span className="animate-pulse">…</span> : m.value}
+              {!loading && m.value !== "—" && (
+                <span className="text-lg font-normal text-muted-foreground ml-1">{m.unit}</span>
+              )}
+            </p>
+            <p className="text-xs text-muted-foreground/40">{m.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Main grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Per-workload table */}
+      <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
+        <div className="border-b border-white/[0.06] px-6 py-4 flex items-center justify-between">
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Activity className="size-4 text-primary" />
+            Workload Metrics
+          </h2>
+          <span className="text-xs text-muted-foreground/50">{workloads.length} workload{workloads.length !== 1 ? "s" : ""}</span>
+        </div>
 
-        {/* Chart placeholder */}
-        <div className="lg:col-span-2 rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
-          <div className="border-b border-white/[0.06] px-6 py-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Activity className="size-4 text-primary" />
-              Request Rate
-            </h2>
-            <span className="text-xs text-muted-foreground/50">Last 24h</span>
-          </div>
+        {!loading && workloads.length === 0 ? (
           <div className="px-6 py-10 flex flex-col items-center justify-center gap-3 text-center">
             <div className="size-12 rounded-full border border-white/[0.07] bg-white/[0.03] flex items-center justify-center">
               <Activity className="size-5 text-muted-foreground/30" />
             </div>
-            <p className="text-sm text-muted-foreground/50">No metrics data yet</p>
+            <p className="text-sm text-muted-foreground/50">No metrics yet</p>
             <p className="text-xs text-muted-foreground/30 max-w-xs">
-              Connect your workloads and metrics will appear here automatically.
+              Start a workload and metrics will appear here within 30 seconds.
             </p>
           </div>
-        </div>
-
-        {/* Alerts */}
-        <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
-          <div className="border-b border-white/[0.06] px-6 py-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <AlertTriangle className="size-4 text-primary" />
-              Alerts
-            </h2>
-            <span className="text-xs text-muted-foreground/50">{PLACEHOLDER_ALERTS.length} total</span>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/[0.05] text-xs text-muted-foreground/50">
+                  <th className="px-6 py-3 text-left font-medium">Workload</th>
+                  <th className="px-4 py-3 text-right font-medium">CPU (cores)</th>
+                  <th className="px-4 py-3 text-right font-medium">Memory</th>
+                  <th className="px-4 py-3 text-right font-medium">Net In</th>
+                  <th className="px-4 py-3 text-right font-medium">Net Out</th>
+                  <th className="px-4 py-3 text-right font-medium">Disk R</th>
+                  <th className="px-4 py-3 text-right font-medium">Disk W</th>
+                  <th className="px-4 py-3 text-right font-medium">Updated</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {workloads.map((w) => {
+                  const cpuM = w.cpu_limit_millicores > 0 ? Math.min(w.cpu_millicores, w.cpu_limit_millicores) : w.cpu_millicores;
+                  const memLimitMB = w.memory_limit_bytes > 0 ? w.memory_limit_bytes / (1024 * 1024) : Infinity;
+                  const memMB = w.memory_limit_bytes > 0 ? Math.min(w.memory_mb, memLimitMB) : w.memory_mb;
+                  return (
+                  <tr key={w.workload_id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="px-6 py-3 font-mono text-xs text-foreground/60">
+                      {w.workload_id.slice(0, 8)}…
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {cpuCores(cpuM)}
+                      <span className="text-muted-foreground/40 ml-1 text-xs">cores</span>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {(() => { const m = memDisplay(memMB); return <>{m.value} <span className="text-muted-foreground/40 text-xs">{m.unit}</span></>; })()}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {fmt(w.network_in_kbps)} <span className="text-muted-foreground/40 text-xs">KB/s</span>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {fmt(w.network_out_kbps)} <span className="text-muted-foreground/40 text-xs">KB/s</span>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {fmt(w.disk_read_kbps)} <span className="text-muted-foreground/40 text-xs">KB/s</span>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {fmt(w.disk_write_kbps)} <span className="text-muted-foreground/40 text-xs">KB/s</span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs text-muted-foreground/40">
+                      {new Date(w.recorded_at).toLocaleTimeString()}
+                    </td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <div className="divide-y divide-white/[0.05]">
-            {PLACEHOLDER_ALERTS.map((alert) => (
-              <div key={alert.id} className="flex items-start gap-3 px-6 py-3">
-                {alert.severity === "info" ? (
-                  <CheckCircle2 className="size-4 text-muted-foreground/40 mt-0.5 shrink-0" />
-                ) : (
-                  <AlertTriangle className="size-4 text-amber-500 mt-0.5 shrink-0" />
-                )}
-                <div>
-                  <p className="text-sm text-foreground/60 leading-snug">{alert.message}</p>
-                  <p className="text-xs text-muted-foreground/40 flex items-center gap-1 mt-0.5">
-                    <Clock className="size-3" /> {alert.time}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Status table placeholder */}
-      <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
-        <div className="border-b border-white/[0.06] px-6 py-4">
-          <h2 className="text-sm font-semibold">Workload Health</h2>
-        </div>
-        <div className="px-6 py-10 flex flex-col items-center justify-center gap-3 text-center">
-          <div className="size-12 rounded-full border border-white/[0.07] bg-white/[0.03] flex items-center justify-center">
-            <HardDrive className="size-5 text-muted-foreground/30" />
-          </div>
-          <p className="text-sm text-muted-foreground/50">No workloads reporting yet</p>
-          <p className="text-xs text-muted-foreground/30 max-w-xs">
-            Deploy workloads from the Canvas to see their health status here.
-          </p>
-        </div>
+        )}
       </div>
     </div>
   );
