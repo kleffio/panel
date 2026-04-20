@@ -179,6 +179,40 @@ func (m *Manager) Install(ctx context.Context, manifest *domain.CatalogManifest,
 		return nil, fmt.Errorf("install plugin: encrypt secrets: %w", err)
 	}
 
+	// Tier 0 — static plugins: no container, no gRPC. Platform serves the bundle.
+	if isStaticTier(manifest) {
+		p := &domain.Plugin{
+			ID:           manifest.ID,
+			Type:         manifest.Type,
+			DisplayName:  manifest.Name,
+			Image:        "",
+			Version:      manifest.Version,
+			FrontendURL:  manifest.FrontendURL,
+			GRPCAddr:     "", // empty = no container
+			Config:       configJSON,
+			Secrets:      secretsJSON,
+			Enabled:      true,
+			Status:       domain.PluginStatusRunning,
+			Dependencies: manifest.Dependencies,
+			InstalledAt:  time.Now().UTC(),
+			UpdatedAt:    time.Now().UTC(),
+		}
+		if err := m.store.Save(ctx, p); err != nil {
+			return nil, fmt.Errorf("install plugin: save: %w", err)
+		}
+		m.setStatus(p.ID, domain.PluginStatusRunning)
+		// Register manifest-declared capabilities directly (no gRPC discovery).
+		caps := make(map[string]bool, len(manifest.Capabilities))
+		for _, c := range manifest.Capabilities {
+			caps[c] = true
+		}
+		m.mu.Lock()
+		m.capabilities[p.ID] = caps
+		m.mu.Unlock()
+		m.logger.Info("plugin installed (static/tier-0)", "id", p.ID)
+		return p, nil
+	}
+
 	grpcAddr := fmt.Sprintf("kleff-%s:%d", manifest.ID, grpcPort)
 
 	p := &domain.Plugin{
@@ -245,6 +279,21 @@ func (m *Manager) Install(ctx context.Context, manifest *domain.CatalogManifest,
 	return p, nil
 }
 
+// isStaticTier reports whether a manifest describes a Tier 0 (static/no-container) plugin.
+// A plugin is static when all its declared capabilities are "ui.manifest" — no container,
+// no gRPC, just a frontend bundle served to the browser.
+func isStaticTier(m *domain.CatalogManifest) bool {
+	if len(m.Capabilities) == 0 {
+		return false
+	}
+	for _, c := range m.Capabilities {
+		if c != "ui.manifest" {
+			return false
+		}
+	}
+	return true
+}
+
 // Remove stops the container, removes the DB record, and closes the gRPC connection.
 func (m *Manager) Remove(ctx context.Context, pluginID string) error {
 	// Refuse to remove the active IDP — there must always be one active IDP.
@@ -281,9 +330,11 @@ func (m *Manager) Remove(ctx context.Context, pluginID string) error {
 	m.setStatus(pluginID, domain.PluginStatusRemoving)
 
 	_ = m.pool.Close(pluginID)
-	containerID := "kleff-" + pluginID
-	if err := m.rt.Remove(ctx, containerID); err != nil {
-		m.logger.Warn("plugin remove: container removal failed", "id", pluginID, "error", err)
+	if p.GRPCAddr != "" {
+		containerID := "kleff-" + pluginID
+		if err := m.rt.Remove(ctx, containerID); err != nil {
+			m.logger.Warn("plugin remove: container removal failed", "id", pluginID, "error", err)
+		}
 	}
 
 	// Best-effort removal of companion containers.
@@ -347,9 +398,11 @@ func (m *Manager) Disable(ctx context.Context, pluginID string) error {
 
 	_ = m.pool.Close(pluginID)
 
-	containerID := "kleff-" + pluginID
-	if err := m.rt.Stop(ctx, containerID); err != nil {
-		m.logger.Warn("plugin disable: stop failed", "id", pluginID, "error", err)
+	if p.GRPCAddr != "" {
+		containerID := "kleff-" + pluginID
+		if err := m.rt.Stop(ctx, containerID); err != nil {
+			m.logger.Warn("plugin disable: stop failed", "id", pluginID, "error", err)
+		}
 	}
 
 	p.Enabled = false
@@ -404,6 +457,11 @@ func (m *Manager) Reconfigure(ctx context.Context, pluginID string, config map[s
 
 	if err := m.store.Save(ctx, p); err != nil {
 		return fmt.Errorf("reconfigure plugin: save: %w", err)
+	}
+
+	// Static (Tier 0) plugins have no container — config saved, nothing to restart.
+	if p.GRPCAddr == "" {
+		return nil
 	}
 
 	// Restart container with new env vars.

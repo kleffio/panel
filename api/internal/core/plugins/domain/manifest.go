@@ -1,11 +1,14 @@
 package domain
 
 // CatalogManifest is a plugin's entry in the remote plugin registry.
-// Shape mirrors the kleff-plugin.json manifest documented in PLUGIN_SPEC.md.
+// Shape mirrors the plugin.json manifest documented in PLUGIN_SPEC.md.
 type CatalogManifest struct {
 	ID              string          `json:"id"`
 	Name            string          `json:"name"`
 	Type            string          `json:"type"`
+	// Tier is the plugin execution tier: 0 = static (no container), 1 = stateless,
+	// 2 = stateful. If omitted, the platform infers tier from capabilities.
+	Tier            int             `json:"tier,omitempty"`
 	Description     string          `json:"description"`
 	LongDescription string          `json:"longDescription,omitempty"`
 	Tags            []string        `json:"tags,omitempty"`
