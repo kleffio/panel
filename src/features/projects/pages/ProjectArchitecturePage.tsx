@@ -164,6 +164,8 @@ function buildNode(
     footer: workload.endpoint || "Endpoint pending",
     position,
     actions: isDeleting ? ["logs"] : ["restart", "logs", "scale", "delete"],
+    cpuLimitMillicores: workload.cpu_millicores || undefined,
+    memoryLimitBytes: workload.memory_bytes || undefined,
     panel: {
       title: `${displayName} details`,
       description: isDeleting

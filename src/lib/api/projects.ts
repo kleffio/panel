@@ -23,6 +23,8 @@ export interface WorkloadDTO {
   node_id: string;
   state: "pending" | "running" | "stopped" | "deleted" | "failed";
   error_message: string;
+  cpu_millicores: number;
+  memory_bytes: number;
   created_at: string;
   updated_at: string;
 }

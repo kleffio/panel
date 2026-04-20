@@ -157,6 +157,8 @@ export type InfrastructureNode = {
   };
   actions: NodeAction[];
   panel: NodePanelData;
+  cpuLimitMillicores?: number;
+  memoryLimitBytes?: number;
 };
 
 export type InfrastructureEdge = {
