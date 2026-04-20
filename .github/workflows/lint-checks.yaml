@@ -3,8 +3,12 @@ name: Lint Checks
 "on":
   push:
     branches: ["**"]
+    paths:
+      - "web/**"
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - "web/**"
   workflow_dispatch:
 
 concurrency:

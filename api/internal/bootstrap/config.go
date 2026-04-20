@@ -1,0 +1,184 @@
+package bootstrap
+
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/kleffio/platform/internal/shared/config"
+)
+
+// Config holds all runtime configuration for the platform API.
+// Values are sourced from environment variables at startup via LoadConfig.
+type Config struct {
+	// ── Core ──────────────────────────────────────────────────────────────────
+
+	// HTTPPort is the port the API server listens on (default: 8080).
+	HTTPPort int
+
+	// DatabaseURL is the Postgres connection string (required).
+	DatabaseURL string
+
+	// LogLevel controls the minimum log severity: debug, info, warn, error.
+	LogLevel string
+
+	// CORSAllowedOrigins is the list of allowed CORS origins.
+	// An empty list permits all origins (development mode).
+	CORSAllowedOrigins []string
+
+	// ── Auth / OIDC ───────────────────────────────────────────────────────────
+
+	// OIDCAuthority is the OIDC provider issuer URL used for JWT verification.
+	OIDCAuthority string
+
+	// OIDCClientID is the expected audience claim in incoming JWTs.
+	OIDCClientID string
+
+	// IntrospectURL is the OAuth2 token introspection endpoint (RFC 7662).
+	IntrospectURL string
+
+	// IntrospectClientID is the OAuth2 client ID for introspection requests.
+	IntrospectClientID string
+
+	// IntrospectClientSecret is the OAuth2 client secret for introspection.
+	IntrospectClientSecret string
+
+	// JWKSUri is the OIDC JWKS endpoint for JWT signature verification.
+	JWKSUri string
+
+	// ── Crate registry ────────────────────────────────────────────────────────
+
+	// CrateRegistryURL is the base URL of the crate registry.
+	// Default: https://raw.githubusercontent.com/kleffio/crate-registry/main
+	// For local dev, use: file:///absolute/path/to/crate-registry
+	CrateRegistryURL string
+
+	// ── Plugin system ─────────────────────────────────────────────────────────
+
+	// RuntimeProvider selects the container runtime for plugin management.
+	// Values: "docker" (default), "kubernetes", "manual".
+	RuntimeProvider string
+
+	// PluginRegistryURL overrides the plugin catalog URL.
+	// Default: https://raw.githubusercontent.com/kleff/plugin-registry/main/plugins.json
+	PluginRegistryURL string
+
+	// PluginNetwork is the Docker network plugins are attached to (default: "kleff").
+	PluginNetwork string
+
+	// PluginGRPCPort is the port plugins listen on inside their container (default: 50051).
+	PluginGRPCPort int
+
+	// PluginRegistryTTL is the seconds between catalog re-fetches (default: 3600).
+	PluginRegistryTTL int
+
+	// PluginNamespace is the k8s namespace for plugin Deployments (default: "kleff").
+	PluginNamespace string
+
+	// NodeBootstrapSecret is the shared bootstrap secret daemons use to register
+	// and obtain a node token.
+	NodeBootstrapSecret string
+
+	// DaemonQueueURL is the Redis URL used to enqueue daemon jobs.
+	DaemonQueueURL string
+
+	// DaemonQueuePassword overrides any password in DaemonQueueURL.
+	DaemonQueuePassword string
+
+	// DaemonQueueTLS enables TLS for Redis queue connections.
+	DaemonQueueTLS bool
+
+	// SecretKey is the AES-256 key (any length; hashed with SHA-256) for
+	// encrypting plugin secrets at rest. Required in production.
+	SecretKey string
+
+	// CompanionEnv holds env vars to inject into every companion container.
+	// Populated from COMPANION_* env vars on the API: COMPANION_SMTP_HOST → SMTP_HOST.
+	// Manifest-declared env vars take precedence over these globals.
+	CompanionEnv map[string]string
+
+	// RedisURL is the legacy connection URL for the daemon job queue.
+	// Prefer DaemonQueueURL.
+	RedisURL string
+}
+
+// LoadConfig reads and validates configuration from environment variables.
+func LoadConfig() (*Config, error) {
+	cfg := &Config{
+		HTTPPort:    config.Int("HTTP_PORT", 8080),
+		DatabaseURL: config.String("DATABASE_URL", ""),
+		LogLevel:    config.String("LOG_LEVEL", "info"),
+
+		OIDCAuthority:          config.String("OIDC_AUTHORITY", ""),
+		OIDCClientID:           config.String("OIDC_CLIENT_ID", "platform"),
+		IntrospectURL:          config.String("OAUTH2_INTROSPECT_URL", ""),
+		IntrospectClientID:     config.String("INTROSPECT_CLIENT_ID", ""),
+		IntrospectClientSecret: config.String("INTROSPECT_CLIENT_SECRET", ""),
+		JWKSUri:                config.String("JWKS_URI", ""),
+
+		CrateRegistryURL: config.String("CRATE_REGISTRY_URL", ""),
+
+		RuntimeProvider:   config.String("RUNTIME_PROVIDER", "docker"),
+		PluginRegistryURL: config.String("PLUGIN_REGISTRY_URL", ""),
+		PluginNetwork:     config.String("PLUGIN_NETWORK", "kleff"),
+		PluginGRPCPort:    config.Int("PLUGIN_GRPC_PORT", 50051),
+		PluginRegistryTTL: config.Int("PLUGIN_REGISTRY_TTL", 3600),
+		PluginNamespace:   config.String("PLUGIN_NAMESPACE", "kleff"),
+		SecretKey:         config.String("SECRET_KEY", ""),
+
+		NodeBootstrapSecret: config.String("NODE_BOOTSTRAP_SECRET", config.String("KLEFF_SHARED_SECRET", "")),
+		DaemonQueueURL:      config.String("DAEMON_QUEUE_REDIS_URL", ""),
+		DaemonQueuePassword: config.String("DAEMON_QUEUE_REDIS_PASSWORD", ""),
+		DaemonQueueTLS:      config.Bool("DAEMON_QUEUE_REDIS_TLS", false),
+		RedisURL:            config.String("REDIS_URL", ""),
+	}
+
+	if cfg.DaemonQueueURL == "" {
+		cfg.DaemonQueueURL = cfg.RedisURL
+	}
+
+	if raw := config.String("CORS_ALLOWED_ORIGINS", ""); raw != "" {
+		cfg.CORSAllowedOrigins = splitCSV(raw)
+	}
+
+	cfg.CompanionEnv = companionEnvFromOS()
+
+	if cfg.DatabaseURL == "" {
+		return nil, fmt.Errorf("DATABASE_URL is required")
+	}
+
+	// Derive introspection URL from OIDC authority if not explicitly set.
+	if cfg.IntrospectURL == "" && cfg.OIDCAuthority != "" {
+		cfg.IntrospectURL = strings.TrimRight(cfg.OIDCAuthority, "/") + "/oauth2/introspect"
+	}
+
+	if cfg.JWKSUri == "" && cfg.OIDCAuthority != "" {
+		cfg.JWKSUri = strings.TrimRight(cfg.OIDCAuthority, "/") + "/protocol/openid-connect/certs"
+	}
+
+	return cfg, nil
+}
+
+// companionEnvFromOS scans os.Environ() for vars prefixed with "COMPANION_",
+// strips the prefix, and returns them as a map for injection into companions.
+func companionEnvFromOS() map[string]string {
+	const prefix = "COMPANION_"
+	out := make(map[string]string)
+	for _, kv := range os.Environ() {
+		k, v, ok := strings.Cut(kv, "=")
+		if ok && strings.HasPrefix(k, prefix) {
+			out[strings.TrimPrefix(k, prefix)] = v
+		}
+	}
+	return out
+}
+
+func splitCSV(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		if t := strings.TrimSpace(part); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}

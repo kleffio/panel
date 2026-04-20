@@ -1,0 +1,1456 @@
+// Package application holds the PluginManager — the central coordinator for
+// plugin lifecycle: deploy, stop, configure, health-check, and gRPC routing.
+package application
+
+import (
+	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net"
+	"strings"
+	"sync"
+	"time"
+
+	"google.golang.org/grpc"
+
+	pluginsv1 "github.com/kleffio/plugin-sdk-go/v1"
+	grpcpool "github.com/kleffio/platform/internal/core/plugins/adapters/grpc"
+	"github.com/kleffio/platform/internal/core/plugins/domain"
+	"github.com/kleffio/platform/internal/core/plugins/ports"
+	"github.com/kleffio/platform/internal/shared/runtime"
+)
+
+const (
+	activeIDPSettingKey = "active_idp_plugin"
+	grpcPort            = 50051
+	healthCheckInterval = 30 * time.Second
+	maxRestartAttempts  = 3
+)
+
+// Manager implements ports.PluginManager.
+type Manager struct {
+	store        ports.PluginStore
+	registry     ports.PluginRegistry
+	rt           runtime.RuntimeAdapter
+	pool         *grpcpool.Pool
+	secretKey    []byte // 32-byte AES-256 key
+	logger       *slog.Logger
+	projectName  string            // Docker Compose project name (e.g. "kleff")
+	companionEnv map[string]string // global env vars injected into every companion
+
+	mu           sync.RWMutex
+	statuses     map[string]domain.PluginStatus
+	restarts     map[string]int
+	capabilities map[string]map[string]bool // plugin ID → set of declared capabilities
+	routes       []pluginRoute              // flat list of all declared plugin HTTP routes
+	activeIDP    string                     // cached from store; set by SetActiveIDP and loaded on Start
+}
+
+// pluginRoute is one entry in the route registry.
+type pluginRoute struct {
+	pluginID string
+	method   string // HTTP method or "*"
+	path     string // exact or prefix ending in "*"
+	public   bool
+}
+
+// New creates a PluginManager and starts the background health-check loop.
+// secretKey is used for AES-256-GCM encryption of plugin secrets; it must be
+// exactly 32 bytes (derive with SHA-256 from SECRET_KEY env var).
+func New(
+	store ports.PluginStore,
+	registry ports.PluginRegistry,
+	rt runtime.RuntimeAdapter,
+	secretKey []byte,
+	projectName string,
+	companionEnv map[string]string,
+	logger *slog.Logger,
+) *Manager {
+	m := &Manager{
+		store:        store,
+		registry:     registry,
+		rt:           rt,
+		pool:         grpcpool.NewPool(),
+		secretKey:    secretKey,
+		projectName:  projectName,
+		companionEnv: companionEnv,
+		logger:       logger,
+		statuses:     make(map[string]domain.PluginStatus),
+		restarts:     make(map[string]int),
+		capabilities: make(map[string]map[string]bool),
+	}
+	return m
+}
+
+// Start loads all enabled plugins from the store, ensures their containers are
+// running, and starts the background health-check goroutine.
+// Call this after the DB is ready.
+func (m *Manager) Start(ctx context.Context) error {
+	plugins, err := m.store.ListAll(ctx)
+	if err != nil {
+		return fmt.Errorf("plugin manager: load plugins: %w", err)
+	}
+
+	for _, p := range plugins {
+		if !p.Enabled {
+			m.setStatus(p.ID, domain.PluginStatusDisabled)
+			continue
+		}
+		// Frontend-only plugins have no backend container — mark running immediately.
+		if p.GRPCAddr == "" {
+			m.setStatus(p.ID, domain.PluginStatusRunning)
+			continue
+		}
+		if err := m.ensureRunning(ctx, p); err != nil {
+			m.logger.Warn("plugin manager: startup: failed to start plugin",
+				"id", p.ID, "error", err)
+			m.setStatus(p.ID, domain.PluginStatusError)
+		}
+	}
+
+	// Cache the active IDP so HasIdentityProvider() works before capability discovery runs.
+	if activeID, err := m.store.GetSetting(ctx, activeIDPSettingKey); err == nil && activeID != "" {
+		m.mu.Lock()
+		m.activeIDP = activeID
+		m.mu.Unlock()
+	}
+
+	go m.healthLoop(ctx)
+	return nil
+}
+
+var _ ports.PluginManager = (*Manager)(nil)
+
+// Install deploys a new plugin container, persists config, and dials gRPC.
+func (m *Manager) Install(ctx context.Context, manifest *domain.CatalogManifest, config map[string]string) (*domain.Plugin, error) {
+	// Validate that all declared dependencies are installed and enabled.
+	if len(manifest.Dependencies) > 0 {
+		installed, err := m.store.ListAll(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("install plugin: check dependencies: %w", err)
+		}
+		enabledByID := make(map[string]bool, len(installed))
+		for _, p := range installed {
+			enabledByID[p.ID] = p.Enabled
+		}
+		for _, depID := range manifest.Dependencies {
+			enabled, ok := enabledByID[depID]
+			if !ok {
+				return nil, fmt.Errorf("install plugin: dependency %q is not installed", depID)
+			}
+			if !enabled {
+				return nil, fmt.Errorf("install plugin: dependency %q is installed but not enabled", depID)
+			}
+		}
+	}
+
+	// Separate plain config from secrets, applying manifest defaults for any
+	// field the caller did not explicitly provide.
+	plainCfg := map[string]string{}
+	secretCfg := map[string]string{}
+	for _, field := range manifest.Config {
+		val, ok := config[field.Key]
+		if !ok || val == "" {
+			if field.Default != "" {
+				val = field.Default
+			} else {
+				continue
+			}
+		}
+		if field.Type == "secret" {
+			secretCfg[field.Key] = val
+		} else {
+			plainCfg[field.Key] = val
+		}
+	}
+
+	configJSON, err := json.Marshal(plainCfg)
+	if err != nil {
+		return nil, fmt.Errorf("install plugin: marshal config: %w", err)
+	}
+	secretsJSON, err := m.encryptSecrets(secretCfg)
+	if err != nil {
+		return nil, fmt.Errorf("install plugin: encrypt secrets: %w", err)
+	}
+
+	grpcAddr := fmt.Sprintf("kleff-%s:%d", manifest.ID, grpcPort)
+
+	p := &domain.Plugin{
+		ID:           manifest.ID,
+		Type:         manifest.Type,
+		DisplayName:  manifest.Name,
+		Image:        fmt.Sprintf("%s:%s", manifest.Image, manifest.Version),
+		Version:      manifest.Version,
+		FrontendURL:  manifest.FrontendURL,
+		GRPCAddr:     grpcAddr,
+		Config:       configJSON,
+		Secrets:      secretsJSON,
+		Enabled:      manifest.Type != "idp", // IDP plugins require explicit activation
+		Status:       domain.PluginStatusDisabled,
+		Dependencies: manifest.Dependencies,
+		InstalledAt:  time.Now().UTC(),
+		UpdatedAt:    time.Now().UTC(),
+	}
+
+	if err := m.store.Save(ctx, p); err != nil {
+		return nil, fmt.Errorf("install plugin: save: %w", err)
+	}
+
+	// IDP plugins are installed (config saved) but not started yet.
+	// Containers and companions are deferred to SetActiveIDP → ensureRunning,
+	// so the user can configure the plugin before committing to running it.
+	if manifest.Type == "idp" {
+		m.logger.Info("plugin installed (deferred start)", "id", p.ID, "image", p.Image)
+		return p, nil
+	}
+
+	m.setStatus(p.ID, domain.PluginStatusInstalling)
+
+	// Deploy companion containers declared in the manifest (e.g. Keycloak server).
+	if err := m.deployCompanions(ctx, manifest, config); err != nil {
+		m.setStatus(p.ID, domain.PluginStatusError)
+		return nil, fmt.Errorf("install plugin: deploy companions: %w", err)
+	}
+
+	// For each companion that was deployed (not skipped), inject its internal
+	// address so the plugin container always has a valid URL to reach it.
+	for _, c := range manifest.Companions {
+		if c.SkipIfEnv != "" && c.InternalAddr != "" && config[c.SkipIfEnv] == "" {
+			config[c.SkipIfEnv] = c.InternalAddr
+		}
+	}
+
+	spec := m.buildContainerSpec(p, manifest, config)
+	if err := m.rt.Deploy(ctx, spec); err != nil {
+		m.setStatus(p.ID, domain.PluginStatusError)
+		return nil, fmt.Errorf("install plugin: deploy: %w", err)
+	}
+
+	if err := m.pool.Dial(ctx, p.ID, grpcAddr); err != nil {
+		m.setStatus(p.ID, domain.PluginStatusError)
+		return nil, fmt.Errorf("install plugin: dial gRPC: %w", err)
+	}
+
+	m.setStatus(p.ID, domain.PluginStatusRunning)
+	p.Status = domain.PluginStatusRunning
+	m.discoverCapabilities(ctx, p.ID)
+	m.logger.Info("plugin installed", "id", p.ID, "image", p.Image)
+
+	return p, nil
+}
+
+// Remove stops the container, removes the DB record, and closes the gRPC connection.
+func (m *Manager) Remove(ctx context.Context, pluginID string) error {
+	// Refuse to remove the active IDP — there must always be one active IDP.
+	if activeID, _ := m.store.GetSetting(ctx, activeIDPSettingKey); activeID == pluginID {
+		return fmt.Errorf("remove plugin: %q is the active IDP; activate a different IDP plugin first", pluginID)
+	}
+
+	// Refuse to remove if another installed plugin depends on this one.
+	if err := m.checkNoDependents(ctx, pluginID, false); err != nil {
+		return fmt.Errorf("remove plugin: %w", err)
+	}
+
+	// Refuse to remove the last IDP plugin — at least one must remain installed.
+	p, err := m.store.FindByID(ctx, pluginID)
+	if err != nil {
+		return fmt.Errorf("remove plugin: find: %w", err)
+	}
+	if p.Type == "idp" {
+		all, err := m.store.ListAll(ctx)
+		if err != nil {
+			return fmt.Errorf("remove plugin: list: %w", err)
+		}
+		idpCount := 0
+		for _, pl := range all {
+			if pl.Type == "idp" {
+				idpCount++
+			}
+		}
+		if idpCount <= 1 {
+			return fmt.Errorf("remove plugin: %q is the only identity provider; install another IDP plugin before removing this one", pluginID)
+		}
+	}
+
+	m.setStatus(pluginID, domain.PluginStatusRemoving)
+
+	_ = m.pool.Close(pluginID)
+	containerID := "kleff-" + pluginID
+	if err := m.rt.Remove(ctx, containerID); err != nil {
+		m.logger.Warn("plugin remove: container removal failed", "id", pluginID, "error", err)
+	}
+
+	// Best-effort removal of companion containers.
+	if manifest, err := m.registry.GetManifest(ctx, pluginID); err == nil && manifest != nil {
+		m.removeCompanions(ctx, manifest)
+	}
+
+	if err := m.store.Delete(ctx, pluginID); err != nil {
+		return fmt.Errorf("remove plugin: delete record: %w", err)
+	}
+
+	m.mu.Lock()
+	delete(m.statuses, pluginID)
+	delete(m.restarts, pluginID)
+	m.mu.Unlock()
+
+	m.clearCapabilities(pluginID) // also removes routes
+
+	m.mu.Lock()
+	if m.activeIDP == pluginID {
+		m.activeIDP = ""
+	}
+	m.mu.Unlock()
+
+	m.logger.Info("plugin removed", "id", pluginID)
+	return nil
+}
+
+// Enable starts the container and re-opens the gRPC connection.
+func (m *Manager) Enable(ctx context.Context, pluginID string) error {
+	p, err := m.store.FindByID(ctx, pluginID)
+	if err != nil {
+		return fmt.Errorf("enable plugin: find: %w", err)
+	}
+
+	p.Enabled = true
+	p.UpdatedAt = time.Now().UTC()
+	if err := m.store.Save(ctx, p); err != nil {
+		return fmt.Errorf("enable plugin: save: %w", err)
+	}
+
+	return m.ensureRunning(ctx, p)
+}
+
+// Disable stops the container and closes the gRPC connection.
+func (m *Manager) Disable(ctx context.Context, pluginID string) error {
+	// Refuse to disable the active IDP — there must always be one active IDP.
+	if activeID, _ := m.store.GetSetting(ctx, activeIDPSettingKey); activeID == pluginID {
+		return fmt.Errorf("disable plugin: %q is the active IDP; activate a different IDP plugin first", pluginID)
+	}
+
+	// Refuse to disable if an enabled plugin depends on this one.
+	if err := m.checkNoDependents(ctx, pluginID, true); err != nil {
+		return fmt.Errorf("disable plugin: %w", err)
+	}
+
+	p, err := m.store.FindByID(ctx, pluginID)
+	if err != nil {
+		return fmt.Errorf("disable plugin: find: %w", err)
+	}
+
+	_ = m.pool.Close(pluginID)
+
+	containerID := "kleff-" + pluginID
+	if err := m.rt.Stop(ctx, containerID); err != nil {
+		m.logger.Warn("plugin disable: stop failed", "id", pluginID, "error", err)
+	}
+
+	p.Enabled = false
+	p.UpdatedAt = time.Now().UTC()
+	if err := m.store.Save(ctx, p); err != nil {
+		return fmt.Errorf("disable plugin: save: %w", err)
+	}
+
+	m.setStatus(pluginID, domain.PluginStatusDisabled)
+	m.clearCapabilities(pluginID)
+	return nil
+}
+
+// Reconfigure restarts the container with updated config.
+func (m *Manager) Reconfigure(ctx context.Context, pluginID string, config map[string]string) error {
+	p, err := m.store.FindByID(ctx, pluginID)
+	if err != nil {
+		return fmt.Errorf("reconfigure plugin: find: %w", err)
+	}
+
+	// Fetch manifest to know which fields are secrets.
+	manifest, err := m.registry.GetManifest(ctx, pluginID)
+	if err != nil {
+		return fmt.Errorf("reconfigure plugin: get manifest: %w", err)
+	}
+
+	plainCfg := map[string]string{}
+	secretCfg := map[string]string{}
+	if manifest != nil {
+		for _, field := range manifest.Config {
+			if val, ok := config[field.Key]; ok {
+				if field.Type == "secret" {
+					secretCfg[field.Key] = val
+				} else {
+					plainCfg[field.Key] = val
+				}
+			}
+		}
+	} else {
+		plainCfg = config
+	}
+
+	configJSON, _ := json.Marshal(plainCfg)
+	secretsJSON, err := m.encryptSecrets(secretCfg)
+	if err != nil {
+		return fmt.Errorf("reconfigure plugin: encrypt secrets: %w", err)
+	}
+
+	p.Config = configJSON
+	p.Secrets = secretsJSON
+	p.UpdatedAt = time.Now().UTC()
+
+	if err := m.store.Save(ctx, p); err != nil {
+		return fmt.Errorf("reconfigure plugin: save: %w", err)
+	}
+
+	// Restart container with new env vars.
+	_ = m.pool.Close(pluginID)
+	spec := m.buildContainerSpec(p, manifest, config)
+	if err := m.rt.Deploy(ctx, spec); err != nil {
+		return fmt.Errorf("reconfigure plugin: redeploy: %w", err)
+	}
+
+	return m.pool.Dial(ctx, p.ID, p.GRPCAddr)
+}
+
+// GetPlugin returns the persisted plugin with its current in-memory status.
+func (m *Manager) GetPlugin(ctx context.Context, pluginID string) (*domain.Plugin, error) {
+	p, err := m.store.FindByID(ctx, pluginID)
+	if err != nil {
+		return nil, err
+	}
+	p.Status = m.getStatus(p.ID)
+	return p, nil
+}
+
+// ListPlugins returns all installed plugins with in-memory statuses.
+func (m *Manager) ListPlugins(ctx context.Context) ([]*domain.Plugin, error) {
+	plugins, err := m.store.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range plugins {
+		p.Status = m.getStatus(p.ID)
+	}
+	return plugins, nil
+}
+
+// ── Identity (auth) ───────────────────────────────────────────────────────────
+
+func (m *Manager) getActiveIDP(ctx context.Context) (pluginsv1.IdentityPluginClient, error) {
+	activeID, err := m.store.GetSetting(ctx, activeIDPSettingKey)
+	if err != nil || activeID == "" {
+		return nil, err
+	}
+	return m.pool.IDPClient(activeID)
+}
+
+func (m *Manager) SetActiveIDP(ctx context.Context, pluginID string) error {
+	// Capture the previous active IDP before switching.
+	m.mu.RLock()
+	prevIDP := m.activeIDP
+	m.mu.RUnlock()
+
+	if err := m.store.SetSetting(ctx, activeIDPSettingKey, pluginID); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.activeIDP = pluginID
+	m.mu.Unlock()
+
+	// Ensure the newly active IDP is enabled and running.
+	if newPlugin, err := m.store.FindByID(ctx, pluginID); err == nil {
+		if !newPlugin.Enabled {
+			newPlugin.Enabled = true
+			newPlugin.UpdatedAt = time.Now().UTC()
+			_ = m.store.Save(ctx, newPlugin)
+		}
+		if runErr := m.ensureRunning(ctx, newPlugin); runErr != nil {
+			m.logger.Warn("SetActiveIDP: ensure new IDP running", "id", pluginID, "error", runErr)
+		}
+	}
+
+	// Stop the previous IDP's containers when switching to a different plugin.
+	// Named Docker volumes are preserved (ContainerRemove does not pass RemoveVolumes),
+	// so all data (e.g. Keycloak realm, users) survives and is restored on re-activation.
+	if prevIDP != "" && prevIDP != pluginID {
+		// Mark old plugin disabled FIRST so the health loop does not instantly restart its containers
+		// while we are in the middle of removing them.
+		if oldPlugin, err := m.store.FindByID(ctx, prevIDP); err == nil {
+			oldPlugin.Enabled = false
+			oldPlugin.UpdatedAt = time.Now().UTC()
+			if saveErr := m.store.Save(ctx, oldPlugin); saveErr != nil {
+				m.logger.Warn("SetActiveIDP: save old plugin disabled", "id", prevIDP, "error", saveErr)
+			}
+		}
+		m.setStatus(prevIDP, domain.PluginStatusDisabled)
+
+		_ = m.pool.Close(prevIDP)
+
+		if err := m.rt.Remove(ctx, "kleff-"+prevIDP); err != nil {
+			m.logger.Warn("SetActiveIDP: remove old IDP container", "id", prevIDP, "error", err)
+		}
+
+		// Remove companion containers (e.g. Keycloak server) for the old IDP.
+		if manifest, err := m.registry.GetManifest(ctx, prevIDP); err == nil && manifest != nil {
+			for _, c := range manifest.Companions {
+				if stopErr := m.rt.Remove(ctx, c.ID); stopErr != nil {
+					m.logger.Warn("SetActiveIDP: remove old companion", "companion", c.ID, "plugin", prevIDP, "error", stopErr)
+				}
+			}
+		}
+
+		m.clearCapabilities(prevIDP)
+		m.logger.Info("SetActiveIDP: stopped and removed previous IDP", "previous", prevIDP, "active", pluginID)
+	}
+
+	return nil
+}
+
+func (m *Manager) GetActiveIDPID() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.activeIDP
+}
+
+func (m *Manager) ValidateToken(ctx context.Context, token string) (*pluginsv1.TokenClaims, error) {
+	idp, err := m.getActiveIDP(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("validate token: %w", err)
+	}
+	if idp == nil {
+		return nil, fmt.Errorf("no active IDP plugin")
+	}
+	resp, err := idp.ValidateToken(ctx, &pluginsv1.ValidateTokenRequest{Token: token})
+	if err != nil {
+		return nil, fmt.Errorf("validate token: %w", err)
+	}
+	if resp.Error != nil {
+		return nil, fmt.Errorf("%s", resp.Error.Message)
+	}
+	return resp.Claims, nil
+}
+
+func (m *Manager) Login(ctx context.Context, username, password string) (*pluginsv1.TokenSet, error) {
+	idp, err := m.getActiveIDP(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("login: %w", err)
+	}
+	if idp == nil {
+		return nil, fmt.Errorf("no active IDP plugin")
+	}
+	resp, err := idp.Login(ctx, &pluginsv1.LoginRequest{Username: username, Password: password})
+	if err != nil {
+		return nil, fmt.Errorf("login: %w", err)
+	}
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+	return resp.Token, nil
+}
+
+func (m *Manager) Register(ctx context.Context, req *pluginsv1.RegisterRequest) (string, error) {
+	idp, err := m.getActiveIDP(ctx)
+	if err != nil {
+		return "", fmt.Errorf("register: %w", err)
+	}
+	if idp == nil {
+		return "", fmt.Errorf("no active IDP plugin")
+	}
+	resp, err := idp.Register(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("register: %w", err)
+	}
+	if resp.Error != nil {
+		return "", resp.Error
+	}
+	return resp.UserID, nil
+}
+
+func (m *Manager) GetOIDCConfig(ctx context.Context) (*pluginsv1.OIDCConfig, error) {
+	idp, err := m.getActiveIDP(ctx)
+	if err != nil || idp == nil {
+		return nil, err
+	}
+	resp, err := idp.GetOIDCConfig(ctx, &pluginsv1.GetOIDCConfigRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("get OIDC config: %w", err)
+	}
+	if resp.Error != nil {
+		return nil, fmt.Errorf("%s", resp.Error.Message)
+	}
+	return resp.Config, nil
+}
+
+func (m *Manager) RefreshToken(ctx context.Context, refreshToken string) (*pluginsv1.TokenSet, error) {
+	idp, err := m.getActiveIDP(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("refresh token: %w", err)
+	}
+	if idp == nil {
+		return nil, fmt.Errorf("no active IDP plugin")
+	}
+	resp, err := idp.RefreshToken(ctx, &pluginsv1.RefreshTokenRequest{RefreshToken: refreshToken})
+	if err != nil {
+		return nil, fmt.Errorf("refresh token: %w", err)
+	}
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+	return resp.Token, nil
+}
+
+func (m *Manager) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	idp, err := m.getActiveIDP(ctx)
+	if err != nil {
+		return fmt.Errorf("change password: %w", err)
+	}
+	if idp == nil {
+		return fmt.Errorf("no active IDP plugin")
+	}
+	resp, err := idp.ChangePassword(ctx, &pluginsv1.ChangePasswordRequest{
+		UserID:          userID,
+		CurrentPassword: currentPassword,
+		NewPassword:     newPassword,
+	})
+	if err != nil {
+		return fmt.Errorf("change password: %w", err)
+	}
+	if resp.Error != nil {
+		return resp.Error
+	}
+	return nil
+}
+
+func (m *Manager) ListSessions(ctx context.Context, userID, currentSessionID string) ([]*pluginsv1.Session, error) {
+	idp, err := m.getActiveIDP(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list sessions: %w", err)
+	}
+	if idp == nil {
+		return nil, fmt.Errorf("no active IDP plugin")
+	}
+	resp, err := idp.ListSessions(ctx, &pluginsv1.ListSessionsRequest{
+		UserID:           userID,
+		CurrentSessionID: currentSessionID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list sessions: %w", err)
+	}
+	if resp.Error != nil {
+		return nil, resp.Error
+	}
+	return resp.Sessions, nil
+}
+
+func (m *Manager) RevokeAllSessions(ctx context.Context, userID, currentSessionID string) error {
+	sessions, err := m.ListSessions(ctx, userID, currentSessionID)
+	if err != nil {
+		return fmt.Errorf("revoke all sessions: list: %w", err)
+	}
+	var errs []string
+	for _, s := range sessions {
+		if s.Current {
+			continue
+		}
+		if err := m.RevokeSession(ctx, userID, s.ID); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", s.ID, err))
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("revoke all sessions: some failed: %s", strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+func (m *Manager) RevokeSession(ctx context.Context, userID, sessionID string) error {
+	idp, err := m.getActiveIDP(ctx)
+	if err != nil {
+		return fmt.Errorf("revoke session: %w", err)
+	}
+	if idp == nil {
+		return fmt.Errorf("no active IDP plugin")
+	}
+	resp, err := idp.RevokeSession(ctx, &pluginsv1.RevokeSessionRequest{
+		UserID:    userID,
+		SessionID: sessionID,
+	})
+	if err != nil {
+		return fmt.Errorf("revoke session: %w", err)
+	}
+	if resp.Error != nil {
+		return resp.Error
+	}
+	return nil
+}
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+func (m *Manager) ensureRunning(ctx context.Context, p *domain.Plugin) error {
+	// Fetch manifest once — used for companion deployment and default env injection.
+	var manifest *domain.CatalogManifest
+	if mf, err := m.registry.GetManifest(ctx, p.ID); err == nil && mf != nil {
+		manifest = mf
+	}
+
+	// Ensure companion containers (e.g. Keycloak server) are running first.
+	if manifest != nil {
+		secrets, _ := m.decryptSecrets(p.Secrets)
+		cfg := mergeConfig(p.Config, secrets)
+		if err := m.deployCompanions(ctx, manifest, cfg); err != nil {
+			m.logger.Warn("ensureRunning: companion deploy failed", "plugin", p.ID, "error", err)
+		}
+	}
+
+	containerID := "kleff-" + p.ID
+	st, err := m.rt.Status(ctx, containerID)
+	if err != nil {
+		return fmt.Errorf("status check: %w", err)
+	}
+
+	if st.State != runtime.StateRunning {
+		// Decode secrets for env injection.
+		secrets, _ := m.decryptSecrets(p.Secrets)
+		allConfig := mergeConfig(p.Config, secrets)
+
+		// Apply manifest defaults for any key not already in config.
+		// This ensures internal/bootstrap env vars reach the plugin container
+		// even when they were not stored at install time.
+		if manifest != nil {
+			for _, field := range manifest.Config {
+				if _, ok := allConfig[field.Key]; !ok && field.Default != "" {
+					allConfig[field.Key] = field.Default
+				}
+			}
+		}
+
+		spec := m.buildContainerSpec(p, manifest, allConfig)
+		if err := m.rt.Deploy(ctx, spec); err != nil {
+			return fmt.Errorf("deploy: %w", err)
+		}
+	}
+
+	if !m.pool.HasConnection(p.ID) {
+		if err := m.pool.Dial(ctx, p.ID, p.GRPCAddr); err != nil {
+			return fmt.Errorf("dial gRPC: %w", err)
+		}
+	}
+
+	m.setStatus(p.ID, domain.PluginStatusRunning)
+	m.discoverCapabilities(context.Background(), p.ID)
+	return nil
+}
+
+func (m *Manager) buildContainerSpec(p *domain.Plugin, manifest *domain.CatalogManifest, config map[string]string) runtime.ContainerSpec {
+	env := make(map[string]string, len(config)+2)
+	for k, v := range config {
+		if v != "" {
+			env[k] = v
+		}
+	}
+	env["PLUGIN_ID"] = p.ID
+	env["PLUGIN_PORT"] = fmt.Sprintf("%d", grpcPort)
+
+	labels := map[string]string{
+		"kleff.io/managed":             "true",
+		"kleff.io/plugin-id":           p.ID,
+		"kleff.io/type":                p.Type,
+		"com.docker.compose.project":   m.projectName,
+		"com.docker.compose.service":   p.ID,
+	}
+
+	var volumes []runtime.VolumeMount
+	if manifest != nil {
+		for _, v := range manifest.Volumes {
+			volumes = append(volumes, runtime.VolumeMount{Name: v.Name, Target: v.Target})
+		}
+	}
+
+	ports := []runtime.PortMapping{
+		{ContainerPort: grpcPort, Protocol: "tcp"},
+	}
+	if p.Type == "ui" {
+		ports = append(ports, runtime.PortMapping{ContainerPort: 3001, HostPort: 3001, Protocol: "tcp"})
+	}
+
+	return runtime.ContainerSpec{
+		ID:    "kleff-" + p.ID,
+		Image: p.Image,
+		Env:   env,
+		Ports: ports,
+		Labels:        labels,
+		Volumes:       volumes,
+		RestartPolicy: runtime.RestartAlways,
+	}
+}
+
+// healthLoop runs the 30-second health-check background goroutine.
+func (m *Manager) healthLoop(ctx context.Context) {
+	ticker := time.NewTicker(healthCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.runHealthChecks(ctx)
+		}
+	}
+}
+
+func (m *Manager) runHealthChecks(ctx context.Context) {
+	plugins, err := m.store.ListAll(ctx)
+	if err != nil {
+		m.logger.Error("health check: list plugins", "error", err)
+		return
+	}
+
+	for _, p := range plugins {
+		if !p.Enabled {
+			continue
+		}
+		m.checkPlugin(ctx, p)
+	}
+}
+
+func (m *Manager) checkPlugin(ctx context.Context, p *domain.Plugin) {
+	// Frontend-only plugins have no backend container — always healthy.
+	if p.GRPCAddr == "" {
+		m.setStatus(p.ID, domain.PluginStatusRunning)
+		return
+	}
+	
+	// Skip health check if the plugin is currently being removed or disabled
+	currentStatus := m.getStatus(p.ID)
+	if currentStatus == domain.PluginStatusRemoving || currentStatus == domain.PluginStatusDisabled {
+		return
+	}
+
+	containerID := "kleff-" + p.ID
+	st, err := m.rt.Status(ctx, containerID)
+	if err != nil || st.State != runtime.StateRunning {
+		attempts := m.getRestarts(p.ID)
+		if attempts >= maxRestartAttempts {
+			m.setStatus(p.ID, domain.PluginStatusError)
+			m.logger.Error("plugin health: max restart attempts reached", "id", p.ID)
+			return
+		}
+
+		m.logger.Warn("plugin health: container not running, attempting restart",
+			"id", p.ID, "attempts", attempts+1)
+
+		secrets, _ := m.decryptSecrets(p.Secrets)
+		allConfig := mergeConfig(p.Config, secrets)
+		// Apply manifest defaults for any key not already stored.
+		var checkManifest *domain.CatalogManifest
+		if mf, err := m.registry.GetManifest(ctx, p.ID); err == nil && mf != nil {
+			checkManifest = mf
+			for _, field := range mf.Config {
+				if _, ok := allConfig[field.Key]; !ok && field.Default != "" {
+					allConfig[field.Key] = field.Default
+				}
+			}
+		}
+		spec := m.buildContainerSpec(p, checkManifest, allConfig)
+
+		if restartErr := m.rt.Deploy(ctx, spec); restartErr != nil {
+			m.incrementRestarts(p.ID)
+			m.setStatus(p.ID, domain.PluginStatusError)
+			return
+		}
+		if dialErr := m.pool.Dial(ctx, p.ID, p.GRPCAddr); dialErr != nil {
+			m.incrementRestarts(p.ID)
+			m.setStatus(p.ID, domain.PluginStatusError)
+			return
+		}
+		m.resetRestarts(p.ID)
+		m.setStatus(p.ID, domain.PluginStatusRunning)
+		return
+	}
+
+	// Container is running — check gRPC health.
+	hc, err := m.pool.HealthClient(p.ID)
+	if err != nil {
+		if dialErr := m.pool.Dial(ctx, p.ID, p.GRPCAddr); dialErr != nil {
+			m.setStatus(p.ID, domain.PluginStatusError)
+			return
+		}
+		hc, err = m.pool.HealthClient(p.ID)
+		if err != nil {
+			m.setStatus(p.ID, domain.PluginStatusError)
+			return
+		}
+	}
+
+	hCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	resp, err := hc.Health(hCtx, &pluginsv1.HealthRequest{})
+	if err != nil {
+		m.setStatus(p.ID, domain.PluginStatusError)
+		return
+	}
+
+	switch resp.Status {
+	case pluginsv1.HealthStatusHealthy:
+		m.resetRestarts(p.ID)
+		m.setStatus(p.ID, domain.PluginStatusRunning)
+		
+		// If capabilities missed during install, retry collecting them.
+		m.mu.RLock()
+		missingCaps := len(m.capabilities[p.ID]) == 0
+		m.mu.RUnlock()
+		if missingCaps {
+			m.discoverCapabilities(ctx, p.ID)
+		}
+		
+	case pluginsv1.HealthStatusDegraded:
+		m.setStatus(p.ID, domain.PluginStatusRunning) // degraded but still serving
+	default:
+		m.setStatus(p.ID, domain.PluginStatusError)
+	}
+}
+
+// ── Capability extension points ───────────────────────────────────────────────
+
+// discoverCapabilities calls GetCapabilities on the plugin and caches the result.
+// Non-fatal: if the call fails the plugin is treated as having no capabilities.
+func (m *Manager) discoverCapabilities(ctx context.Context, id string) {
+	hc, err := m.pool.HealthClient(id)
+	if err != nil {
+		return
+	}
+	capCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	resp, err := hc.GetCapabilities(capCtx, &pluginsv1.GetCapabilitiesRequest{}, grpc.WaitForReady(true))
+	if err != nil {
+		m.logger.Debug("plugin capabilities: GetCapabilities failed (no capabilities assumed)",
+			"plugin", id, "error", err)
+		return
+	}
+
+	caps := make(map[string]bool, len(resp.Capabilities))
+	for _, c := range resp.Capabilities {
+		caps[c] = true
+	}
+
+	// Enforce tag-based permissions: strip any capability the plugin's manifest
+	// tags do not permit. Plugins with no layer tags are unrestricted (nil).
+	if manifest, err := m.registry.GetManifest(ctx, id); err == nil && manifest != nil {
+		if permitted := permittedCapabilities(manifest.Tags); permitted != nil {
+			for c := range caps {
+				if !permitted[c] {
+					m.logger.Warn("plugin capability denied by tag permissions",
+						"plugin", id, "capability", c)
+					delete(caps, c)
+				}
+			}
+		}
+	}
+
+	m.mu.Lock()
+	m.capabilities[id] = caps
+	m.mu.Unlock()
+
+	m.logger.Debug("plugin capabilities discovered", "plugin", id, "capabilities", resp.Capabilities)
+
+	// If the plugin owns HTTP routes, fetch and register them now.
+	if caps[pluginsv1.CapabilityAPIRoutes] {
+		m.discoverRoutes(ctx, id)
+	}
+}
+
+func (m *Manager) clearCapabilities(id string) {
+	m.mu.Lock()
+	delete(m.capabilities, id)
+	// Remove all routes registered by this plugin.
+	filtered := m.routes[:0]
+	for _, r := range m.routes {
+		if r.pluginID != id {
+			filtered = append(filtered, r)
+		}
+	}
+	m.routes = filtered
+	m.mu.Unlock()
+}
+
+// HasIdentityProvider reports whether an IDP plugin has been configured.
+// It returns true as soon as SetActiveIDP is called — before capability discovery
+// completes — so the frontend doesn't redirect back to setup while the plugin starts.
+func (m *Manager) HasIdentityProvider() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.activeIDP != "" {
+		return true
+	}
+	for id := range m.capabilities {
+		if m.capabilities[id][pluginsv1.CapabilityIdentityProvider] {
+			return true
+		}
+	}
+	return false
+}
+
+// IDPReady reports whether the active IDP plugin has completed capability discovery.
+// This is used to gate the frontend login page — returning false means the plugin
+// container is starting up and the caller should show a loading state.
+func (m *Manager) IDPReady() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.activeIDP == "" {
+		return false
+	}
+	caps, ok := m.capabilities[m.activeIDP]
+	return ok && caps[pluginsv1.CapabilityIdentityProvider]
+}
+
+// discoverRoutes calls GetRoutes on a plugin and registers them in the route table.
+func (m *Manager) discoverRoutes(ctx context.Context, id string) {
+	hc, err := m.pool.HTTPPluginClient(id)
+	if err != nil {
+		return
+	}
+	rCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	resp, err := hc.GetRoutes(rCtx, &pluginsv1.GetRoutesRequest{})
+	if err != nil || resp.Error != nil {
+		m.logger.Warn("plugin routes: GetRoutes failed", "plugin", id, "error", err)
+		return
+	}
+
+	m.mu.Lock()
+	// Remove any previously registered routes for this plugin.
+	filtered := m.routes[:0]
+	for _, r := range m.routes {
+		if r.pluginID != id {
+			filtered = append(filtered, r)
+		}
+	}
+	for _, r := range resp.Routes {
+		filtered = append(filtered, pluginRoute{
+			pluginID: id,
+			method:   r.Method,
+			path:     r.Path,
+			public:   r.Public,
+		})
+	}
+	m.routes = filtered
+	m.mu.Unlock()
+
+	m.logger.Info("plugin routes registered", "plugin", id, "count", len(resp.Routes))
+}
+
+// MatchPluginRoute returns the plugin ID and public flag for the first route
+// that matches the given method and path, or ok=false if none match.
+func (m *Manager) MatchPluginRoute(method, path string) (pluginID string, public bool, ok bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, r := range m.routes {
+		if !routeMethodMatches(r.method, method) {
+			continue
+		}
+		if routePathMatches(r.path, path) {
+			return r.pluginID, r.public, true
+		}
+	}
+	return "", false, false
+}
+
+// HandlePluginRoute forwards an HTTP request to the plugin's Handle gRPC method.
+func (m *Manager) HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HTTPRequest) (*pluginsv1.HTTPResponse, error) {
+	hc, err := m.pool.HTTPPluginClient(pluginID)
+	if err != nil {
+		return nil, fmt.Errorf("plugin route: no client for %q: %w", pluginID, err)
+	}
+	resp, err := hc.Handle(ctx, &pluginsv1.HandleHTTPRequest{Request: req})
+	if err != nil {
+		return nil, fmt.Errorf("plugin route: Handle gRPC: %w", err)
+	}
+	if resp.Error != nil {
+		return nil, fmt.Errorf("plugin route: %s", resp.Error.Message)
+	}
+	return resp.Response, nil
+}
+
+func routeMethodMatches(pattern, method string) bool {
+	return pattern == "*" || pattern == method
+}
+
+func routePathMatches(pattern, path string) bool {
+	if strings.HasSuffix(pattern, "*") {
+		return strings.HasPrefix(path, pattern[:len(pattern)-1])
+	}
+	return pattern == path
+}
+
+// RunMiddleware fans out OnRequest to all plugins that declared CapabilityAPIMiddleware.
+// RunMiddleware fans out OnRequest to all plugins that declared CapabilityAPIMiddleware.
+// The platform has already validated the token; userID and roles are the verified identity.
+// Returns a non-nil error if any plugin denies the request.
+func (m *Manager) RunMiddleware(ctx context.Context, userID string, roles []string, method, path string) error {
+	m.mu.RLock()
+	var middlewarePlugins []string
+	for id, caps := range m.capabilities {
+		if caps[pluginsv1.CapabilityAPIMiddleware] {
+			middlewarePlugins = append(middlewarePlugins, id)
+		}
+	}
+	m.mu.RUnlock()
+
+	if len(middlewarePlugins) == 0 {
+		return nil
+	}
+
+	req := &pluginsv1.MiddlewareRequest{
+		UserID: userID,
+		Roles:  roles,
+		Method: method,
+		Path:   path,
+	}
+
+	for _, id := range middlewarePlugins {
+		mc, err := m.pool.MiddlewareClient(id)
+		if err != nil {
+			m.logger.Warn("plugin middleware: no client", "plugin", id, "error", err)
+			continue
+		}
+		resp, err := mc.OnRequest(ctx, req)
+		if err != nil {
+			m.logger.Warn("plugin middleware: OnRequest error", "plugin", id, "error", err)
+			continue // treat gRPC errors as non-blocking
+		}
+		if !resp.Allow {
+			msg := "forbidden by plugin"
+			if resp.Error != nil && resp.Error.Message != "" {
+				msg = resp.Error.Message
+			}
+			return fmt.Errorf("%s", msg)
+		}
+	}
+	return nil
+}
+
+// GetUIManifests collects UIManifest from every plugin that declared CapabilityUIManifest.
+func (m *Manager) GetUIManifests(ctx context.Context) ([]*pluginsv1.UIManifest, error) {
+	m.mu.RLock()
+	var uiPlugins []string
+	for id, caps := range m.capabilities {
+		if caps[pluginsv1.CapabilityUIManifest] {
+			uiPlugins = append(uiPlugins, id)
+		}
+	}
+	m.mu.RUnlock()
+
+	var manifests []*pluginsv1.UIManifest
+	for _, id := range uiPlugins {
+		uc, err := m.pool.UIClient(id)
+		if err != nil {
+			continue
+		}
+		resp, err := uc.GetUIManifest(ctx, &pluginsv1.GetUIManifestRequest{})
+		if err != nil || resp.Error != nil {
+			m.logger.Warn("plugin UI: GetUIManifest error", "plugin", id, "error", err)
+			continue
+		}
+		if resp.Manifest != nil {
+			resp.Manifest.PluginID = id
+			manifests = append(manifests, resp.Manifest)
+		}
+	}
+	return manifests, nil
+}
+
+// ── Companion container management ───────────────────────────────────────────
+
+// deployCompanions starts companion containers declared in the plugin manifest.
+// Only deploys a companion if it is not already running (idempotent).
+// pluginConfig is the merged plain+secret config for the plugin; companions
+// with SkipIfEnv set are skipped when the user supplied that config key.
+func (m *Manager) deployCompanions(ctx context.Context, manifest *domain.CatalogManifest, pluginConfig map[string]string) error {
+	for _, c := range manifest.Companions {
+		if c.SkipIfEnv != "" && pluginConfig[c.SkipIfEnv] != "" {
+			m.logger.Info("companion skipped: user provided external service",
+				"companion", c.ID, "plugin", manifest.ID, "key", c.SkipIfEnv)
+			continue
+		}
+
+		st, _ := m.rt.Status(ctx, c.ID)
+		if st.State == runtime.StateRunning {
+			continue
+		}
+
+		volumes := make([]runtime.VolumeMount, 0, len(c.Volumes))
+		for _, v := range c.Volumes {
+			volumes = append(volumes, runtime.VolumeMount{Name: v.Name, Target: v.Target})
+		}
+
+		ports := make([]runtime.PortMapping, 0, len(c.Ports))
+		for _, p := range c.Ports {
+			proto := p.Protocol
+			if proto == "" {
+				proto = "tcp"
+			}
+			ports = append(ports, runtime.PortMapping{
+				ContainerPort: p.ContainerPort,
+				HostPort:      p.HostPort,
+				Protocol:      proto,
+			})
+		}
+
+		// Merge global companion env (lower priority) with manifest env (higher priority).
+		env := make(map[string]string, len(m.companionEnv)+len(c.Env)+len(pluginConfig))
+		for k, v := range m.companionEnv {
+			env[k] = v
+		}
+		for k, v := range c.Env {
+			env[k] = v
+		}
+		// Merge dynamic user configurations (highest priority).
+		for k, v := range pluginConfig {
+			env[k] = v
+		}
+
+		spec := runtime.ContainerSpec{
+			ID:      c.ID,
+			Image:   c.Image,
+			Command: c.Command,
+			Env:     env,
+			Ports:   ports,
+			Volumes: volumes,
+			User:    c.User,
+			Labels: map[string]string{
+				"kleff.io/managed":             "true",
+				"kleff.io/plugin-id":           manifest.ID,
+				"kleff.io/companion":           "true",
+				"com.docker.compose.project":   m.projectName,
+				"com.docker.compose.service":   c.ID,
+			},
+			RestartPolicy: runtime.RestartAlways,
+		}
+		// Block until the declared TCP dependency is reachable.
+		if c.WaitForTCP != "" {
+			if err := m.waitForTCP(ctx, c.WaitForTCP); err != nil {
+				return fmt.Errorf("companion %q: wait for TCP %q: %w", c.ID, c.WaitForTCP, err)
+			}
+		}
+
+		if err := m.rt.Deploy(ctx, spec); err != nil {
+			return fmt.Errorf("companion %q: %w", c.ID, err)
+		}
+		m.logger.Info("companion deployed", "companion", c.ID, "plugin", manifest.ID)
+	}
+	return nil
+}
+
+// waitForTCP polls addr ("host:port") until it accepts a TCP connection or the
+// context is cancelled. It retries every second for up to 2 minutes.
+// Progress is logged every 5 attempts to avoid flooding the log.
+func (m *Manager) waitForTCP(ctx context.Context, addr string) error {
+	const (
+		dialTimeout = time.Second
+		retryDelay  = time.Second
+		maxWait     = 2 * time.Minute
+		logEvery    = 5 // log every N attempts
+	)
+	deadline := time.Now().Add(maxWait)
+	for attempt := 1; ; attempt++ {
+		conn, err := net.DialTimeout("tcp", addr, dialTimeout)
+		if err == nil {
+			conn.Close()
+			m.logger.Info("TCP dependency ready", "addr", addr, "attempts", attempt)
+			return nil
+		}
+		if attempt%logEvery == 0 {
+			m.logger.Info("waiting for TCP dependency", "addr", addr, "attempts", attempt)
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out after %s waiting for %s to accept connections", maxWait, addr)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retryDelay):
+		}
+	}
+}
+
+// removeCompanions stops and removes companion containers declared in the manifest.
+func (m *Manager) removeCompanions(ctx context.Context, manifest *domain.CatalogManifest) {
+	for _, c := range manifest.Companions {
+		if err := m.rt.Remove(ctx, c.ID); err != nil {
+			m.logger.Warn("companion remove failed", "companion", c.ID, "plugin", manifest.ID, "error", err)
+		} else {
+			m.logger.Info("companion removed", "companion", c.ID, "plugin", manifest.ID)
+		}
+	}
+}
+
+// ── Secret encryption (AES-256-GCM) ──────────────────────────────────────────
+
+func (m *Manager) encryptSecrets(secrets map[string]string) ([]byte, error) {
+	if len(secrets) == 0 {
+		return []byte("{}"), nil
+	}
+	plain, err := json.Marshal(secrets)
+	if err != nil {
+		return nil, err
+	}
+	if len(m.secretKey) == 0 {
+		return plain, nil // no encryption in development mode
+	}
+
+	block, err := aes.NewCipher(m.secretKey)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+	ciphertext := gcm.Seal(nonce, nonce, plain, nil)
+
+	// Store as JSON so it round-trips cleanly.
+	return json.Marshal(map[string][]byte{"v1": ciphertext})
+}
+
+func (m *Manager) decryptSecrets(data []byte) (map[string]string, error) {
+	if len(data) == 0 || string(data) == "{}" {
+		return map[string]string{}, nil
+	}
+	if len(m.secretKey) == 0 {
+		// Development mode: data is plaintext JSON.
+		var out map[string]string
+		return out, json.Unmarshal(data, &out)
+	}
+
+	var wrapped map[string][]byte
+	if err := json.Unmarshal(data, &wrapped); err != nil {
+		return map[string]string{}, nil
+	}
+	ciphertext, ok := wrapped["v1"]
+	if !ok {
+		return map[string]string{}, nil
+	}
+
+	block, err := aes.NewCipher(m.secretKey)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	if len(ciphertext) < gcm.NonceSize() {
+		return nil, fmt.Errorf("ciphertext too short")
+	}
+	nonce, ciphertext := ciphertext[:gcm.NonceSize()], ciphertext[gcm.NonceSize():]
+	plain, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var out map[string]string
+	return out, json.Unmarshal(plain, &out)
+}
+
+// ── Thread-safe status helpers ────────────────────────────────────────────────
+
+func (m *Manager) setStatus(id string, s domain.PluginStatus) {
+	m.mu.Lock()
+	m.statuses[id] = s
+	m.mu.Unlock()
+}
+
+func (m *Manager) getStatus(id string) domain.PluginStatus {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if s, ok := m.statuses[id]; ok {
+		return s
+	}
+	return domain.PluginStatusUnknown
+}
+
+func (m *Manager) getRestarts(id string) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.restarts[id]
+}
+
+func (m *Manager) incrementRestarts(id string) {
+	m.mu.Lock()
+	m.restarts[id]++
+	m.mu.Unlock()
+}
+
+func (m *Manager) resetRestarts(id string) {
+	m.mu.Lock()
+	m.restarts[id] = 0
+	m.mu.Unlock()
+}
+
+// checkNoDependents returns an error if any other plugin declares pluginID as a
+// dependency. When enabledOnly is true, only enabled plugins are considered
+// (used by Disable); when false, all installed plugins are considered (used by Remove).
+func (m *Manager) checkNoDependents(ctx context.Context, pluginID string, enabledOnly bool) error {
+	all, err := m.store.ListAll(ctx)
+	if err != nil {
+		return fmt.Errorf("check dependents: %w", err)
+	}
+	var dependents []string
+	for _, p := range all {
+		if p.ID == pluginID {
+			continue
+		}
+		if enabledOnly && !p.Enabled {
+			continue
+		}
+		for _, dep := range p.Dependencies {
+			if dep == pluginID {
+				dependents = append(dependents, p.ID)
+				break
+			}
+		}
+	}
+	if len(dependents) > 0 {
+		return fmt.Errorf("plugin %q is required by: %s", pluginID, strings.Join(dependents, ", "))
+	}
+	return nil
+}
+
+// ── Config helpers ────────────────────────────────────────────────────────────
+
+// mergeConfig merges a persisted JSON config blob and a secrets map into a
+// single string map for container env injection.
+func mergeConfig(configJSON []byte, secrets map[string]string) map[string]string {
+	out := make(map[string]string, len(secrets))
+	for k, v := range secrets {
+		out[k] = v
+	}
+	var plain map[string]string
+	if err := json.Unmarshal(configJSON, &plain); err == nil {
+		for k, v := range plain {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// DeriveSecretKey derives a 32-byte AES-256 key from the SECRET_KEY env var
+// using SHA-256. Call this during bootstrap.
+func DeriveSecretKey(raw string) []byte {
+	if raw == "" {
+		return nil
+	}
+	h := sha256.Sum256([]byte(raw))
+	return h[:]
+}

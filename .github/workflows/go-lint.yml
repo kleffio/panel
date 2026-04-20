@@ -1,0 +1,37 @@
+---
+name: Go Lint
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "api/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  go-lint:
+    name: Go Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: api/go.mod
+          cache: false
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        env:
+          GOWORK: off
+      - name: Run golangci-lint
+        run: golangci-lint run
+        env:
+          GOWORK: off
