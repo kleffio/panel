@@ -376,7 +376,7 @@ export function Sidebar() {
             />
 
             <NavItem
-              href={`${projectBase}/settings`}
+              href={`${projectBase}/team`}
               label="Team"
               icon={Users}
               pathname={pathname}
