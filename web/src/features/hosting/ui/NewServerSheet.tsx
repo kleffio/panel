@@ -1,9 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ChevronLeft, Server, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Boxes,
+  ChevronLeft,
+  ChevronRight,
+  Container,
+  Database,
+  Gamepad2,
+  Github,
+  Search,
+  Server,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import {
   Button,
+  Card,
+  CardContent,
   Input,
   Label,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -15,7 +29,49 @@ import { isApiError } from "@/lib/api/error";
 import type { Crate, Blueprint, ConfigField } from "@/lib/api/catalog";
 import { AnimatePresence, motion } from "framer-motion";
 
-type Step = "crate" | "blueprint" | "config";
+type Step = "catalog" | "blueprint" | "config";
+type CatalogCategory = "games" | "databases" | "docker-images" | "github-repos";
+
+type ResourceCategory = {
+  id: CatalogCategory;
+  label: string;
+  description: string;
+  aliases: string[];
+  icon: LucideIcon;
+};
+
+const RESOURCE_CATEGORIES: ResourceCategory[] = [
+  {
+    id: "games",
+    label: "Games",
+    description: "Dedicated game server templates",
+    aliases: ["game", "games", "minecraft", "paper", "purpur", "spigot", "bukkit", "fabric", "forge", "neoforge", "bedrock"],
+    icon: Gamepad2,
+  },
+  {
+    id: "databases",
+    label: "Databases",
+    description: "SQL and NoSQL data stores",
+    aliases: ["database", "databases", "db", "sql", "postgres", "mysql", "mongo", "redis"],
+    icon: Database,
+  },
+  {
+    id: "docker-images",
+    label: "Docker Images",
+    description: "Run custom container images",
+    aliases: ["docker", "image", "images", "container", "oci"],
+    icon: Container,
+  },
+  {
+    id: "github-repos",
+    label: "GitHub Repositories",
+    description: "Deploy from GitHub source repos",
+    aliases: ["repository", "repositories", "repo", "git", "github", "source", "scm"],
+    icon: Github,
+  },
+];
+
+const DEFAULT_CATEGORY: CatalogCategory = "games";
 
 interface MojangVersion {
   id: string;
@@ -88,10 +144,10 @@ function extractErrorMessage(err: unknown): string {
     const payload = err.data as { error?: string } | null;
     if (payload?.error) return payload.error;
     if (err.message) return err.message;
-    return "Failed to create server";
+    return "Failed to create node";
   }
   if (err instanceof Error && err.message) return err.message;
-  return "Failed to create server";
+  return "Failed to create node";
 }
 
 async function fetchMojangVersions(): Promise<MojangVersion[]> {
@@ -103,6 +159,151 @@ async function fetchMojangVersions(): Promise<MojangVersion[]> {
 function resolveLatestReleaseVersion(versions: MojangVersion[]): string | null {
   if (versions.length === 0) return null;
   return versions.find((v) => v.type === "release")?.id ?? versions[0]?.id ?? null;
+}
+
+function normalizeToken(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function collectCrateTokens(crate: Crate): string[] {
+  const rawTokens: unknown[] = [
+    crate.category,
+    crate.name,
+    crate.id,
+    crate.description,
+    ...(Array.isArray(crate.tags) ? crate.tags : []),
+  ];
+
+  return rawTokens.map(normalizeToken).filter(Boolean);
+}
+
+function crateMatchesCategory(crate: Crate, category: CatalogCategory): boolean {
+  const categoryDef = RESOURCE_CATEGORIES.find((item) => item.id === category);
+  if (!categoryDef) return false;
+
+  const aliases = categoryDef.aliases.map(normalizeToken).filter(Boolean);
+  const crateTokens = collectCrateTokens(crate);
+
+  return aliases.some((alias) => crateTokens.some((token) => token.includes(alias)));
+}
+
+function resolveCategoryIcon(crate: Crate): LucideIcon {
+  for (const category of RESOURCE_CATEGORIES) {
+    if (crateMatchesCategory(crate, category.id)) {
+      return category.icon;
+    }
+  }
+  return Boxes;
+}
+
+function isMinecraftCrate(crate: Crate | null): boolean {
+  if (!crate) return false;
+
+  const minecraftAliases = [
+    "minecraft",
+    "paper",
+    "purpur",
+    "spigot",
+    "bukkit",
+    "fabric",
+    "forge",
+    "neoforge",
+    "bedrock",
+  ].map(normalizeToken);
+
+  const crateTokens = collectCrateTokens(crate);
+  return minecraftAliases.some((alias) => crateTokens.some((token) => token.includes(alias)));
+}
+
+function humanizeID(id: string): string {
+  return id
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function inferCategoryFromCrateID(crateID: string): CatalogCategory {
+  const normalized = normalizeToken(crateID);
+
+  for (const category of RESOURCE_CATEGORIES) {
+    if (category.aliases.some((alias) => normalized.includes(normalizeToken(alias)))) {
+      return category.id;
+    }
+  }
+
+  return DEFAULT_CATEGORY;
+}
+
+function buildSyntheticCratesFromBlueprints(blueprints: Blueprint[]): Crate[] {
+  const grouped = new Map<string, Blueprint[]>();
+
+  for (const blueprint of blueprints) {
+    if (!blueprint.crate_id) continue;
+    const existing = grouped.get(blueprint.crate_id) ?? [];
+    existing.push(blueprint);
+    grouped.set(blueprint.crate_id, existing);
+  }
+
+  const now = new Date().toISOString();
+
+  return Array.from(grouped.entries())
+    .map(([crateID, crateBlueprints]) => {
+      const first = crateBlueprints[0];
+      const templateCount = crateBlueprints.length;
+
+      return {
+        id: crateID,
+        name: humanizeID(crateID),
+        category: inferCategoryFromCrateID(crateID),
+        description:
+          first?.description?.trim() ||
+          `${templateCount} template${templateCount === 1 ? "" : "s"} available`,
+        logo: first?.logo || "",
+        tags: [crateID],
+        official: true,
+        created_at: now,
+        updated_at: now,
+      } satisfies Crate;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function mergeCrates(primary: Crate[], fallback: Crate[]): Crate[] {
+  if (primary.length === 0) return fallback;
+  if (fallback.length === 0) return primary;
+
+  const byID = new Map<string, Crate>();
+
+  for (const crate of fallback) {
+    byID.set(crate.id, crate);
+  }
+
+  for (const crate of primary) {
+    byID.set(crate.id, crate);
+  }
+
+  return Array.from(byID.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function loadFallbackCratesFromBlueprints(): Promise<Crate[]> {
+  try {
+    const blueprintRes = await listBlueprints("");
+    const synthetic = buildSyntheticCratesFromBlueprints(blueprintRes.blueprints ?? []);
+    if (synthetic.length > 0) {
+      return synthetic;
+    }
+  } catch {
+    // Fall through to minecraft-specific fallback.
+  }
+
+  try {
+    const minecraftBlueprintRes = await listBlueprints("minecraft");
+    return buildSyntheticCratesFromBlueprints(minecraftBlueprintRes.blueprints ?? []);
+  } catch {
+    return [];
+  }
 }
 
 // Dark styled input for the modal
@@ -129,14 +330,14 @@ function DarkInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       required={required}
-      className="h-12 w-full rounded-full border-input bg-background/85 px-4 text-sm text-foreground placeholder:text-muted-foreground/70 focus-visible:ring-primary/20"
+      className="h-12 w-full rounded-[0.3rem] border border-white/12 bg-black/25 px-4 text-sm text-[var(--test-foreground)] placeholder:text-[var(--test-muted)] focus-visible:ring-[#f5b517]/25 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
     />
   );
 }
 
 function DarkLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
   return (
-    <Label htmlFor={htmlFor} className="mb-2 block text-sm text-foreground/90">
+    <Label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium text-[var(--test-foreground)]">
       {children}
     </Label>
   );
@@ -177,7 +378,7 @@ function ConfigFieldInput({
           </Button>
         </div>
         <Select value={value} onValueChange={onChange}>
-          <SelectTrigger id={field.key} className="h-12 rounded-full border-input bg-background/85 px-4 text-foreground">
+          <SelectTrigger id={field.key} className="h-12 rounded-[0.3rem] border border-white/12 bg-black/25 px-4 text-[var(--test-foreground)]">
             <SelectValue placeholder="Select version…" />
           </SelectTrigger>
           <SelectContent className="max-h-64">
@@ -205,7 +406,7 @@ function ConfigFieldInput({
       )}
       {field.type === "select" && field.options ? (
         <Select value={value} onValueChange={onChange}>
-          <SelectTrigger id={field.key} className="h-12 rounded-full border-input bg-background/85 px-4 text-foreground">
+          <SelectTrigger id={field.key} className="h-12 rounded-[0.3rem] border border-white/12 bg-black/25 px-4 text-[var(--test-foreground)]">
             <SelectValue placeholder="Select…" />
           </SelectTrigger>
           <SelectContent>
@@ -228,7 +429,9 @@ function ConfigFieldInput({
 }
 
 export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activeServerNames = [] }: NewServerSheetProps) {
-  const [step, setStep] = useState<Step>("crate");
+  const [step, setStep] = useState<Step>("catalog");
+  const [createQuery, setCreateQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<CatalogCategory | null>(null);
   const [crates, setCrates] = useState<Crate[]>([]);
   const [loadingCrates, setLoadingCrates] = useState(false);
   const [selectedCrate, setSelectedCrate] = useState<Crate | null>(null);
@@ -245,15 +448,77 @@ export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activ
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const normalizedServerName = serverName.trim().toLowerCase();
+  const normalizedQuery = createQuery.trim().toLowerCase();
   const nameConflict = normalizedServerName !== "" && activeServerNames.some((name) => name.trim().toLowerCase() === normalizedServerName);
   const nameInvalid = serverName.trim() !== "" && !/^[a-zA-Z0-9][a-zA-Z0-9_.\-]*$/.test(serverName.trim());
   const requiredFieldsFilled = selectedBlueprint
     ? selectedBlueprint.config.filter((f) => f.required).every((f) => (configValues[f.key] ?? "").trim() !== "")
     : true;
 
+  const categorySearchResults = useMemo(() => {
+    if (!normalizedQuery) return RESOURCE_CATEGORIES;
+
+    return RESOURCE_CATEGORIES.filter((category) => {
+      const haystack = `${category.label} ${category.description} ${category.aliases.join(" ")}`.toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [normalizedQuery]);
+
+  const categoryCounts = useMemo(() => {
+    return RESOURCE_CATEGORIES.reduce((acc, category) => {
+      let categoryCrates = crates.filter((crate) => crateMatchesCategory(crate, category.id));
+
+      if (category.id === "games") {
+        categoryCrates = categoryCrates.filter((crate) => isMinecraftCrate(crate));
+      }
+
+      acc[category.id] = categoryCrates.length;
+      return acc;
+    }, {} as Record<CatalogCategory, number>);
+  }, [crates]);
+
+  const filteredCrates = useMemo(() => {
+    if (!selectedCategory) return [];
+
+    let categoryCrates = crates.filter((crate) => crateMatchesCategory(crate, selectedCategory));
+
+    // Current game offering is intentionally limited to Minecraft variants.
+    if (selectedCategory === "games") {
+      categoryCrates = categoryCrates.filter((crate) => isMinecraftCrate(crate));
+    }
+
+    return categoryCrates;
+  }, [crates, selectedCategory]);
+
+  const queryFilteredCrates = useMemo(() => {
+    if (!selectedCategory) return [];
+    if (!normalizedQuery) return filteredCrates;
+
+    return filteredCrates.filter((crate) => {
+      const haystack = [
+        crate.name,
+        crate.description,
+        crate.id,
+        crate.category,
+        ...(Array.isArray(crate.tags) ? crate.tags : []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [selectedCategory, filteredCrates, normalizedQuery]);
+
+  const selectedCategoryMeta = useMemo(
+    () => RESOURCE_CATEGORIES.find((category) => category.id === selectedCategory) ?? null,
+    [selectedCategory],
+  );
+
   useEffect(() => {
     if (!open) {
-      setStep("crate");
+      setStep("catalog");
+      setCreateQuery("");
+      setSelectedCategory(null);
       setSelectedCrate(null);
       setSelectedBlueprint(null);
       setBlueprints([]);
@@ -269,12 +534,58 @@ export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activ
 
   useEffect(() => {
     if (!open) return;
-    setLoadingCrates(true);
-    listCrates()
-      .then((res) => setCrates(res.crates ?? []))
-      .catch(() => toast.error("Failed to load games"))
-      .finally(() => setLoadingCrates(false));
+
+    let cancelled = false;
+
+    const loadCatalog = async () => {
+      setLoadingCrates(true);
+
+      try {
+        const [crateResult, fallbackCrates] = await Promise.all([
+          listCrates().catch(() => null),
+          loadFallbackCratesFromBlueprints(),
+        ]);
+
+        const apiCrates = crateResult?.crates ?? [];
+        const nextCrates = mergeCrates(apiCrates, fallbackCrates);
+
+        if (!cancelled) {
+          setCrates(nextCrates);
+          if (nextCrates.length === 0) {
+            toast.error("Failed to load catalog");
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          toast.error("Failed to load catalog");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingCrates(false);
+        }
+      }
+    };
+
+    void loadCatalog();
+
+    return () => {
+      cancelled = true;
+    };
   }, [open]);
+
+  function selectCategory(category: CatalogCategory) {
+    setSelectedCategory(category);
+    setCreateQuery("");
+    setSelectedCrate(null);
+    setSelectedBlueprint(null);
+    setBlueprints([]);
+    setConfigValues({});
+  }
+
+  function exitCategorySelection() {
+    setSelectedCategory(null);
+    setCreateQuery("");
+  }
 
   function selectCrate(crate: Crate) {
     setSelectedCrate(crate);
@@ -283,7 +594,7 @@ export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activ
     setStep("blueprint");
     listBlueprints(crate.id)
       .then((res) => setBlueprints(res.blueprints ?? []))
-      .catch(() => toast.error("Failed to load server types"))
+      .catch(() => toast.error("Failed to load templates"))
       .finally(() => setLoadingBlueprints(false));
   }
 
@@ -297,7 +608,7 @@ export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activ
     setMemoryMB(nearestMemoryOption(bp.resources.memory_mb));
     setCpuMillicores(nearestCPUOption(bp.resources.cpu_millicores));
     setStep("config");
-    if (selectedCrate?.id === "minecraft" && bp.config.some((field) => field.key === "VERSION")) {
+    if (isMinecraftCrate(selectedCrate) && bp.config.some((field) => field.key === "VERSION")) {
       fetchMojangVersions()
         .then((versions) => {
           setMojangVersions(versions);
@@ -328,7 +639,7 @@ export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activ
         config: configValues,
         resources: { memory_mb: memoryMB, cpu_millicores: cpuMillicores },
       });
-      toast.success("Server is being provisioned");
+      toast.success("Node is being provisioned");
       onOpenChange(false);
       onCreated?.(result.deployment_id);
     } catch (err) {
@@ -342,20 +653,21 @@ export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activ
 
   function goBack() {
     if (step === "config") setStep("blueprint");
-    else if (step === "blueprint") setStep("crate");
+    else if (step === "blueprint") setStep("catalog");
+    else if (step === "catalog" && selectedCategory) exitCategorySelection();
   }
 
   if (!open) return null;
 
   return (
     <AnimatePresence>
-      {open && (
+      {open ? (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6 backdrop-blur-xl"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/42 p-4 sm:p-6"
           onClick={() => onOpenChange(false)}
         >
           <motion.div
@@ -363,11 +675,11 @@ export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activ
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
             transition={{ duration: 0.18 }}
-            className="glass-panel relative flex w-full max-w-[500px] flex-col overflow-hidden rounded-[1.85rem] border border-[var(--test-border)] text-[var(--test-foreground)] shadow-[0_30px_80px_rgba(0,0,0,0.58)]"
-            style={{ maxHeight: "min(640px, 90vh)" }}
+            className="glass-panel relative flex w-full max-w-[560px] flex-col overflow-hidden rounded-[0.75rem] border border-[#f5b517]/22 bg-[#090909] text-[var(--test-foreground)] shadow-[0_30px_80px_rgba(0,0,0,0.58)]"
+            style={{ maxHeight: "min(700px, 92vh)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(245,181,23,0.1),transparent_56%),linear-gradient(180deg,rgba(6,6,7,0.92),rgba(8,8,9,0.97))]" />
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_80%_at_50%_0%,rgba(245,181,23,0.13),transparent_56%),linear-gradient(180deg,rgba(6,6,7,0.92),rgba(8,8,9,0.98))]" />
 
             {/* Close */}
             <Button
@@ -380,203 +692,306 @@ export function NewServerSheet({ open, onOpenChange, projectID, onCreated, activ
               <X className="h-4 w-4" />
             </Button>
 
-            {/* Back + title */}
-            <div className="relative z-10 flex items-center gap-2 border-b border-[var(--test-border)] px-5 py-4 pr-12">
-              {step !== "crate" && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={goBack}
-                  className="mr-1 text-muted-foreground hover:bg-white/10 hover:text-[var(--test-foreground)]"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-              )}
-              <div>
-                <p className="text-base font-semibold text-[var(--test-foreground)]">
-                  {step === "crate" ? "Add a server" : step === "blueprint" ? `${selectedCrate?.name ?? "Server"} types` : `Configure server`}
-                </p>
-                <p className="text-[11px] text-[var(--test-muted)]">
-                  {step === "crate" ? "Select a game to host" : step === "blueprint" ? "Pick a server variant" : `Setting up ${selectedBlueprint?.name}`}
-                </p>
-              </div>
-            </div>
-
-            {/* Step 1: Crate list */}
-            {step === "crate" && (
-              <div className="kleff-scrollbar relative z-10 flex-1 overflow-y-auto pr-1.5">
-                {loadingCrates ? (
-                  <div className="px-5 py-8 text-center text-sm text-muted-foreground">Loading games...</div>
-                ) : crates.length === 0 ? (
-                  <div className="px-5 py-8 text-center text-sm text-muted-foreground">No games available.</div>
-                ) : (
-                  crates.map((crate) => (
-                    <button
-                      key={crate.id}
+            <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+              <div className="border-b border-[#f5b517]/18 px-5 py-4 pr-12 sm:px-6">
+                <div className="flex items-start gap-2">
+                  {step !== "catalog" || selectedCategory ? (
+                    <Button
                       type="button"
-                      onClick={() => selectCrate(crate)}
-                      className="group flex w-full items-center gap-3 border-b border-[var(--test-border)] px-5 py-3.5 text-left last:border-0 transition-colors hover:bg-white/[0.035]"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={goBack}
+                      className="mt-0.5 mr-1 rounded-[0.25rem] text-muted-foreground hover:bg-white/10 hover:text-[var(--test-foreground)]"
                     >
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-black/20 transition-colors group-hover:border-[#f5b517]/35 group-hover:bg-[#f5b517]/10">
-                        {crate.logo ? (
-                          <img src={crate.logo} alt={crate.name} className="h-5 w-5 object-contain" />
-                        ) : (
-                          <Server className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-[#f5b517]" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-[var(--test-foreground)]">{crate.name}</p>
-                        {crate.description && (
-                          <p className="mt-0.5 truncate text-[11px] text-[var(--test-muted)]">{crate.description}</p>
-                        )}
-                      </div>
-                      <ChevronLeft className="h-4 w-4 shrink-0 rotate-180 text-muted-foreground/80" />
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                  ) : null}
 
-            {/* Step 2: Blueprint list */}
-            {step === "blueprint" && (
-              <div className="kleff-scrollbar relative z-10 flex-1 overflow-y-auto pr-1.5">
-                {loadingBlueprints ? (
-                  <div className="px-5 py-8 text-center text-sm text-muted-foreground">Loading server types...</div>
-                ) : blueprints.length === 0 ? (
-                  <div className="px-5 py-8 text-center text-sm text-muted-foreground">No server types available.</div>
-                ) : (
-                  blueprints.map((bp) => (
-                    <button
-                      key={bp.id}
-                      type="button"
-                      onClick={() => selectBlueprint(bp)}
-                      className="group flex w-full items-center gap-3 border-b border-[var(--test-border)] px-5 py-3.5 text-left last:border-0 transition-colors hover:bg-white/[0.035]"
-                    >
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-black/20 transition-colors group-hover:border-[#f5b517]/35 group-hover:bg-[#f5b517]/10">
-                        <Server className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-[#f5b517]" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-[var(--test-foreground)]">{bp.name}</p>
-                        {bp.description && (
-                          <p className="mt-0.5 truncate text-[11px] text-[var(--test-muted)]">{bp.description}</p>
-                        )}
-                      </div>
-                      <ChevronLeft className="h-4 w-4 shrink-0 rotate-180 text-muted-foreground/80" />
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* Step 3: Config form */}
-            {step === "config" && selectedBlueprint && (
-              <form onSubmit={handleSubmit} className="relative z-10 flex flex-col flex-1 min-h-0">
-                <div className="kleff-scrollbar flex-1 overflow-y-auto px-5 py-5 pr-3">
-                  <div className="space-y-5">
-                    {/* Server name */}
-                    <div>
-                    <DarkLabel htmlFor="server-name">Server name <span className="text-red-400">*</span></DarkLabel>
-                    <DarkInput
-                      id="server-name"
-                      value={serverName}
-                      onChange={setServerName}
-                      placeholder="my-server"
-                      required
-                    />
-                    </div>
-
-                    {/* Construct selector (runtime/image picker) */}
-                    {selectedBlueprint.constructs && Object.keys(selectedBlueprint.constructs).length > 1 && (
-                      <div>
-                        <DarkLabel htmlFor="construct-select">Runtime</DarkLabel>
-                        <Select
-                          value={configValues["IMAGE"] ?? ""}
-                          onValueChange={(v) => setField("IMAGE", v)}
-                        >
-                          <SelectTrigger id="construct-select" className="h-12 rounded-full border-input bg-background/85 px-4 text-foreground">
-                            <SelectValue placeholder="Select runtime…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.keys(selectedBlueprint.constructs).map((label) => (
-                              <SelectItem key={label} value={label}>{label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-
-                    {/* Blueprint config fields */}
-                    <div className="space-y-4">
-                      {selectedBlueprint.config.map((field) => (
-                        <ConfigFieldInput
-                          key={field.key}
-                          field={field}
-                          value={configValues[field.key] ?? ""}
-                          onChange={(v) => setField(field.key, v)}
-                          mojangVersions={field.key === "VERSION" && selectedCrate?.id === "minecraft" ? mojangVersions : undefined}
-                          showSnapshots={showSnapshots}
-                          onToggleSnapshots={() => setShowSnapshots((v) => !v)}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Resources */}
-                    <div className="space-y-4 border-t border-border/70 pt-4">
-                      <p className="text-xs font-medium text-muted-foreground">Resources</p>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <DarkLabel htmlFor="memory">Memory</DarkLabel>
-                          <Select value={String(memoryMB)} onValueChange={(v) => setMemoryMB(Number(v))}>
-                            <SelectTrigger id="memory" className="h-12 rounded-full border-input bg-background/85 px-4 text-foreground">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {MEMORY_OPTIONS.map((o) => (
-                                <SelectItem key={o.mb} value={String(o.mb)}>{o.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <DarkLabel htmlFor="cpu">CPU</DarkLabel>
-                          <Select value={String(cpuMillicores)} onValueChange={(v) => setCpuMillicores(Number(v))}>
-                            <SelectTrigger id="cpu" className="h-12 rounded-full border-input bg-background/85 px-4 text-foreground">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {CPU_OPTIONS.map((o) => (
-                                <SelectItem key={o.millicores} value={String(o.millicores)}>{o.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Errors */}
-                    {nameInvalid && <p className="text-xs text-red-400">Name can only contain letters, numbers, underscores, dots, and hyphens.</p>}
-                    {nameConflict && <p className="text-xs text-red-400">A server with that name already exists.</p>}
-                    {submitError && <p className="text-xs text-red-400">{submitError}</p>}
-                    {!projectID && <p className="text-xs text-red-400">Select a project before launching a server.</p>}
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold leading-tight text-[var(--test-foreground)]">
+                      {step === "catalog"
+                        ? selectedCategoryMeta?.label ?? "Add a node"
+                        : step === "blueprint"
+                            ? `${selectedCrate?.name ?? "Resource"} templates`
+                            : "Configure node"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-[var(--test-muted)]">
+                      {step === "catalog"
+                        ? selectedCategoryMeta
+                            ? `Choose a ${selectedCategoryMeta.label.toLowerCase()} resource`
+                            : "What would you like to create?"
+                        : step === "blueprint"
+                            ? "Select deployment template"
+                            : `Setting up ${selectedBlueprint?.name}`}
+                    </p>
                   </div>
                 </div>
+              </div>
 
-                {/* Footer */}
-                <div className="border-t border-[var(--test-border)] px-5 py-4">
-                  <Button
-                    type="submit"
-                    disabled={submitting || !projectID || !serverName.trim() || nameConflict || nameInvalid || !requiredFieldsFilled}
-                    className="h-12 w-full rounded-full bg-gradient-kleff text-primary-foreground text-sm font-semibold shadow-[0_18px_40px_rgba(196,143,0,0.22)] transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {submitting ? "Launching…" : "Launch server"}
-                  </Button>
+              {step === "catalog" ? (
+                <div className="kleff-scrollbar-subtle flex-1 overflow-y-auto px-5 py-5 pr-3 sm:px-6">
+                  <div className="space-y-4">
+                    <div className="flex h-12 items-center gap-2 rounded-[0.3rem] border border-[#f5b517]/30 bg-black/30 px-3">
+                      <Search className="h-3.5 w-3.5 text-[#f6d274]/85" />
+                      <Input
+                        value={createQuery}
+                        onChange={(e) => setCreateQuery(e.target.value)}
+                        placeholder="What would you like to create?"
+                        className="h-9 border-none bg-transparent px-0 text-sm text-white placeholder:text-white/45 focus-visible:ring-0"
+                      />
+                    </div>
+
+                    {!selectedCategory ? (
+                      <div className="space-y-2">
+                        {categorySearchResults.map((category) => {
+                          const Icon = category.icon;
+                          const count = categoryCounts[category.id] ?? 0;
+
+                          return (
+                            <Card
+                              key={category.id}
+                              onClick={() => selectCategory(category.id)}
+                              className="cursor-pointer gap-0 rounded-[0.3rem] border border-white/12 bg-black/28 py-0 shadow-none ring-0 transition-all duration-150 hover:border-[#f5b517]/45 hover:bg-[#f5b517]/10"
+                            >
+                              <CardContent className="flex items-center gap-3 p-3">
+                                <Icon className="h-4 w-4 text-white/75" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-[var(--test-foreground)]">{category.label}</p>
+                                  <p className="mt-0.5 text-[11px] text-[var(--test-muted)]">
+                                    {count > 0 ? `${count} available` : "Coming soon"}
+                                  </p>
+                                </div>
+                                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/80" />
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+
+                        {categorySearchResults.length === 0 ? (
+                          <div className="rounded-[0.3rem] border border-white/10 bg-black/24 px-4 py-8 text-center">
+                            <p className="text-sm text-muted-foreground">No categories match your search.</p>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : loadingCrates ? (
+                      <div className="px-2 py-8 text-center text-sm text-muted-foreground">Loading catalog...</div>
+                    ) : queryFilteredCrates.length === 0 ? (
+                      <div className="rounded-[0.3rem] border border-white/10 bg-black/24 px-4 py-8 text-center">
+                        {selectedCategory === "games" ? (
+                          <>
+                            <p className="text-sm text-muted-foreground">Only Minecraft is currently available for Games.</p>
+                            <p className="mt-1 text-xs text-muted-foreground/80">If it is missing, wait for catalog sync and reopen this modal.</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm text-muted-foreground">No resources available in this category yet.</p>
+                            <p className="mt-1 text-xs text-muted-foreground/80">Try another category.</p>
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {queryFilteredCrates.map((crate) => {
+                          const CategoryIcon = resolveCategoryIcon(crate);
+
+                          return (
+                            <Card
+                              key={crate.id}
+                              onClick={() => selectCrate(crate)}
+                              className="cursor-pointer gap-0 rounded-[0.3rem] border border-white/12 bg-black/28 py-0 shadow-none ring-0 transition-all duration-150 hover:border-[#f5b517]/45 hover:bg-[#f5b517]/10"
+                            >
+                              <CardContent className="flex items-center gap-3 p-3">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.2rem] border border-white/12 bg-black/35">
+                                  {crate.logo ? (
+                                    <img src={crate.logo} alt={crate.name} className="h-4.5 w-4.5 object-contain" />
+                                  ) : (
+                                    <CategoryIcon className="h-4 w-4 text-muted-foreground" />
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-[var(--test-foreground)]">{crate.name}</p>
+                                  {crate.description ? (
+                                    <p className="mt-0.5 truncate text-[11px] text-[var(--test-muted)]">{crate.description}</p>
+                                  ) : null}
+                                </div>
+                                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/80" />
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </form>
-            )}
+              ) : null}
+
+              {step === "blueprint" ? (
+                <div className="kleff-scrollbar-subtle flex-1 overflow-y-auto px-5 py-5 pr-3 sm:px-6">
+                  {loadingBlueprints ? (
+                    <div className="px-2 py-8 text-center text-sm text-muted-foreground">Loading templates...</div>
+                  ) : blueprints.length === 0 ? (
+                    <div className="px-2 py-8 text-center text-sm text-muted-foreground">No templates available.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {blueprints.map((bp) => (
+                        <Card
+                          key={bp.id}
+                          onClick={() => selectBlueprint(bp)}
+                          className="cursor-pointer gap-0 rounded-[0.3rem] border border-white/12 bg-black/26 py-0 shadow-none ring-0 transition-all duration-150 hover:border-[#f5b517]/45 hover:bg-[#f5b517]/10"
+                        >
+                          <CardContent className="flex items-center gap-3 p-3">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.2rem] border border-white/12 bg-black/35">
+                              <Server className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-[var(--test-foreground)]">{bp.name}</p>
+                              {bp.description ? (
+                                <p className="mt-0.5 truncate text-[11px] text-[var(--test-muted)]">{bp.description}</p>
+                              ) : null}
+                            </div>
+                            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/80" />
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {step === "config" && selectedBlueprint ? (
+                <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
+                  <div className="kleff-scrollbar-subtle flex-1 overflow-y-auto px-5 py-5 pr-3 sm:px-6">
+                    <div className="space-y-5">
+                      <div className="rounded-[0.3rem] border border-[#f5b517]/25 bg-[rgba(28,21,8,0.6)] px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-[#f6d274]">Blueprint</p>
+                        <p className="mt-1 text-sm font-medium text-[var(--test-foreground)]">
+                          {selectedCrate?.name ?? "Resource"} / {selectedBlueprint.name}
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <DarkLabel htmlFor="server-name">Node name <span className="text-red-400">*</span></DarkLabel>
+                        <DarkInput
+                          id="server-name"
+                          value={serverName}
+                          onChange={setServerName}
+                          placeholder="my-node"
+                          required
+                        />
+                      </div>
+
+                      {selectedBlueprint.constructs && Object.keys(selectedBlueprint.constructs).length > 1 ? (
+                        <div className="space-y-2">
+                          <DarkLabel htmlFor="construct-select">Runtime</DarkLabel>
+                          <Select
+                            value={configValues["IMAGE"] ?? ""}
+                            onValueChange={(v) => setField("IMAGE", v)}
+                          >
+                            <SelectTrigger id="construct-select" className="h-11 rounded-[0.35rem] border border-white/12 bg-black/25 px-3.5 text-[var(--test-foreground)]">
+                              <SelectValue placeholder="Select runtime..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.keys(selectedBlueprint.constructs).map((label) => (
+                                <SelectItem key={label} value={label}>{label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : null}
+
+                      <div className="space-y-4">
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-[#f6d274]/80">Template settings</p>
+                        {selectedBlueprint.config.map((field) => (
+                          <ConfigFieldInput
+                            key={field.key}
+                            field={field}
+                            value={configValues[field.key] ?? ""}
+                            onChange={(v) => setField(field.key, v)}
+                            mojangVersions={field.key === "VERSION" && isMinecraftCrate(selectedCrate) ? mojangVersions : undefined}
+                            showSnapshots={showSnapshots}
+                            onToggleSnapshots={() => setShowSnapshots((v) => !v)}
+                          />
+                        ))}
+                      </div>
+
+                      <div className="space-y-4 pt-1">
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-[#f6d274]/80">Resources</p>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <DarkLabel htmlFor="memory">Memory</DarkLabel>
+                            <Select value={String(memoryMB)} onValueChange={(v) => setMemoryMB(Number(v))}>
+                              <SelectTrigger id="memory" className="h-11 rounded-[0.35rem] border border-white/12 bg-black/25 px-3.5 text-[var(--test-foreground)]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {MEMORY_OPTIONS.map((o) => (
+                                  <SelectItem key={o.mb} value={String(o.mb)}>{o.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <DarkLabel htmlFor="cpu">CPU</DarkLabel>
+                            <Select value={String(cpuMillicores)} onValueChange={(v) => setCpuMillicores(Number(v))}>
+                              <SelectTrigger id="cpu" className="h-11 rounded-[0.35rem] border border-white/12 bg-black/25 px-3.5 text-[var(--test-foreground)]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {CPU_OPTIONS.map((o) => (
+                                  <SelectItem key={o.millicores} value={String(o.millicores)}>{o.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {nameInvalid ? (
+                        <p className="rounded-[0.3rem] border border-red-400/25 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                          Name can only contain letters, numbers, underscores, dots, and hyphens.
+                        </p>
+                      ) : null}
+                      {nameConflict ? (
+                        <p className="rounded-[0.3rem] border border-red-400/25 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                          A node with that name already exists.
+                        </p>
+                      ) : null}
+                      {submitError ? (
+                        <p className="rounded-[0.3rem] border border-red-400/25 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                          {submitError}
+                        </p>
+                      ) : null}
+                      {!projectID ? (
+                        <p className="rounded-[0.3rem] border border-red-400/25 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                          Select a project before creating a node.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-[#f5b517]/18 px-5 py-4 sm:px-6">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={goBack}
+                      className="h-10 rounded-[0.3rem] border-white/15 bg-black/30 px-4 text-sm text-white/80 hover:bg-white/8"
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={submitting || !projectID || !serverName.trim() || nameConflict || nameInvalid || !requiredFieldsFilled}
+                      className="h-10 rounded-[0.3rem] bg-gradient-kleff px-4 text-primary-foreground text-sm font-semibold shadow-[0_12px_28px_rgba(196,143,0,0.2)] transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {submitting ? "Creating..." : "Create node"}
+                    </Button>
+                  </div>
+                </form>
+              ) : null}
+            </div>
           </motion.div>
         </motion.div>
-      )}
+      ) : null}
     </AnimatePresence>
   );
 }

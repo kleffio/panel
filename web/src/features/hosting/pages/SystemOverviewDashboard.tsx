@@ -1,6 +1,5 @@
 import { Activity, AlertTriangle, CheckCircle2, GitCommit, HardDrive, Cpu, AlertCircle, TrendingUp, ArrowRight } from "lucide-react";
 import type {
-  AiSuggestion,
   InfrastructureNode,
   OverviewActivityItem,
   OverviewDeploymentItem,
@@ -9,13 +8,11 @@ import type {
 
 export function SystemOverviewDashboard({
   infrastructureNodes,
-  mockAiSuggestions,
   overviewMetricCards,
   overviewDeployments,
   overviewActivityFeed,
 }: {
   infrastructureNodes: InfrastructureNode[];
-  mockAiSuggestions: AiSuggestion[];
   overviewMetricCards: OverviewMetricCard[];
   overviewDeployments: OverviewDeploymentItem[];
   overviewActivityFeed: OverviewActivityItem[];
@@ -58,32 +55,16 @@ export function SystemOverviewDashboard({
         {/* Main Column */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Smart AI Alerts */}
+          {/* System Alerts */}
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
             <div className="border-b border-zinc-800 bg-zinc-800/50 px-6 py-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-rose-500" />
-                Active Alerts & AI Insights
+                <AlertCircle className="h-4 w-4 text-zinc-400" />
+                Active Alerts
               </h2>
-              <span className="bg-rose-500/10 text-rose-500 text-xs py-1 px-2.5 rounded-full font-medium">{mockAiSuggestions.length} items</span>
             </div>
-            <div className="divide-y divide-zinc-800">
-              {mockAiSuggestions.map((suggestion) => (
-                <div key={suggestion.id} className="p-6 transition hover:bg-zinc-800/50">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`inline-block w-2 h-2 rounded-full ${suggestion.severity === 'critical' ? 'bg-rose-500' : suggestion.severity === 'warning' ? 'bg-amber-500' : 'bg-blue-500'}`} />
-                        <h3 className="text-sm font-medium">{suggestion.title}</h3>
-                      </div>
-                      <p className="text-sm text-zinc-400 leading-relaxed pl-4">{suggestion.description}</p>
-                    </div>
-                    <button className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border border-zinc-800 hover:bg-zinc-800 transition">
-                      {suggestion.actionLabel}
-                    </button>
-                  </div>
-                </div>
-              ))}
+            <div className="px-6 py-8 text-center text-sm text-zinc-500">
+              No active alerts. All systems are healthy.
             </div>
           </div>
 

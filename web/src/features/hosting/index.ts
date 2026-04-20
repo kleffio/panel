@@ -2,10 +2,9 @@ export {
   detailSections,
   infrastructureEdges,
   infrastructureNodes,
-  mockAiSuggestions,
 } from "@/features/hosting/model/content";
 export type {
-  AiSuggestion,
+  CanvasGroup,
   DetailPanelData,
   DetailRow,
   DetailSection,

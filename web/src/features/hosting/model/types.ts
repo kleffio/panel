@@ -27,15 +27,6 @@ export type NodePanelData = {
   highlights: string[];
 };
 
-export type AiSuggestion = {
-  id: string;
-  nodeId: string;
-  title: string;
-  description: string;
-  severity: "info" | "warning" | "critical";
-  actionLabel: string;
-};
-
 export type DetailRow = {
   primary: string;
   secondary: string;
@@ -176,4 +167,15 @@ export type InfrastructureEdge = {
   label: string;
   sourceHandle?: string;
   targetHandle?: string;
+};
+
+export type CanvasGroup = {
+  id: string;
+  label: string;
+  color: string;
+  memberIds: string[];
+  notes: string;
+  role: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
 };
