@@ -13,3 +13,5 @@ vendor/
 
 # Hot reload (air)
 tmp/
+
+plugins.local.json
