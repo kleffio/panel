@@ -2,10 +2,16 @@
 .DS_Store
 Thumbs.db
 
-# Environment
-.env
-.env.local
-
 # Editor
 .vscode/
 .idea/
+*.suo
+*.sw?
+
+# Environment (covers both api/ and web/)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
