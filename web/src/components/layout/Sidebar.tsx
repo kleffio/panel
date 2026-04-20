@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Network,
   Activity,
+  Users,
 } from "lucide-react";
 import {
   cn,
@@ -39,6 +40,7 @@ import {
   Label,
 } from "@kleffio/ui";
 import { useAuth, broadcastSignout, useHasRole, useRoles, AuthConfigContext } from "@/features/auth";
+import { NotificationBell } from "@/features/notifications";
 import { PluginSlot } from "@/features/plugins/ui/PluginSlot";
 import { useBackendPlugins } from "@/features/plugins/model/use-backend-plugins";
 import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
@@ -372,6 +374,13 @@ export function Sidebar() {
               icon={Store}
               pathname={pathname}
             />
+
+            <NavItem
+              href={`${projectBase}/settings`}
+              label="Team"
+              icon={Users}
+              pathname={pathname}
+            />
           </>
         ) : (
           <p className="px-2.5 py-2 text-xs text-sidebar-foreground/30">
@@ -416,6 +425,9 @@ export function Sidebar() {
       {/* User — pinned to bottom */}
       <div className="border-t border-sidebar-border px-2 py-3">
         <PluginSlot name="topbar.right" />
+        <div className="mb-1 flex items-center justify-end px-1">
+          <NotificationBell />
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-white/[0.05] focus-visible:outline-none">
