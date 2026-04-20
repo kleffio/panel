@@ -18,7 +18,7 @@ const CurrentProjectContext = React.createContext<CurrentProjectContextValue | n
 const storageKey = "kleff.currentProjectSlug";
 
 // Paths that are not project-scoped and should not trigger auto-navigation.
-const NO_NAV_PREFIXES = ["/project/", "/admin", "/account", "/settings", "/auth"];
+const NO_NAV_PREFIXES = ["/project/", "/admin", "/account", "/settings", "/auth", "/notifications"];
 
 export function CurrentProjectProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = React.useState<ProjectDTO[]>([]);
