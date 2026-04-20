@@ -95,6 +95,7 @@ function FlowCanvasBody({
   onDeleteNode,
   onPersistNodePosition,
   simulateMetrics,
+  readOnly,
 }: {
   infrastructureNodes: InfrastructureNode[];
   infrastructureEdges: InfrastructureEdge[];
@@ -106,6 +107,7 @@ function FlowCanvasBody({
   onDeleteNode?: (nodeID: string) => Promise<void> | void;
   onPersistNodePosition?: (nodeID: string, position: { x: number; y: number }) => void;
   simulateMetrics?: boolean;
+  readOnly?: boolean;
 }) {
   const { fitView } = useReactFlow();
   const [newServerOpen, setNewServerOpen] = useState(false);
@@ -299,21 +301,23 @@ function FlowCanvasBody({
         >
           {/* Top-right stacked controls */}
           <Panel position="top-right" className="!mr-4 !mt-4 flex flex-col items-stretch gap-2 sm:!mr-6 sm:!mt-5">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 min-w-[138px] justify-start rounded-[0.3rem] border-[var(--test-border)] bg-[var(--test-panel)] px-3 text-xs text-[var(--test-foreground)] hover:bg-[var(--test-accent-soft)]"
-              onClick={() => {
-                if (!projectID) {
-                  toast("Node creation mocked", { description: "Choose a project context first." });
-                  return;
-                }
-                setNewServerOpen(true);
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Add Node
-            </Button>
+            {!readOnly && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 min-w-[138px] justify-start rounded-[0.3rem] border-[var(--test-border)] bg-[var(--test-panel)] px-3 text-xs text-[var(--test-foreground)] hover:bg-[var(--test-accent-soft)]"
+                onClick={() => {
+                  if (!projectID) {
+                    toast("Node creation mocked", { description: "Choose a project context first." });
+                    return;
+                  }
+                  setNewServerOpen(true);
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                Add Node
+              </Button>
+            )}
 
             {/* Organize dropdown */}
             <DropdownMenu>
@@ -527,6 +531,7 @@ export function InfrastructureFlowCanvas({
   onDeleteNode,
   onPersistNodePosition,
   simulateMetrics,
+  readOnly,
 }: {
   infrastructureNodes: InfrastructureNode[];
   infrastructureEdges: InfrastructureEdge[];
@@ -538,6 +543,7 @@ export function InfrastructureFlowCanvas({
   onDeleteNode?: (nodeID: string) => Promise<void> | void;
   onPersistNodePosition?: (nodeID: string, position: { x: number; y: number }) => void;
   simulateMetrics?: boolean;
+  readOnly?: boolean;
 }) {
   return (
     <ReactFlowProvider>
@@ -552,6 +558,7 @@ export function InfrastructureFlowCanvas({
         onDeleteNode={onDeleteNode}
         onPersistNodePosition={onPersistNodePosition}
         simulateMetrics={simulateMetrics}
+        readOnly={readOnly}
       />
     </ReactFlowProvider>
   );

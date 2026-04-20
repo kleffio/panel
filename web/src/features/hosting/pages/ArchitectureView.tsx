@@ -16,6 +16,7 @@ export function ArchitectureView({
   onDeleteNode,
   onPersistNodePosition,
   simulateMetrics,
+  readOnly,
 }: {
   infrastructureNodes: InfrastructureNode[];
   infrastructureEdges: InfrastructureEdge[];
@@ -27,6 +28,7 @@ export function ArchitectureView({
   onDeleteNode?: (nodeID: string) => Promise<void> | void;
   onPersistNodePosition?: (nodeID: string, position: { x: number; y: number }) => void;
   simulateMetrics?: boolean;
+  readOnly?: boolean;
 }) {
   return (
     <div className="h-full min-h-[720px] overflow-hidden">
@@ -42,6 +44,7 @@ export function ArchitectureView({
           onDeleteNode={onDeleteNode}
           onPersistNodePosition={onPersistNodePosition}
           simulateMetrics={simulateMetrics}
+          readOnly={readOnly}
         />
       </ArchitectureThemeShell>
     </div>

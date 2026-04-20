@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Activity, Boxes, Database, Globe, HardDrive, Server, Shield, Swords } from "lucide-react";
 
 import {
@@ -10,10 +11,12 @@ import {
   listConnections,
   listGraphNodes,
   listWorkloads,
+  listProjectMembers,
   upsertGraphNode,
   type WorkloadDTO,
 } from "@/lib/api";
 import { ArchitectureView } from "@/features/hosting/pages/ArchitectureView";
+import { useCurrentUser } from "@/features/auth";
 import type {
   InfrastructureEdge,
   InfrastructureNode,
@@ -164,6 +167,8 @@ function buildNode(
     footer: workload.endpoint || "Endpoint pending",
     position,
     actions: isDeleting ? ["logs"] : ["restart", "logs", "scale", "delete"],
+    cpuLimitMillicores: workload.cpu_millicores || undefined,
+    memoryLimitBytes: workload.memory_bytes || undefined,
     panel: {
       title: `${displayName} details`,
       description: isDeleting
@@ -181,6 +186,15 @@ function buildNode(
 }
 
 export function ProjectArchitecturePage({ projectID }: { projectID: string }) {
+  const currentUser = useCurrentUser();
+  const { data: membersData } = useQuery({
+    queryKey: ["project-members", projectID],
+    queryFn: () => listProjectMembers(projectID),
+    enabled: !!projectID,
+  });
+  const currentMember = membersData?.members?.find((m) => m.user_id === currentUser?.userId);
+  const readOnly = currentMember?.role === "viewer";
+
   const [projectName, setProjectName] = React.useState("Project");
   const [nodes, setNodes] = React.useState<InfrastructureNode[]>([]);
   const [edges, setEdges] = React.useState<InfrastructureEdge[]>([]);
@@ -420,6 +434,7 @@ export function ProjectArchitecturePage({ projectID }: { projectID: string }) {
         onDeleteNode={handleDeleteNode}
         onPersistNodePosition={handlePersistNodePosition}
         simulateMetrics={false}
+        readOnly={readOnly}
       />
     </>
   );

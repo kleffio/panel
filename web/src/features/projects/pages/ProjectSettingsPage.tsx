@@ -19,54 +19,55 @@ import {
   SelectTrigger,
   SelectValue,
   Badge,
-  Separator,
 } from "@kleffio/ui";
 import { Spinner } from "@/components/ui/Spinner";
 import { useAuth } from "@/features/auth";
 import {
-  listMembers,
-  listInvites,
-  createInvite,
-  revokeInvite,
-  removeMember,
-  updateMemberRole,
-  type OrgMemberDTO,
-  type OrgInviteDTO,
-} from "@/lib/api/organizations";
+  listProjectMembers,
+  listProjectInvites,
+  createProjectInvite,
+  revokeProjectInvite,
+  removeProjectMember,
+  updateProjectMemberRole,
+  type ProjectMemberDTO,
+  type ProjectInviteDTO,
+} from "@/lib/api/projects";
 
 interface ProjectSettingsPageProps {
-  orgID: string;
+  projectID: string;
 }
 
 const ROLE_LABELS: Record<string, string> = {
   owner: "Owner",
-  admin: "Admin",
-  member: "Member",
+  maintainer: "Maintainer",
+  developer: "Developer",
+  viewer: "Viewer",
 };
 
 const ROLE_VARIANTS: Record<string, "default" | "secondary" | "outline"> = {
   owner: "default",
-  admin: "secondary",
-  member: "outline",
+  maintainer: "secondary",
+  developer: "outline",
+  viewer: "outline",
 };
 
 function MemberRow({
   member,
   currentUserID,
   canManage,
-  orgID,
+  projectID,
   onRemoved,
   onRoleChanged,
 }: {
-  member: OrgMemberDTO;
+  member: ProjectMemberDTO;
   currentUserID: string;
   canManage: boolean;
-  orgID: string;
+  projectID: string;
   onRemoved: () => void;
   onRoleChanged: () => void;
 }) {
   const removeMut = useMutation({
-    mutationFn: () => removeMember(orgID, member.user_id),
+    mutationFn: () => removeProjectMember(projectID, member.user_id),
     onSuccess: () => {
       toast.success("Member removed.");
       onRemoved();
@@ -75,7 +76,7 @@ function MemberRow({
   });
 
   const roleMut = useMutation({
-    mutationFn: (role: string) => updateMemberRole(orgID, member.user_id, role),
+    mutationFn: (role: string) => updateProjectMemberRole(projectID, member.user_id, role),
     onSuccess: () => {
       toast.success("Role updated.");
       onRoleChanged();
@@ -107,13 +108,14 @@ function MemberRow({
             onValueChange={(role) => roleMut.mutate(role)}
             disabled={roleMut.isPending}
           >
-            <SelectTrigger className="h-7 w-24 text-xs">
+            <SelectTrigger className="h-7 w-28 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="viewer">Viewer</SelectItem>
+              <SelectItem value="developer">Developer</SelectItem>
+              <SelectItem value="maintainer">Maintainer</SelectItem>
               <SelectItem value="owner">Owner</SelectItem>
-              <SelectItem value="admin">Admin</SelectItem>
-              <SelectItem value="member">Member</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -134,16 +136,16 @@ function MemberRow({
 function InviteRow({
   invite,
   canManage,
-  orgID,
+  projectID,
   onRevoked,
 }: {
-  invite: OrgInviteDTO;
+  invite: ProjectInviteDTO;
   canManage: boolean;
-  orgID: string;
+  projectID: string;
   onRevoked: () => void;
 }) {
   const revokeMut = useMutation({
-    mutationFn: () => revokeInvite(orgID, invite.id),
+    mutationFn: () => revokeProjectInvite(projectID, invite.id),
     onSuccess: () => {
       toast.success("Invite revoked.");
       onRevoked();
@@ -180,25 +182,25 @@ function InviteRow({
   );
 }
 
-export function ProjectSettingsPage({ orgID }: ProjectSettingsPageProps) {
+export function ProjectSettingsPage({ projectID }: ProjectSettingsPageProps) {
   const auth = useAuth();
   const queryClient = useQueryClient();
   const currentUserID = (auth.user?.profile?.sub as string | undefined) ?? "";
 
-  const membersKey = ["orgs", orgID, "members"] as const;
-  const invitesKey = ["orgs", orgID, "invites"] as const;
+  const membersKey = ["projects", projectID, "members"] as const;
+  const invitesKey = ["projects", projectID, "invites"] as const;
 
   const { data: membersData, isLoading: membersLoading, isError: membersError } = useQuery({
     queryKey: membersKey,
-    queryFn: () => listMembers(orgID),
-    enabled: !!orgID,
+    queryFn: () => listProjectMembers(projectID),
+    enabled: !!projectID,
     retry: false,
   });
 
   const { data: invitesData, isLoading: invitesLoading } = useQuery({
     queryKey: invitesKey,
-    queryFn: () => listInvites(orgID),
-    enabled: !!orgID,
+    queryFn: () => listProjectInvites(projectID),
+    enabled: !!projectID,
   });
 
   const members = membersData?.members ?? [];
@@ -206,18 +208,19 @@ export function ProjectSettingsPage({ orgID }: ProjectSettingsPageProps) {
 
   const currentMember = members.find((m) => m.user_id === currentUserID);
   const canManage =
-    currentMember?.role === "owner" || currentMember?.role === "admin";
+    currentMember?.role === "owner" ||
+    currentMember?.role === "maintainer";
 
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("member");
+  const [inviteRole, setInviteRole] = useState("developer");
   const [pendingToken, setPendingToken] = useState<string | null>(null);
 
   const inviteMut = useMutation({
-    mutationFn: () => createInvite(orgID, { email: inviteEmail.trim(), role: inviteRole }),
+    mutationFn: () => createProjectInvite(projectID, { email: inviteEmail.trim(), role: inviteRole }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: invitesKey });
       setInviteEmail("");
-      setPendingToken(res.token);
+      if (res.token) setPendingToken(res.token);
       toast.success("Invite created.");
     },
     onError: (err: Error) => toast.error(err.message ?? "Failed to create invite."),
@@ -230,7 +233,7 @@ export function ProjectSettingsPage({ orgID }: ProjectSettingsPageProps) {
   }
 
   const inviteURL = pendingToken
-    ? `${typeof window !== "undefined" ? window.location.origin : ""}/invite/${pendingToken}`
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/project-invite/${pendingToken}`
     : null;
 
   function copyInviteURL() {
@@ -277,7 +280,7 @@ export function ProjectSettingsPage({ orgID }: ProjectSettingsPageProps) {
                   member={m}
                   currentUserID={currentUserID}
                   canManage={canManage}
-                  orgID={orgID}
+                  projectID={projectID}
                   onRemoved={() => queryClient.invalidateQueries({ queryKey: membersKey })}
                   onRoleChanged={() => queryClient.invalidateQueries({ queryKey: membersKey })}
                 />
@@ -287,7 +290,7 @@ export function ProjectSettingsPage({ orgID }: ProjectSettingsPageProps) {
         </CardContent>
       </Card>
 
-      {/* Invite form (owners + admins only) */}
+      {/* Invite form (owners + maintainers only) */}
       {canManage && (
         <Card>
           <CardHeader>
@@ -296,7 +299,7 @@ export function ProjectSettingsPage({ orgID }: ProjectSettingsPageProps) {
               Invite someone
             </CardTitle>
             <CardDescription>
-              Send an invite link to add a new team member.
+              Send an invite link to add a new project member.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -318,8 +321,9 @@ export function ProjectSettingsPage({ orgID }: ProjectSettingsPageProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="member">Member</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="viewer">Viewer</SelectItem>
+                    <SelectItem value="developer">Developer</SelectItem>
+                    <SelectItem value="maintainer">Maintainer</SelectItem>
                     <SelectItem value="owner">Owner</SelectItem>
                   </SelectContent>
                 </Select>
@@ -378,7 +382,7 @@ export function ProjectSettingsPage({ orgID }: ProjectSettingsPageProps) {
                     key={inv.id}
                     invite={inv}
                     canManage={canManage}
-                    orgID={orgID}
+                    projectID={projectID}
                     onRevoked={() => queryClient.invalidateQueries({ queryKey: invitesKey })}
                   />
                 ))}
