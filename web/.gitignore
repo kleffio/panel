@@ -1,0 +1,16 @@
+# Next.js
+.next/
+out/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+
+# Type checking
+*.tsbuildinfo
+
+# Local TLS certificates
+*.pem

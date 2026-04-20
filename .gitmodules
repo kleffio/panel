@@ -1,0 +1,3 @@
+[submodule "api/contracts"]
+	path = api/contracts
+	url = git@github.com:kleffio/contracts.git

@@ -1,34 +1,17 @@
-# Next.js
-.next/
-out/
-.pnpm-store/
-
-# Dependencies
-node_modules/
-
-# Environment files
-.env
-.env.local
-.env.*.local
-
-# Build output
-dist/
-
-
-# Type checking
-*.tsbuildinfo
-
 # OS
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-npm-debug.log*
-
 # Editor
 .vscode/
 .idea/
+*.suo
+*.sw?
 
-# Local TLS certificates
-*.pem
+# Environment (covers both api/ and web/)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
