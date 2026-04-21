@@ -1,17 +1,26 @@
-import axios from "axios";
-import { normalizeApiError, ApiError } from "./error";
-import { getApiAccessToken } from "./token";
+import axios, { type InternalAxiosRequestConfig } from "axios";
+import { normalizeApiError } from "./error";
+import { getApiAccessToken, setApiAccessToken } from "./token";
 
 type UnauthorizedHandler = () => void;
+type TokenRefresher = () => Promise<string | null>;
+
 let onUnauthorizedHandler: UnauthorizedHandler | null = null;
+let tokenRefresher: TokenRefresher | null = null;
+let pendingRefresh: Promise<string | null> | null = null;
 
 export function setOnUnauthorized(handler: UnauthorizedHandler) {
   onUnauthorizedHandler = handler;
 }
 
-// Use relative paths so browser requests go through the Next.js rewrite proxy
-// (/api/* → http://api:8080/api/*). The full API base URL is only needed in
-// next.config.ts for the server-side rewrite rule.
+export function setTokenRefresher(fn: TokenRefresher | null) {
+  tokenRefresher = fn;
+}
+
+interface RetryConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
+
 export const apiClient = axios.create({
   baseURL: "",
   headers: {
@@ -31,10 +40,34 @@ apiClient.interceptors.request.use((config) => {
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: unknown) => {
+  async (error: unknown) => {
     const apiError = normalizeApiError(error);
-    if (apiError.status === 401 && onUnauthorizedHandler) {
-      onUnauthorizedHandler();
+    const config = (error as { config?: RetryConfig }).config;
+
+    if (apiError.status === 401 && tokenRefresher && config && !config._retry) {
+      config._retry = true;
+      try {
+        // Deduplicate concurrent 401s — only one refresh call in flight at a time.
+        if (!pendingRefresh) {
+          pendingRefresh = tokenRefresher().finally(() => {
+            pendingRefresh = null;
+          });
+        }
+        const newToken = await pendingRefresh;
+        if (newToken) {
+          setApiAccessToken(newToken);
+          config.headers.set("Authorization", `Bearer ${newToken}`);
+          return apiClient(config);
+        }
+      } catch {
+        // Refresh threw — fall through to logout below.
+      }
+      onUnauthorizedHandler?.();
+      return Promise.reject(apiError);
+    }
+
+    if (apiError.status === 401) {
+      onUnauthorizedHandler?.();
     }
     return Promise.reject(apiError);
   }

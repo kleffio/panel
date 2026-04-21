@@ -166,6 +166,8 @@ export interface Session {
   started_at?: number;
   /** Unix seconds */
   last_access?: number;
+  /** Unix seconds; absent means the IDP did not report an expiry */
+  expires_at?: number;
   current: boolean;
 }
 
