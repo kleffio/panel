@@ -38,6 +38,7 @@ services:
       CORS_ALLOWED_ORIGINS: http://localhost:3000
       LOG_LEVEL: debug
       RUNTIME_PROVIDER: docker
+      PLUGIN_NETWORK: kleff-dev
       SECRET_KEY: local-dev-secret
       KLEFF_SHARED_SECRET: local-dev-shared-secret
       DAEMON_QUEUE_REDIS_URL: redis://redis:6379/0

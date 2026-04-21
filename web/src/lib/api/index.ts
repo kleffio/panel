@@ -1,4 +1,4 @@
-export { apiClient, setOnUnauthorized } from "./client";
+export { apiClient, setOnUnauthorized, setTokenRefresher } from "./client";
 export { isApiError, normalizeApiError } from "./error";
 export type { ApiError } from "./error";
 export { setApiAccessToken, clearApiAccessToken, getApiAccessToken } from "./token";
