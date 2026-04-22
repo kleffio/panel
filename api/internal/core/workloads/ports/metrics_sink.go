@@ -11,6 +11,7 @@ type MetricsSink interface {
 // MetricSample is the workload-layer view of a single resource observation.
 type MetricSample struct {
 	WorkloadID    string
+	WorkloadName  string
 	NodeID        string
 	OrgID         string
 	ProjectID     string

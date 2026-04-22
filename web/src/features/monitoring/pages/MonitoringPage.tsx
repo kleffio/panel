@@ -29,6 +29,7 @@ export function MonitoringPage() {
   const [lastUpdated, setLastUpdated] = React.useState<Date | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = React.useState(0);
 
   const fetchMetrics = React.useCallback(async () => {
     if (!currentProjectID) return;
@@ -120,7 +121,7 @@ export function MonitoringPage() {
             </span>
           )}
           <button
-            onClick={fetchMetrics}
+            onClick={() => { fetchMetrics(); setRefreshKey((k) => k + 1); }}
             className="flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-xs text-muted-foreground hover:bg-white/[0.08] transition-colors"
           >
             <RefreshCw className="size-3" />
@@ -161,7 +162,7 @@ export function MonitoringPage() {
       </div>
 
       {/* Plugin-injected charts (e.g. Prometheus time-series) */}
-      <PluginSlot name="monitoring.charts" slotProps={{ projectId: currentProjectID }} />
+      <PluginSlot name="monitoring.charts" slotProps={{ projectId: currentProjectID, refreshKey }} />
 
       {/* Per-workload table */}
       <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
@@ -205,8 +206,8 @@ export function MonitoringPage() {
                   const memMB = w.memory_limit_bytes > 0 ? Math.min(w.memory_mb, memLimitMB) : w.memory_mb;
                   return (
                   <tr key={w.workload_id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-6 py-3 font-mono text-xs text-foreground/60">
-                      {w.workload_id.slice(0, 8)}…
+                    <td className="px-6 py-3 text-xs text-foreground/60">
+                      {w.workload_name || w.workload_id.slice(0, 8) + "…"}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       {cpuCores(cpuM)}

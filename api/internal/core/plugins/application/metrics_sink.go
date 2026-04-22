@@ -19,6 +19,7 @@ func NewMetricsSinkAdapter(mgr *Manager) *MetricsSinkAdapter {
 func (a *MetricsSinkAdapter) IngestWorkloadMetrics(ctx context.Context, s *workloadports.MetricSample) error {
 	return a.mgr.IngestWorkloadMetrics(ctx, &pluginsv1.MetricSample{
 		WorkloadID:    s.WorkloadID,
+		WorkloadName:  s.WorkloadName,
 		NodeID:        s.NodeID,
 		OrgID:         s.OrgID,
 		ProjectID:     s.ProjectID,

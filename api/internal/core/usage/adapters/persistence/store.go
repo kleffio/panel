@@ -63,7 +63,8 @@ func (s *PostgresUsageStore) ListLatestByProject(ctx context.Context, projectID 
 			u.disk_read_kbps, u.disk_write_kbps,
 			u.recorded_at,
 			COALESCE(w.cpu_millicores, 0),
-			COALESCE(w.memory_bytes, 0)
+			COALESCE(w.memory_bytes, 0),
+			COALESCE(w.name, '')
 		FROM (
 			SELECT DISTINCT ON (workload_id)
 				workload_id, project_id,
@@ -92,6 +93,7 @@ func (s *PostgresUsageStore) ListLatestByProject(ctx context.Context, projectID 
 			&m.DiskReadKbps, &m.DiskWriteKbps,
 			&m.RecordedAt,
 			&m.CPULimitMillicores, &m.MemoryLimitBytes,
+			&m.WorkloadName,
 		); err != nil {
 			return nil, fmt.Errorf("scan usage row: %w", err)
 		}

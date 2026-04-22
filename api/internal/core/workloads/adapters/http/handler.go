@@ -120,13 +120,16 @@ func (h *Handler) provisionWorkload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	initiatedBy := ""
+	ownerUsername := ""
 	if claims, ok := middleware.ClaimsFromContext(r.Context()); ok {
 		initiatedBy = claims.Subject
+		ownerUsername = claims.Username
 	}
 	res, err := h.provision.Handle(r.Context(), commands.ProvisionWorkloadCommand{
 		OrganizationID: effectiveOrgID,
 		ProjectID:      projectID,
 		OwnerID:        req.OwnerID,
+		OwnerUsername:  ownerUsername,
 		ServerName:     req.ServerName,
 		BlueprintID:    req.BlueprintID,
 		Image:          req.Image,
@@ -295,6 +298,7 @@ func (h *Handler) updateStatus(w http.ResponseWriter, r *http.Request) {
 		if h.metricsSink != nil {
 			sample := &ports.MetricSample{
 				WorkloadID:    workloadID,
+				WorkloadName:  existing.Name,
 				NodeID:        nodeID,
 				OrgID:         existing.OrganizationID,
 				ProjectID:     existing.ProjectID,

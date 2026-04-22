@@ -42,6 +42,7 @@ type UsageRecord struct {
 // WorkloadMetrics is the latest snapshot for a single workload, used by the monitoring page.
 type WorkloadMetrics struct {
 	WorkloadID     string    `json:"workload_id"`
+	WorkloadName   string    `json:"workload_name,omitempty"`
 	ProjectID      string    `json:"project_id"`
 	CPUMillicores  int64     `json:"cpu_millicores"`
 	MemoryMB       int64     `json:"memory_mb"`

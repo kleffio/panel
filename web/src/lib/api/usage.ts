@@ -2,6 +2,7 @@ import { get } from "./request";
 
 export interface WorkloadMetricsDTO {
   workload_id: string;
+  workload_name?: string;
   project_id: string;
   cpu_millicores: number;
   memory_mb: number;

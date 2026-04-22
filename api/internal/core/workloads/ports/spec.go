@@ -3,7 +3,9 @@ package ports
 // WorkloadSpec is the daemon queue payload for workload operations.
 type WorkloadSpec struct {
 	OwnerID          string            `json:"owner_id"`
+	OwnerUsername    string            `json:"owner_username,omitempty"`
 	ServerID         string            `json:"server_id"`
+	ServerName       string            `json:"server_name,omitempty"`
 	BlueprintID      string            `json:"blueprint_id"`
 	ProjectID        string            `json:"project_id"`
 	ProjectSlug      string            `json:"project_slug"`
