@@ -161,6 +161,8 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 	provisionHandler := workloadcmd.NewProvisionWorkloadHandler(workloadsStore, projectsStore, queuePublisher, catalogStore, logger)
 	workloadAction := workloadcmd.NewWorkloadActionHandler(workloadsStore, projectsStore, queuePublisher, logger)
 
+	metricsSink := pluginapplication.NewMetricsSinkAdapter(pluginMgr)
+
 	return &Container{
 		Config:        cfg,
 		Logger:        logger,
@@ -176,7 +178,7 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 		OrganizationsHandler: organizationshttp.NewHandler(orgStore, notificationSvc, logger),
 		DeploymentsHandler:   deploymentshttp.NewHandler(createDeployment, serverAction, deploymentStore, cfg.SecretKey, logger),
 		ProjectsHandler:      projectshttp.NewHandler(projectsStore, orgStore, notificationSvc, logger),
-		WorkloadsHandler:     workloadshttp.NewHandler(projectsStore, orgStore, workloadsStore, provisionHandler, workloadAction, bus, logger),
+		WorkloadsHandler:     workloadshttp.NewHandler(projectsStore, orgStore, workloadsStore, usagepersistence.NewPostgresUsageStore(db), metricsSink, provisionHandler, workloadAction, bus, logger),
 		NodesHandler:         nodeshttp.NewHandler(nodeStore, logger),
 		BillingHandler:       billinghttp.NewHandler(logger),
 		UsageHandler:         usagehttp.NewHandler(usagepersistence.NewPostgresUsageStore(db), logger),

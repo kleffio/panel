@@ -4,6 +4,7 @@ import * as React from "react";
 import { Activity, Cpu, HardDrive, MemoryStick, RefreshCw, Wifi } from "lucide-react";
 import { getProjectMetrics, type WorkloadMetricsDTO } from "@/lib/api/usage";
 import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
+import { PluginSlot } from "@/features/plugins/ui/PluginSlot";
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -158,6 +159,9 @@ export function MonitoringPage() {
           </div>
         ))}
       </div>
+
+      {/* Plugin-injected charts (e.g. Prometheus time-series) */}
+      <PluginSlot name="monitoring.charts" slotProps={{ projectId: currentProjectID }} />
 
       {/* Per-workload table */}
       <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">

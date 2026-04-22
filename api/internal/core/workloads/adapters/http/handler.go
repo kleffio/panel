@@ -15,10 +15,13 @@ import (
 	orgports "github.com/kleffio/platform/internal/core/organizations/ports"
 	projectdomain "github.com/kleffio/platform/internal/core/projects/domain"
 	projectports "github.com/kleffio/platform/internal/core/projects/ports"
+	usagedomain "github.com/kleffio/platform/internal/core/usage/domain"
+	usageports "github.com/kleffio/platform/internal/core/usage/ports"
 	"github.com/kleffio/platform/internal/core/workloads/application/commands"
 	"github.com/kleffio/platform/internal/core/workloads/domain"
 	"github.com/kleffio/platform/internal/core/workloads/ports"
 	"github.com/kleffio/platform/internal/shared/events"
+	"github.com/kleffio/platform/internal/shared/ids"
 	"github.com/kleffio/platform/internal/shared/middleware"
 	"github.com/kleffio/platform/internal/shared/queue"
 )
@@ -30,19 +33,21 @@ const (
 )
 
 type Handler struct {
-	projects  projectports.ProjectRepository
-	orgs      orgports.OrganizationRepository
-	repo      ports.Repository
-	provision *commands.ProvisionWorkloadHandler
-	action    *commands.WorkloadActionHandler
-	bus       *events.Bus
-	logger    *slog.Logger
+	projects    projectports.ProjectRepository
+	orgs        orgports.OrganizationRepository
+	repo        ports.Repository
+	usageRepo   usageports.UsageRepository
+	metricsSink ports.MetricsSink
+	provision   *commands.ProvisionWorkloadHandler
+	action      *commands.WorkloadActionHandler
+	bus         *events.Bus
+	logger      *slog.Logger
 }
 
 var orgSlugCleaner = regexp.MustCompile(`[^a-z0-9-]+`)
 
-func NewHandler(projects projectports.ProjectRepository, orgs orgports.OrganizationRepository, repo ports.Repository, provision *commands.ProvisionWorkloadHandler, action *commands.WorkloadActionHandler, bus *events.Bus, logger *slog.Logger) *Handler {
-	return &Handler{projects: projects, orgs: orgs, repo: repo, provision: provision, action: action, bus: bus, logger: logger}
+func NewHandler(projects projectports.ProjectRepository, orgs orgports.OrganizationRepository, repo ports.Repository, usageRepo usageports.UsageRepository, metricsSink ports.MetricsSink, provision *commands.ProvisionWorkloadHandler, action *commands.WorkloadActionHandler, bus *events.Bus, logger *slog.Logger) *Handler {
+	return &Handler{projects: projects, orgs: orgs, repo: repo, usageRepo: usageRepo, metricsSink: metricsSink, provision: provision, action: action, bus: bus, logger: logger}
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
@@ -259,6 +264,52 @@ func (h *Handler) updateStatus(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("update workload status", "error", err, "workload_id", workloadID)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to persist workload status"})
 		return
+	}
+
+	if h.usageRepo != nil && (req.CPUMillicores > 0 || req.MemoryMB > 0) {
+		const scrapeIntervalSeconds = 30.0
+		usageRecord := &usagedomain.UsageRecord{
+			ID:             ids.New(),
+			OrganizationID: existing.OrganizationID,
+			ProjectID:      existing.ProjectID,
+			GameServerID:   workloadID,
+			NodeID:         nodeID,
+			RecordedAt:     observedAt,
+			CPUSeconds:     float64(req.CPUMillicores) / 1000.0 * scrapeIntervalSeconds,
+			MemoryGBHours:  float64(req.MemoryMB) / 1024.0 * (scrapeIntervalSeconds / 3600.0),
+			NetworkInMB:    req.NetworkRxMB,
+			NetworkOutMB:   req.NetworkTxMB,
+			DiskReadMB:     req.DiskReadMB,
+			DiskWriteMB:    req.DiskWriteMB,
+			CPUMillicores:  req.CPUMillicores,
+			MemoryMB:       req.MemoryMB,
+			NetworkInKbps:  req.NetworkRxMB * 1024.0 / scrapeIntervalSeconds,
+			NetworkOutKbps: req.NetworkTxMB * 1024.0 / scrapeIntervalSeconds,
+			DiskReadKbps:   req.DiskReadMB * 1024.0 / scrapeIntervalSeconds,
+			DiskWriteKbps:  req.DiskWriteMB * 1024.0 / scrapeIntervalSeconds,
+		}
+		if err := h.usageRepo.Save(r.Context(), usageRecord); err != nil {
+			h.logger.Warn("save usage record", "error", err, "workload_id", workloadID)
+		}
+
+		if h.metricsSink != nil {
+			sample := &ports.MetricSample{
+				WorkloadID:    workloadID,
+				NodeID:        nodeID,
+				OrgID:         existing.OrganizationID,
+				ProjectID:     existing.ProjectID,
+				Timestamp:     observedAt.Unix(),
+				CPUMillicores: req.CPUMillicores,
+				MemoryMB:      req.MemoryMB,
+				NetworkRxMB:   req.NetworkRxMB,
+				NetworkTxMB:   req.NetworkTxMB,
+				DiskReadMB:    req.DiskReadMB,
+				DiskWriteMB:   req.DiskWriteMB,
+			}
+			if err := h.metricsSink.IngestWorkloadMetrics(r.Context(), sample); err != nil {
+				h.logger.Warn("ingest metrics to observability plugin", "error", err, "workload_id", workloadID)
+			}
+		}
 	}
 
 	if h.bus != nil {

@@ -100,4 +100,15 @@ type PluginManager interface {
 
 	// HandlePluginRoute forwards an HTTP request to the given plugin via gRPC.
 	HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HTTPRequest) (*pluginsv1.HTTPResponse, error)
+
+	// ── Observability (monitoring.framework capability) ───────────────────────
+
+	// GetMetricsBackendURL returns the PromQL-compatible query URL of the active
+	// monitoring plugin's time-series backend (e.g. VictoriaMetrics).
+	// Returns ("", nil) when no monitoring plugin is installed.
+	GetMetricsBackendURL(ctx context.Context) (string, error)
+
+	// GetPluginInternalFrontendURL returns the internal (Docker-network) URL of
+	// the plugin's frontend JS bundle, or "" if the plugin has no frontend.
+	GetPluginInternalFrontendURL(ctx context.Context, pluginID string) (string, error)
 }

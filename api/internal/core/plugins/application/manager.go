@@ -219,7 +219,7 @@ func (m *Manager) Install(ctx context.Context, manifest *domain.CatalogManifest,
 		ID:           manifest.ID,
 		Type:         manifest.Type,
 		DisplayName:  manifest.Name,
-		Image:        fmt.Sprintf("%s:%s", manifest.Image, manifest.Version),
+		Image:        pluginImage(manifest.Image, manifest.Version),
 		Version:      manifest.Version,
 		FrontendURL:  manifest.FrontendURL,
 		GRPCAddr:     grpcAddr,
@@ -913,6 +913,15 @@ func (m *Manager) checkPlugin(ctx context.Context, p *domain.Plugin) {
 				}
 			}
 		}
+
+		// Ensure companion containers (e.g. VictoriaMetrics) are running before
+		// restarting the plugin — mirrors what ensureRunning does at startup.
+		if checkManifest != nil {
+			if compErr := m.deployCompanions(ctx, checkManifest, allConfig); compErr != nil {
+				m.logger.Warn("plugin health: companion deploy failed", "id", p.ID, "error", compErr)
+			}
+		}
+
 		spec := m.buildContainerSpec(p, checkManifest, allConfig)
 
 		if restartErr := m.rt.Deploy(ctx, spec); restartErr != nil {
@@ -1275,13 +1284,14 @@ func (m *Manager) deployCompanions(ctx context.Context, manifest *domain.Catalog
 		}
 
 		spec := runtime.ContainerSpec{
-			ID:      c.ID,
-			Image:   c.Image,
-			Command: c.Command,
-			Env:     env,
-			Ports:   ports,
-			Volumes: volumes,
-			User:    c.User,
+			ID:         c.ID,
+			Image:      c.Image,
+			Entrypoint: c.Entrypoint,
+			Command:    c.Command,
+			Env:        env,
+			Ports:      ports,
+			Volumes:    volumes,
+			User:       c.User,
 			Labels: map[string]string{
 				"kleff.io/managed":             "true",
 				"kleff.io/plugin-id":           manifest.ID,
@@ -1347,6 +1357,83 @@ func (m *Manager) removeCompanions(ctx context.Context, manifest *domain.Catalog
 			m.logger.Info("companion removed", "companion", c.ID, "plugin", manifest.ID)
 		}
 	}
+}
+
+// ── Observability framework ───────────────────────────────────────────────────
+
+// IngestWorkloadMetrics finds the active observability.framework plugin and
+// forwards a metric sample to it via gRPC. Non-fatal: errors are logged only.
+func (m *Manager) IngestWorkloadMetrics(ctx context.Context, sample *pluginsv1.MetricSample) error {
+	m.mu.RLock()
+	var frameworkID string
+	for id, caps := range m.capabilities {
+		if caps[pluginsv1.CapabilityMonitoringFramework] {
+			frameworkID = id
+			break
+		}
+	}
+	m.mu.RUnlock()
+
+	if frameworkID == "" {
+		return nil // no observability plugin installed — silently drop
+	}
+
+	client, err := m.pool.MonitoringFrameworkClient(frameworkID)
+	if err != nil {
+		return fmt.Errorf("observability framework client: %w", err)
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	resp, err := client.IngestMetrics(callCtx, &pluginsv1.IngestMetricsRequest{Sample: sample})
+	if err != nil {
+		return fmt.Errorf("IngestMetrics: %w", err)
+	}
+	if resp.Error != nil {
+		return fmt.Errorf("IngestMetrics: %s", resp.Error.Message)
+	}
+	return nil
+}
+
+// GetMetricsBackendURL returns the PromQL-compatible query base URL of the
+// active monitoring plugin's time-series backend (e.g. VictoriaMetrics).
+// It finds the companion with InternalAddr set on the monitoring.framework plugin.
+func (m *Manager) GetMetricsBackendURL(ctx context.Context) (string, error) {
+	m.mu.RLock()
+	var frameworkID string
+	for id, caps := range m.capabilities {
+		if caps[pluginsv1.CapabilityMonitoringFramework] {
+			frameworkID = id
+			break
+		}
+	}
+	m.mu.RUnlock()
+
+	if frameworkID == "" {
+		return "", nil
+	}
+
+	manifest, err := m.registry.GetManifest(ctx, frameworkID)
+	if err != nil || manifest == nil {
+		return "", nil
+	}
+	for _, c := range manifest.Companions {
+		if c.InternalAddr != "" {
+			return c.InternalAddr, nil
+		}
+	}
+	return "", nil
+}
+
+// GetPluginInternalFrontendURL returns the internal (Docker-network) URL stored
+// in the plugin DB record's FrontendURL field, or "" if none is set.
+func (m *Manager) GetPluginInternalFrontendURL(ctx context.Context, pluginID string) (string, error) {
+	p, err := m.store.FindByID(ctx, pluginID)
+	if err != nil {
+		return "", err
+	}
+	return p.FrontendURL, nil
 }
 
 // ── Secret encryption (AES-256-GCM) ──────────────────────────────────────────
@@ -1505,6 +1592,19 @@ func mergeConfig(configJSON []byte, secrets map[string]string) map[string]string
 
 // DeriveSecretKey derives a 32-byte AES-256 key from the SECRET_KEY env var
 // using SHA-256. Call this during bootstrap.
+// pluginImage returns a fully-tagged image reference. If the image field already
+// contains a tag (a colon after the last slash), the version is not appended.
+func pluginImage(image, version string) string {
+	ref := image
+	if idx := strings.LastIndex(ref, "/"); idx >= 0 {
+		ref = ref[idx+1:]
+	}
+	if !strings.Contains(ref, ":") {
+		return image + ":" + version
+	}
+	return image
+}
+
 func DeriveSecretKey(raw string) []byte {
 	if raw == "" {
 		return nil

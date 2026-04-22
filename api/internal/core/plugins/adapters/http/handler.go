@@ -22,8 +22,11 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -48,6 +51,13 @@ func NewHandler(
 	logger *slog.Logger,
 ) *Handler {
 	return &Handler{manager: manager, registry: registry, logger: logger}
+}
+
+// RegisterAnonymousRoutes attaches routes that require no authentication.
+// These must be registered outside any auth middleware group.
+func (h *Handler) RegisterAnonymousRoutes(r chi.Router) {
+	r.Get("/api/v1/plugins/{id}/js", h.handlePluginJS)
+	r.Get("/api/v1/metrics/query_range", h.handleMetricsQueryRange)
 }
 
 // RegisterPublicRoutes attaches authenticated-but-not-admin plugin routes.
@@ -154,7 +164,7 @@ func (h *Handler) handleListInstalledPublic(w http.ResponseWriter, r *http.Reque
 	if !isAdmin {
 		filtered := plugins[:0]
 		for _, p := range plugins {
-			if p.Type == "ui" {
+			if p.Type == "ui" || p.FrontendURL != "" {
 				filtered = append(filtered, p)
 			}
 		}
@@ -362,7 +372,7 @@ func toResponse(p *plugindomain.Plugin) pluginResponse {
 		Image:       p.Image,
 		Version:     p.Version,
 		GRPCAddr:    p.GRPCAddr,
-		FrontendURL: p.FrontendURL,
+		FrontendURL: pluginJSProxyURL(p),
 		Config:      p.Config, // secrets already stripped from Config field
 		Enabled:     p.Enabled,
 		Status:      p.Status,
@@ -377,4 +387,69 @@ func toResponses(plugins []*plugindomain.Plugin) []pluginResponse {
 		out[i] = toResponse(p)
 	}
 	return out
+}
+
+// pluginJSProxyURL returns the public proxy path for a plugin's JS bundle.
+// If FrontendURL is an internal Docker URL (starts with "http://kleff-") the
+// browser cannot reach it directly; the platform proxies it instead.
+func pluginJSProxyURL(p *plugindomain.Plugin) string {
+	if p.FrontendURL == "" {
+		return ""
+	}
+	if strings.HasPrefix(p.FrontendURL, "http://kleff-") {
+		return fmt.Sprintf("/api/v1/plugins/%s/js", p.ID)
+	}
+	return p.FrontendURL
+}
+
+// handlePluginJS proxies the plugin's JS bundle from its internal Docker-network
+// URL to the browser. Only works for plugins whose FrontendURL starts with
+// "http://kleff-" (i.e. is a container-internal address).
+func (h *Handler) handlePluginJS(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	internalURL, err := h.manager.GetPluginInternalFrontendURL(r.Context(), id)
+	if err != nil || internalURL == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if !strings.HasPrefix(internalURL, "http://kleff-") {
+		http.NotFound(w, r)
+		return
+	}
+
+	resp, err := http.Get(internalURL) //nolint:noctx
+	if err != nil {
+		h.logger.Warn("plugin JS proxy: fetch failed", "id", id, "url", internalURL, "error", err)
+		http.Error(w, "upstream unavailable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/javascript")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
+}
+
+// handleMetricsQueryRange proxies a PromQL query_range request to the active
+// monitoring plugin's time-series backend (e.g. VictoriaMetrics).
+func (h *Handler) handleMetricsQueryRange(w http.ResponseWriter, r *http.Request) {
+	backendURL, err := h.manager.GetMetricsBackendURL(r.Context())
+	if err != nil || backendURL == "" {
+		commonhttp.Error(w, domain.NewBadRequest("no monitoring plugin installed"))
+		return
+	}
+
+	target := backendURL + "/api/v1/query_range?" + r.URL.RawQuery
+	resp, err := http.Get(target) //nolint:noctx
+	if err != nil {
+		h.logger.Warn("metrics proxy: upstream error", "url", target, "error", err)
+		http.Error(w, "upstream unavailable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
 }

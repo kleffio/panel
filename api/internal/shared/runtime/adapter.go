@@ -50,6 +50,9 @@ type ContainerSpec struct {
 	// Image is the fully qualified Docker image reference.
 	Image string
 
+	// Entrypoint overrides the container's default ENTRYPOINT (optional).
+	Entrypoint []string
+
 	// Command overrides the container's default CMD (optional).
 	Command []string
 

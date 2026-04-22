@@ -43,6 +43,9 @@ type CompanionSpec struct {
 	// Image is the Docker image reference for the companion container.
 	Image string `json:"image"`
 
+	// Entrypoint overrides the container's default ENTRYPOINT.
+	Entrypoint []string `json:"entrypoint,omitempty"`
+
 	// Command overrides the container's default CMD, e.g. ["start-dev"].
 	Command []string `json:"command,omitempty"`
 

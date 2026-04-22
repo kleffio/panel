@@ -129,6 +129,17 @@ func (p *Pool) HTTPPluginClient(id string) (pluginsv1.PluginHTTPClient, error) {
 	return pluginsv1.NewPluginHTTPClient(conn), nil
 }
 
+// MonitoringFrameworkClient returns a MonitoringFrameworkClient for the given plugin ID.
+func (p *Pool) MonitoringFrameworkClient(id string) (pluginsv1.MonitoringFrameworkClient, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	conn, ok := p.conns[id]
+	if !ok {
+		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
+	}
+	return pluginsv1.NewMonitoringFrameworkClient(conn), nil
+}
+
 // HasConnection reports whether a live connection exists for id.
 func (p *Pool) HasConnection(id string) bool {
 	p.mu.RLock()

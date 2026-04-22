@@ -111,6 +111,7 @@ func (r *Runtime) Deploy(ctx context.Context, spec runtime.ContainerSpec) error 
 	resp, err := r.client.ContainerCreate(ctx,
 		&container.Config{
 			Image:        spec.Image,
+			Entrypoint:   spec.Entrypoint,
 			Cmd:          spec.Command,
 			Env:          env,
 			Labels:       labels,
