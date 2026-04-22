@@ -23,19 +23,19 @@ import { listWorkloads } from "@/lib/api/projects";
 // ── Mock billing data (replace with real API when billing is live) ──────────
 
 const MOCK_TRANSACTIONS = [
-  { id: "1", date: "Apr 15, 2026", description: "Container runtime — prod-api",    amount: 12.40,  status: "paid"    as const },
-  { id: "2", date: "Apr 14, 2026", description: "Container runtime — auth-worker",  amount: 8.20,   status: "paid"    as const },
-  { id: "3", date: "Apr 13, 2026", description: "Egress bandwidth",                 amount: 2.10,   status: "paid"    as const },
-  { id: "4", date: "Apr 10, 2026", description: "Container runtime — redis-cache",  amount: 4.80,   status: "paid"    as const },
-  { id: "5", date: "Apr 01, 2026", description: "Pro plan — April",                 amount: 20.00,  status: "paid"    as const },
+  { id: "1", date: "Apr 15, 2026", description: "Container runtime — prod-api", amount: 12.40, status: "paid" as const },
+  { id: "2", date: "Apr 14, 2026", description: "Container runtime — auth-worker", amount: 8.20, status: "paid" as const },
+  { id: "3", date: "Apr 13, 2026", description: "Egress bandwidth", amount: 2.10, status: "paid" as const },
+  { id: "4", date: "Apr 10, 2026", description: "Container runtime — redis-cache", amount: 4.80, status: "paid" as const },
+  { id: "5", date: "Apr 01, 2026", description: "Pro plan — April", amount: 20.00, status: "paid" as const },
 ];
 
 const MOCK_ACTIVITY = [
-  { icon: "check"  as const, message: "prod-api deployed successfully",        time: "12 min ago" },
-  { icon: "alert"  as const, message: "API latency spiked to 450ms",           time: "24 min ago" },
-  { icon: "check"  as const, message: "Database backup completed",             time: "4 hr ago"   },
-  { icon: "commit" as const, message: "auth-worker scaled to 3 replicas",      time: "6 hr ago"   },
-  { icon: "commit" as const, message: "redis-cache provisioned",               time: "Yesterday"  },
+  { icon: "check" as const, message: "prod-api deployed successfully", time: "12 min ago" },
+  { icon: "alert" as const, message: "API latency spiked to 450ms", time: "24 min ago" },
+  { icon: "check" as const, message: "Database backup completed", time: "4 hr ago" },
+  { icon: "commit" as const, message: "auth-worker scaled to 3 replicas", time: "6 hr ago" },
+  { icon: "commit" as const, message: "redis-cache provisioned", time: "Yesterday" },
 ];
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -84,6 +84,8 @@ export function UserDashboard() {
       caption: "+$8.30 from last month",
       trend: "up" as const,
       icon: DollarSign,
+      color: "text-emerald-400",
+      bg: "bg-emerald-500/10",
     },
     {
       label: "Active projects",
@@ -91,6 +93,8 @@ export function UserDashboard() {
       caption: projects.length === 1 ? "1 project" : `${projects.length} projects`,
       trend: null,
       icon: FolderKanban,
+      color: "text-primary",
+      bg: "bg-primary/10",
     },
     {
       label: "Running containers",
@@ -98,6 +102,8 @@ export function UserDashboard() {
       caption: "Across all projects",
       trend: null,
       icon: Container,
+      color: "text-blue-400",
+      bg: "bg-blue-500/10",
     },
     {
       label: "Requests / min",
@@ -105,123 +111,146 @@ export function UserDashboard() {
       caption: "+12% from last hour",
       trend: "up" as const,
       icon: Activity,
+      color: "text-purple-400",
+      bg: "bg-purple-500/10",
     },
   ];
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8 animate-in fade-in duration-500">
+    <div className="relative mx-auto max-w-7xl space-y-8 animate-in fade-in duration-500 z-0 px-4 sm:px-6 lg:px-8 pb-12">
+      {/* Ambient Background Glows & Grid */}
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-kleff-grid [mask-image:radial-gradient(ellipse_70%_70%_at_50%_0%,#000_40%,transparent_100%)] opacity-30" />
+      <div className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-[40rem] w-[40rem] -translate-x-1/2 rounded-full bg-primary/10 blur-[120px]" />
+      <div className="pointer-events-none absolute -right-20 top-80 -z-10 h-[24rem] w-[24rem] rounded-full bg-blue-500/5 blur-[100px]" />
+      <div className="pointer-events-none absolute -left-20 top-[30rem] -z-10 h-[24rem] w-[24rem] rounded-full bg-purple-500/5 blur-[100px]" />
 
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">{greeting},</p>
-          <h1 className="text-2xl font-semibold tracking-tight capitalize">{displayName}</h1>
+      <div className="flex items-start justify-between relative z-10 pt-4">
+        <div className="space-y-1">
+          <p className="text-sm font-medium uppercase tracking-widest text-primary/80">{greeting},</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-white capitalize drop-shadow-sm">{displayName}</h1>
         </div>
-        <span className="text-xs text-muted-foreground pt-1">
-          {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-        </span>
+        <div className="glass-surface rounded-full px-4 py-1.5 text-xs font-medium text-white/70 shadow-sm border border-white/5">
+          {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+        </div>
       </div>
 
       {/* Metric cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
         {metrics.map((m) => (
           <div
             key={m.label}
-            className="rounded-xl border border-white/[0.07] bg-card p-5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.02)_inset]"
+            className="glass-surface p-6 rounded-2xl flex flex-col gap-4 relative overflow-hidden group transition-all duration-300 hover:bg-white/[0.04] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
           >
+            {/* Subtle top glare */}
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">{m.label}</p>
-              <span className="flex size-7 items-center justify-center rounded-md bg-white/[0.04]">
-                <m.icon className="size-4 text-muted-foreground/60" />
+              <p className="text-[11px] font-semibold text-white/60 tracking-widest uppercase">{m.label}</p>
+              <span className={`flex size-8 items-center justify-center rounded-lg shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)] border border-white/5 ${m.bg}`}>
+                <m.icon className={`size-4 ${m.color}`} />
               </span>
             </div>
-            <p className="text-3xl font-semibold tracking-tight text-foreground">{m.value}</p>
-            <p className="flex items-center gap-1 text-xs text-muted-foreground">
-              {m.trend === "up" && <TrendingUp className="size-3 text-primary" />}
-              {m.trend === "down" && <TrendingDown className="size-3 text-destructive" />}
-              {m.caption}
-            </p>
+            <div className="space-y-1">
+              <p className="text-3xl font-semibold tracking-tight text-white drop-shadow-md">{m.value}</p>
+              <p className="flex items-center gap-1.5 text-xs text-white/50 font-medium mt-1">
+                {m.trend === "up" && <span className="flex items-center justify-center size-4 rounded-full bg-emerald-500/10 text-emerald-400"><TrendingUp className="size-2.5" /></span>}
+                {m.trend === "down" && <span className="flex items-center justify-center size-4 rounded-full bg-rose-500/10 text-rose-400"><TrendingDown className="size-2.5" /></span>}
+                {m.caption}
+              </p>
+            </div>
           </div>
         ))}
       </div>
 
       {/* Main content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
 
         {/* Left column — Spending + Transactions */}
         <div className="lg:col-span-2 space-y-6">
 
           {/* Spending overview */}
-          <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
-            <div className="border-b border-white/[0.06] px-6 py-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold flex items-center gap-2">
-                <CreditCard className="size-4 text-primary" />
+          <div className="glass-panel overflow-hidden relative group">
+            {/* Ambient glow behind chart */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3/4 h-1/2 bg-primary/5 blur-[60px] rounded-full pointer-events-none" />
+
+            <div className="border-b border-white/[0.06] px-6 py-5 flex items-center justify-between relative z-10">
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2.5">
+                <span className="flex size-6 items-center justify-center rounded-md bg-primary/10 border border-primary/20 shadow-[0_0_10px_rgba(245,181,23,0.15)]">
+                  <CreditCard className="size-3 text-primary" />
+                </span>
                 Spending Overview
               </h2>
-              <span className="text-xs text-muted-foreground">April 2026</span>
+              <span className="glass-surface px-2.5 py-1 rounded-md text-[10px] font-semibold text-white/60 uppercase tracking-widest border border-white/5">April 2026</span>
             </div>
-            <div className="px-6 py-5">
-              {/* Simple bar chart — placeholder */}
-              <div className="flex items-end gap-1.5 h-24 mb-3">
+            <div className="px-6 py-6 relative z-10">
+              {/* Glassy bar chart */}
+              <div className="flex items-end gap-2.5 h-32 mb-4">
                 {[18, 32, 24, 40, 28, 47.50, 35].map((v, i) => (
-                  <div key={i} className="flex-1 flex flex-col justify-end">
+                  <div key={i} className="flex-1 flex flex-col justify-end group/bar h-full">
                     <div
-                      className="rounded-t-sm bg-primary/30 hover:bg-primary/50 transition-colors cursor-default"
+                      className="rounded-t-md bg-gradient-kleff opacity-70 group-hover/bar:opacity-100 transition-all cursor-default shadow-[0_0_15px_rgba(245,181,23,0.1)] group-hover/bar:shadow-[0_0_25px_rgba(245,181,23,0.4)] relative overflow-hidden"
                       style={{ height: `${(v / 50) * 100}%` }}
                       title={`$${v}`}
-                    />
+                    >
+                      {/* Bar top glare */}
+                      <div className="absolute inset-x-0 top-0 h-[2px] bg-white/40" />
+                      <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+                    </div>
                   </div>
                 ))}
               </div>
-              <div className="flex justify-between text-[10px] text-muted-foreground">
-                {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => (
+              <div className="flex justify-between text-[10px] font-semibold text-white/30 uppercase tracking-widest border-t border-white/5 pt-4">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
                   <span key={d} className="flex-1 text-center">{d}</span>
                 ))}
               </div>
-              <div className="mt-4 flex items-center gap-6 text-sm">
-                <div>
-                  <p className="text-muted-foreground text-xs">This month</p>
-                  <p className="font-semibold text-foreground">${totalSpend.toFixed(2)}</p>
+
+              <div className="mt-8 flex flex-wrap gap-4">
+                <div className="flex-1 min-w-[120px] glass-surface rounded-xl p-4 border border-white/[0.04]">
+                  <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold mb-1.5">This month</p>
+                  <p className="text-2xl font-semibold text-white drop-shadow-sm">${totalSpend.toFixed(2)}</p>
                 </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Plan</p>
-                  <p className="font-semibold text-foreground flex items-center gap-1">
-                    <Zap className="size-3 text-primary" /> Pro
-                  </p>
+                <div className="flex-1 min-w-[120px] glass-surface rounded-xl p-4 border border-white/[0.04]">
+                  <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold mb-1.5">Plan</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="flex items-center justify-center size-6 rounded bg-primary/20 text-primary shadow-[0_0_10px_rgba(245,181,23,0.2)]"><Zap className="size-3.5" /></span>
+                    <p className="text-xl font-semibold text-white drop-shadow-sm">Pro</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-muted-foreground text-xs">Next invoice</p>
-                  <p className="font-semibold text-foreground">May 1, 2026</p>
+                <div className="flex-1 min-w-[120px] glass-surface rounded-xl p-4 border border-white/[0.04]">
+                  <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold mb-1.5">Next invoice</p>
+                  <p className="text-xl font-semibold text-white drop-shadow-sm mt-0.5">May 1, 2026</p>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Transaction history */}
-          <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
-            <div className="border-b border-white/[0.06] px-6 py-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Transaction History</h2>
-              <button className="text-xs text-primary hover:text-primary/80 flex items-center gap-1 transition-colors">
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-6 py-5 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white">Transaction History</h2>
+              <button className="text-[10px] font-semibold uppercase tracking-widest text-primary hover:text-primary/80 flex items-center gap-1 transition-colors bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-md border border-primary/20">
                 View all <ArrowUpRight className="size-3" />
               </button>
             </div>
-            <div className="divide-y divide-white/[0.05]">
+            <div className="divide-y divide-white/[0.04]">
               {MOCK_TRANSACTIONS.map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between px-6 py-3 hover:bg-accent/30 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="size-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <DollarSign className="size-3.5 text-primary" />
+                <div key={tx.id} className="flex items-center justify-between px-6 py-4 hover:bg-white/[0.03] transition-colors group">
+                  <div className="flex items-center gap-4">
+                    <div className="size-10 rounded-xl bg-white/[0.03] border border-white/[0.05] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] flex items-center justify-center shrink-0 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all duration-300">
+                      <DollarSign className="size-4 text-white/40 group-hover:text-primary transition-colors duration-300" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">{tx.description}</p>
-                      <p className="text-xs text-muted-foreground">{tx.date}</p>
+                      <p className="text-sm font-medium text-white/90 group-hover:text-white transition-colors">{tx.description}</p>
+                      <p className="text-[11px] font-medium text-white/40 mt-1 uppercase tracking-wider">{tx.date}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-foreground">
+                  <div className="flex items-center gap-5">
+                    <span className="text-sm font-medium text-white drop-shadow-sm font-mono">
                       ${tx.amount.toFixed(2)}
                     </span>
-                    <span className="text-[10px] font-medium rounded-full px-2 py-0.5 bg-emerald-500/10 text-emerald-500">
+                    <span className="text-[10px] font-bold uppercase tracking-widest rounded-md px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
                       {tx.status}
                     </span>
                   </div>
@@ -235,52 +264,68 @@ export function UserDashboard() {
         <div className="space-y-6">
 
           {/* Project health */}
-          <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
-            <div className="border-b border-white/[0.06] px-6 py-4">
-              <h2 className="text-sm font-semibold">Projects</h2>
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-6 py-5 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white">Active Projects</h2>
+              <span className="flex size-5 items-center justify-center rounded-md bg-white/10 text-[10px] font-bold text-white border border-white/10">
+                {projects.length}
+              </span>
             </div>
-            <div className="p-4 space-y-2">
+            <div className="p-3">
               {projects.length === 0 ? (
-                <div className="py-6 text-center text-xs text-muted-foreground">
-                  No projects yet — use the workspace switcher to create one.
+                <div className="py-8 text-center px-4">
+                  <div className="mx-auto size-12 rounded-xl bg-white/5 border border-white/5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] flex items-center justify-center mb-4">
+                    <FolderKanban className="size-5 text-white/30" />
+                  </div>
+                  <p className="text-[13px] text-white/50 leading-relaxed">
+                    No projects yet.<br />Use the workspace switcher to create one.
+                  </p>
                 </div>
               ) : (
-                projects.map((project) => (
-                  <a
-                    key={project.id}
-                    href={`/project/${username}/${project.slug}`}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-accent/40 transition-colors group"
-                  >
-                    <div className="size-2 rounded-full bg-emerald-500 shrink-0" />
-                    <span className="flex-1 text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
-                      {project.name}
-                    </span>
-                    <ArrowUpRight className="size-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </a>
-                ))
+                <div className="space-y-1">
+                  {projects.map((project) => (
+                    <a
+                      key={project.id}
+                      href={`/project/${username}/${project.slug}`}
+                      className="flex items-center gap-3.5 rounded-xl px-3 py-3 hover:bg-white/[0.04] border border-transparent hover:border-white/[0.05] transition-all group"
+                    >
+                      <div className="size-2.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
+                      <span className="flex-1 text-[13px] font-medium text-white/70 group-hover:text-white transition-colors truncate">
+                        {project.name}
+                      </span>
+                      <span className="opacity-0 group-hover:opacity-100 transition-all transform translate-x-1 group-hover:translate-x-0 bg-white/5 border border-white/10 rounded p-1">
+                        <ArrowUpRight className="size-3 text-white/70" />
+                      </span>
+                    </a>
+                  ))}
+                </div>
               )}
             </div>
           </div>
 
           {/* Activity feed */}
-          <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
-            <div className="border-b border-white/[0.06] px-6 py-4">
-              <h2 className="text-sm font-semibold">Recent Activity</h2>
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-6 py-5">
+              <h2 className="text-sm font-semibold text-white">Activity Feed</h2>
             </div>
-            <div className="p-4 space-y-4">
-              {MOCK_ACTIVITY.map((item, i) => (
-                <div key={i} className="flex gap-3 items-start">
-                  {item.icon === "commit" && <GitCommit className="size-4 text-muted-foreground mt-0.5 shrink-0" />}
-                  {item.icon === "alert"  && <AlertCircle className="size-4 text-amber-500 mt-0.5 shrink-0" />}
-                  {item.icon === "check"  && <CheckCircle2 className="size-4 text-emerald-500 mt-0.5 shrink-0" />}
-                  <div>
-                    <p className="text-sm text-foreground leading-snug">{item.message}</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                      <Clock className="size-3" /> {item.time}
-                    </p>
+            <div className="p-6">
+              <div className="relative space-y-6 before:absolute before:inset-y-0 before:left-3.5 before:w-px before:bg-gradient-to-b before:from-white/10 before:via-white/10 before:to-transparent">
+                {MOCK_ACTIVITY.map((item, i) => (
+                  <div key={i} className="relative flex gap-5 items-start group">
+                    <div className="relative z-10 flex size-7 items-center justify-center rounded-full bg-[#141416] border border-white/10 shadow-[0_0_0_4px_rgba(20,20,22,0.8)] group-hover:border-white/20 transition-colors mt-0.5">
+                      {item.icon === "commit" && <GitCommit className="size-3.5 text-white/40 group-hover:text-white/80 transition-colors" />}
+                      {item.icon === "alert" && <AlertCircle className="size-3.5 text-rose-400" />}
+                      {item.icon === "check" && <CheckCircle2 className="size-3.5 text-emerald-400" />}
+                    </div>
+                    <div className="flex-1 pt-0.5">
+                      <p className="text-[13px] font-medium text-white/80 leading-snug group-hover:text-white transition-colors">{item.message}</p>
+                      <p className="text-[10px] font-semibold tracking-widest uppercase text-white/40 flex items-center gap-1.5 mt-1.5">
+                        <Clock className="size-3" /> {item.time}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </div>

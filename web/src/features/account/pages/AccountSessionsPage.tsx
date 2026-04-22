@@ -41,6 +41,7 @@ function SessionsList({ sectionId, canRevoke }: { sectionId: string; canRevoke: 
   const { data, isLoading } = useQuery({
     queryKey: SESSIONS_KEY,
     queryFn: () => listSessions(sid),
+    refetchInterval: 30_000,
   });
 
   const revokeMutation = useMutation({
@@ -78,7 +79,10 @@ function SessionsList({ sectionId, canRevoke }: { sectionId: string; canRevoke: 
     </div>
   );
 
-  const sessions = data?.sessions ?? [];
+  const now = Math.floor(Date.now() / 1000);
+  const sessions = (data?.sessions ?? []).filter(
+    (s) => s.current || !s.expires_at || s.expires_at > now,
+  );
   const otherSessions = sessions.filter((s) => !s.current);
 
   if (sessions.length === 0) return <p className="text-sm text-muted-foreground">No active sessions found.</p>;
@@ -120,6 +124,7 @@ function SessionsList({ sectionId, canRevoke }: { sectionId: string; canRevoke: 
                 <p className="text-xs text-muted-foreground">
                   {session.ip_address && `${session.ip_address} · `}
                   {session.last_access ? `Last active ${formatTime(session.last_access)}` : `Started ${formatTime(session.started_at)}`}
+                  {session.expires_at && ` · Expires ${formatTime(session.expires_at)}`}
                 </p>
               </div>
             </div>

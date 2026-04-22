@@ -281,6 +281,39 @@ func (h *AuthHandler) handleChangePassword(w http.ResponseWriter, r *http.Reques
 	commonhttp.Success(w, map[string]string{"status": "ok"})
 }
 
+// sessionDTO is the wire representation of a session sent to the frontend.
+// It normalises timestamps to unix seconds regardless of what the IDP plugin
+// returns (some plugins return milliseconds, which would render as year ~58293
+// in the UI when multiplied by 1000 again on the client side).
+type sessionDTO struct {
+	ID         string `json:"id"`
+	IPAddress  string `json:"ip_address,omitempty"`
+	UserAgent  string `json:"user_agent,omitempty"`
+	StartedAt  int64  `json:"started_at,omitempty"`  // unix seconds
+	LastAccess int64  `json:"last_access,omitempty"` // unix seconds
+	ExpiresAt  int64  `json:"expires_at,omitempty"`  // unix seconds; 0 = unknown
+	Current    bool   `json:"current"`
+}
+
+// normaliseSession converts a plugin SDK Session into a sessionDTO, coercing
+// any millisecond timestamps (> 1e10) down to unix seconds.
+func normaliseSession(s *pluginsv1.Session) sessionDTO {
+	toSeconds := func(v int64) int64 {
+		if v > 1e10 {
+			return v / 1000
+		}
+		return v
+	}
+	return sessionDTO{
+		ID:         s.ID,
+		IPAddress:  s.IPAddress,
+		UserAgent:  s.UserAgent,
+		StartedAt:  toSeconds(s.StartedAt),
+		LastAccess: toSeconds(s.LastAccess),
+		Current:    s.Current,
+	}
+}
+
 // GET /api/v1/auth/sessions?sid=<session_state>
 func (h *AuthHandler) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.ClaimsFromContext(r.Context())
@@ -295,10 +328,11 @@ func (h *AuthHandler) handleListSessions(w http.ResponseWriter, r *http.Request)
 		commonhttp.Error(w, domain.NewInternal(err))
 		return
 	}
-	if sessions == nil {
-		sessions = []*pluginsv1.Session{}
+	dtos := make([]sessionDTO, len(sessions))
+	for i, s := range sessions {
+		dtos[i] = normaliseSession(s)
 	}
-	commonhttp.Success(w, map[string]any{"sessions": sessions})
+	commonhttp.Success(w, map[string]any{"sessions": dtos})
 }
 
 // DELETE /api/v1/auth/sessions  — revoke all sessions except the current one

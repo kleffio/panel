@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { AuthProvider as OidcProvider, useAuth as useOidcAuth } from "react-oidc-context";
 import { WebStorageStateStore } from "oidc-client-ts";
-import { setApiAccessToken, clearApiAccessToken, setOnUnauthorized } from "@/lib/api";
+import { setApiAccessToken, clearApiAccessToken, setOnUnauthorized, setTokenRefresher } from "@/lib/api";
 import { CurrentUserContext, AuthConfigContext, type CurrentUser } from "./context";
 import { fetchCurrentUser, fetchAuthConfig, type AuthConfig } from "./api";
 
@@ -75,15 +75,23 @@ function CurrentUserProvider({ children }: { children: ReactNode }) {
   }, [auth.error, auth.removeUser]);
 
   useEffect(() => {
-    // Register global interceptor callback to log out on 401s
+    setTokenRefresher(async () => {
+      try {
+        const user = await auth.signinSilent();
+        return user?.access_token ?? null;
+      } catch {
+        return null;
+      }
+    });
     setOnUnauthorized(() => {
       clearApiAccessToken();
       auth.removeUser();
     });
     return () => {
+      setTokenRefresher(null);
       setOnUnauthorized(() => {});
     };
-  }, [auth.removeUser]);
+  }, [auth.signinSilent, auth.removeUser]);
 
   // Sync token to API client synchronously during render so queries 
   // fired by children on mount have the token immediately.
