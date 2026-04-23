@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import {
   DollarSign,
-  FolderKanban,
   Container,
+  CircleOff,
   Activity,
   TrendingUp,
   TrendingDown,
@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/features/auth";
 import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
-import { listWorkloads } from "@/lib/api/projects";
+import { listWorkloads, type WorkloadDTO } from "@/lib/api/projects";
 
 // ── Mock billing data (replace with real API when billing is live) ──────────
 
@@ -42,8 +42,10 @@ const MOCK_ACTIVITY = [
 
 export function UserDashboard() {
   const auth = useAuth();
-  const { projects, currentProjectID } = useCurrentProject();
+  const { currentProjectID } = useCurrentProject();
+  const [workloads, setWorkloads] = useState<WorkloadDTO[]>([]);
   const [runningCount, setRunningCount] = useState<number | null>(null);
+  const [stoppedCount, setStoppedCount] = useState<number | null>(null);
 
   const user = auth.user;
   const username = (user?.profile?.preferred_username as string | undefined)
@@ -61,21 +63,17 @@ export function UserDashboard() {
 
   const totalSpend = MOCK_TRANSACTIONS.reduce((s, t) => s + t.amount, 0);
 
-  // Count running workloads across all projects
   useEffect(() => {
-    if (projects.length === 0) {
-      setRunningCount(0);
-      return;
-    }
-    Promise.all(projects.map((p) => listWorkloads(p.id)))
-      .then((results) => {
-        const running = results.flatMap((r) => r.workloads ?? []).filter(
-          (w) => w.state === "running"
-        ).length;
-        setRunningCount(running);
+    if (!currentProjectID) { setWorkloads([]); setRunningCount(0); setStoppedCount(0); return; }
+    listWorkloads(currentProjectID)
+      .then((r) => {
+        const wl = r.workloads ?? [];
+        setWorkloads(wl);
+        setRunningCount(wl.filter((w) => w.state === "running").length);
+        setStoppedCount(wl.filter((w) => w.state === "stopped" || w.state === "failed").length);
       })
-      .catch(() => setRunningCount(0));
-  }, [projects]);
+      .catch(() => { setWorkloads([]); setRunningCount(0); setStoppedCount(0); });
+  }, [currentProjectID]);
 
   const metrics = [
     {
@@ -88,18 +86,18 @@ export function UserDashboard() {
       bg: "bg-emerald-500/10",
     },
     {
-      label: "Active projects",
-      value: String(projects.length),
-      caption: projects.length === 1 ? "1 project" : `${projects.length} projects`,
+      label: "Stopped",
+      value: stoppedCount === null ? "—" : String(stoppedCount),
+      caption: "Idle or failed containers",
       trend: null,
-      icon: FolderKanban,
-      color: "text-primary",
-      bg: "bg-primary/10",
+      icon: CircleOff,
+      color: "text-amber-400",
+      bg: "bg-amber-500/10",
     },
     {
       label: "Running containers",
       value: runningCount === null ? "—" : String(runningCount),
-      caption: "Across all projects",
+      caption: "In this project",
       trend: null,
       icon: Container,
       color: "text-blue-400",
@@ -263,41 +261,49 @@ export function UserDashboard() {
         {/* Right column — Project health + Activity */}
         <div className="space-y-6">
 
-          {/* Project health */}
+          {/* Containers */}
           <div className="glass-panel overflow-hidden">
             <div className="border-b border-white/[0.06] px-6 py-5 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white">Active Projects</h2>
+              <h2 className="text-sm font-semibold text-white">Containers</h2>
               <span className="flex size-5 items-center justify-center rounded-md bg-white/10 text-[10px] font-bold text-white border border-white/10">
-                {projects.length}
+                {workloads.length}
               </span>
             </div>
             <div className="p-3">
-              {projects.length === 0 ? (
+              {workloads.length === 0 ? (
                 <div className="py-8 text-center px-4">
                   <div className="mx-auto size-12 rounded-xl bg-white/5 border border-white/5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] flex items-center justify-center mb-4">
-                    <FolderKanban className="size-5 text-white/30" />
+                    <Container className="size-5 text-white/30" />
                   </div>
                   <p className="text-[13px] text-white/50 leading-relaxed">
-                    No projects yet.<br />Use the workspace switcher to create one.
+                    No containers yet.<br />Add a node from the canvas to get started.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {projects.map((project) => (
-                    <a
-                      key={project.id}
-                      href={`/project/${username}/${project.slug}`}
-                      className="flex items-center gap-3.5 rounded-xl px-3 py-3 hover:bg-white/[0.04] border border-transparent hover:border-white/[0.05] transition-all group"
-                    >
-                      <div className="size-2.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
-                      <span className="flex-1 text-[13px] font-medium text-white/70 group-hover:text-white transition-colors truncate">
-                        {project.name}
-                      </span>
-                      <span className="opacity-0 group-hover:opacity-100 transition-all transform translate-x-1 group-hover:translate-x-0 bg-white/5 border border-white/10 rounded p-1">
-                        <ArrowUpRight className="size-3 text-white/70" />
-                      </span>
-                    </a>
-                  ))}
+                  {workloads.map((w) => {
+                    const isRunning = w.state === "running";
+                    const isFailed = w.state === "failed";
+                    const dotColor = isRunning
+                      ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"
+                      : isFailed
+                      ? "bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)]"
+                      : "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]";
+                    return (
+                      <div
+                        key={w.id}
+                        className="flex items-center gap-3.5 rounded-xl px-3 py-3 border border-transparent hover:bg-white/[0.04] hover:border-white/[0.05] transition-all group"
+                      >
+                        <div className={`size-2 rounded-full shrink-0 ${dotColor}`} />
+                        <span className="flex-1 text-[13px] font-medium text-white/70 group-hover:text-white transition-colors truncate">
+                          {w.name}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-white/30">
+                          {w.state}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
