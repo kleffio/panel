@@ -20,6 +20,7 @@ import {
   Network,
   Activity,
   Users,
+  UserCircle,
 } from "lucide-react";
 import {
   cn,
@@ -339,6 +340,14 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-2 pb-2 overflow-y-auto">
+        <NavItem
+          href="/account"
+          label="Account"
+          icon={UserCircle}
+          exact
+          pathname={pathname}
+        />
+
         {projectBase ? (
           <>
             <NavItem

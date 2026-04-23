@@ -3,7 +3,7 @@
 import { useContext } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { UserCircle, ShieldCheck, MonitorSmartphone, Bell, Settings, LogOut, ChevronsUpDown, LayoutGrid } from "lucide-react";
+import { LayoutDashboard, UserCircle, ShieldCheck, MonitorSmartphone, Bell, Settings, LogOut, ChevronsUpDown, LayoutGrid } from "lucide-react";
 import {
   cn,
   DropdownMenu,
@@ -18,7 +18,8 @@ import { useAuth, broadcastSignout, useHasRole, AuthConfigContext } from "@/feat
 import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
 
 const ACCOUNT_NAV = [
-  { href: "/account",           label: "Profile",       icon: UserCircle },
+  { href: "/account",           label: "Account Home",  icon: LayoutDashboard },
+  { href: "/account/profile",   label: "Profile",       icon: UserCircle },
   { href: "/account/security",  label: "Security",      icon: ShieldCheck },
   { href: "/account/sessions",  label: "Sessions",      icon: MonitorSmartphone },
   { href: "/notifications",     label: "Notifications", icon: Bell },
