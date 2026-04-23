@@ -1,20 +1,10 @@
 "use client";
 
-import { useContext } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Puzzle, Users, ScrollText, Settings, ShieldCheck, LogOut, ChevronsUpDown, LayoutGrid } from "lucide-react";
-import {
-  cn,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  Avatar,
-  AvatarFallback,
-} from "@kleffio/ui";
-import { useAuth, broadcastSignout, useHasRole, AuthConfigContext } from "@/features/auth";
+import { usePathname } from "next/navigation";
+import { LayoutDashboard, Puzzle, Users, ScrollText } from "lucide-react";
+import { cn } from "@kleffio/ui";
+import { SidebarUserFooter } from "./SidebarUserFooter";
 
 const ADMIN_NAV = [
   { href: "/admin",         label: "Dashboard",  icon: LayoutDashboard },
@@ -25,24 +15,6 @@ const ADMIN_NAV = [
 
 export function AdminSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
-  const auth = useAuth();
-  const authConfig = useContext(AuthConfigContext);
-  const isAdmin = useHasRole("admin");
-
-  const user = auth.user;
-  const displayName = user?.profile?.name ?? user?.profile?.email ?? "User";
-  const initial = displayName[0]?.toUpperCase() ?? "U";
-
-  function handleSignOut() {
-    broadcastSignout();
-    if (authConfig?.auth_mode === "redirect") {
-      auth.signoutRedirect();
-    } else {
-      auth.removeUser();
-      router.push("/auth/login");
-    }
-  }
 
   return (
     <aside className="flex h-full w-56 flex-col bg-sidebar border-r border-sidebar-border">
@@ -86,45 +58,7 @@ export function AdminSidebar() {
         })}
       </nav>
 
-      {/* User — pinned to bottom */}
-      <div className="border-t border-sidebar-border px-2 py-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-white/[0.05] focus-visible:outline-none">
-              <Avatar size="sm">
-                <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold ring-1 ring-primary/20">
-                  {initial}
-                </AvatarFallback>
-              </Avatar>
-              <span className="flex-1 truncate text-left text-xs font-medium text-sidebar-foreground/60">
-                {displayName}
-              </span>
-              <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/25" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-48 mb-1">
-            <DropdownMenuItem onClick={() => router.push("/")}>
-              <LayoutGrid className="size-4" />
-              Workspace
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push("/account")}>
-              <Settings className="size-4" />
-              Account
-            </DropdownMenuItem>
-            {isAdmin && (
-              <DropdownMenuItem onClick={() => router.push("/admin")}>
-                <ShieldCheck className="size-4" />
-                Admin
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={handleSignOut}>
-              <LogOut className="size-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <SidebarUserFooter workspaceHref="/" />
     </aside>
   );
 }
