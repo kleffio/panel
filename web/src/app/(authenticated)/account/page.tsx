@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { AccountProfilePage } from "@/features/account/pages/AccountProfilePage";
+import { AccountHomePage } from "@/features/dashboard/pages/AccountHomePage";
 
-export const metadata: Metadata = { title: "Profile" };
+export const metadata: Metadata = { title: "Account Home" };
 
 export default function AccountPage() {
-  return <AccountProfilePage />;
+  return <AccountHomePage />;
 }
