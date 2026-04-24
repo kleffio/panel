@@ -26,6 +26,9 @@ import (
 	notificationshttp "github.com/kleffio/platform/internal/core/notifications/adapters/http"
 	notificationspersistence "github.com/kleffio/platform/internal/core/notifications/adapters/persistence"
 	notificationsapp "github.com/kleffio/platform/internal/core/notifications/application"
+	usershttp "github.com/kleffio/platform/internal/core/users/adapters/http"
+	userspersistence "github.com/kleffio/platform/internal/core/users/adapters/persistence"
+	usersapp "github.com/kleffio/platform/internal/core/users/application"
 	nodeshttp "github.com/kleffio/platform/internal/core/nodes/adapters/http"
 	nodespersistence "github.com/kleffio/platform/internal/core/nodes/adapters/persistence"
 	nodesapp "github.com/kleffio/platform/internal/core/nodes/application"
@@ -82,6 +85,7 @@ type Container struct {
 	NotificationsHandler *notificationshttp.Handler
 	NotificationService  *notificationsapp.Service
 	NotificationHub      *notificationsapp.Hub
+	UsersHandler         *usershttp.Handler
 }
 
 // NewContainer wires all dependencies and returns the composition root.
@@ -158,6 +162,9 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 	notificationHub := notificationsapp.NewHub()
 	notificationSvc := notificationsapp.NewService(notificationStore, notificationHub, logger)
 
+	userProfileStore := userspersistence.NewPostgresUserProfileStore(db)
+	userSvc := usersapp.NewService(userProfileStore)
+
 	provisionHandler := workloadcmd.NewProvisionWorkloadHandler(workloadsStore, projectsStore, queuePublisher, catalogStore, logger)
 	workloadAction := workloadcmd.NewWorkloadActionHandler(workloadsStore, projectsStore, queuePublisher, logger)
 
@@ -187,6 +194,7 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 		NotificationsHandler: notificationshttp.NewHandler(notificationSvc, notificationHub, logger),
 		NotificationService:  notificationSvc,
 		NotificationHub:      notificationHub,
+		UsersHandler:         usershttp.NewHandler(userSvc),
 	}, nil
 }
 

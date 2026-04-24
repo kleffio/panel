@@ -35,12 +35,12 @@ func (h *AuthHandler) RegisterPublicRoutes(r chi.Router) {
 	r.Get("/api/v1/auth/config", h.handleConfig)
 	r.Post("/api/v1/auth/refresh", h.handleRefresh)
 	r.Post("/api/v1/auth/token-exchange", h.handleTokenExchange)
+	r.Get("/api/v1/plugins/ui-manifests", h.handleUIManifests)
 }
 
 // RegisterRoutes attaches authenticated auth endpoints.
 func (h *AuthHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/v1/auth/me", h.handleMe)
-	r.Get("/api/v1/plugins/ui-manifests", h.handleUIManifests)
 	r.Post("/api/v1/auth/change-password", h.handleChangePassword)
 	r.Get("/api/v1/auth/sessions", h.handleListSessions)
 	r.Delete("/api/v1/auth/sessions", h.handleRevokeAllSessions)
@@ -208,8 +208,20 @@ func (h *AuthHandler) handleRefresh(w http.ResponseWriter, r *http.Request) {
 // token endpoint, avoiding CORS issues when the browser cannot POST cross-origin.
 func (h *AuthHandler) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
 	cfg, err := h.manager.GetOIDCConfig(r.Context())
-	if err != nil || cfg == nil || cfg.InternalTokenEndpoint == "" {
-		h.logger.Warn("token-exchange: internal token endpoint unavailable", "error", err)
+	if err != nil || cfg == nil {
+		h.logger.Warn("token-exchange: OIDC config unavailable", "error", err)
+		commonhttp.Error(w, domain.NewInternal(fmt.Errorf("token endpoint not available")))
+		return
+	}
+	// Prefer the internal (Docker-network) endpoint to avoid an extra network hop.
+	// Fall back to the public endpoint — this is a server-side proxy so CORS is not
+	// a concern; the browser never sees the IDP URL directly.
+	tokenEndpoint := cfg.InternalTokenEndpoint
+	if tokenEndpoint == "" {
+		tokenEndpoint = cfg.TokenEndpoint
+	}
+	if tokenEndpoint == "" {
+		h.logger.Warn("token-exchange: no token endpoint configured")
 		commonhttp.Error(w, domain.NewInternal(fmt.Errorf("token endpoint not available")))
 		return
 	}
@@ -218,7 +230,7 @@ func (h *AuthHandler) handleTokenExchange(w http.ResponseWriter, r *http.Request
 		commonhttp.Error(w, domain.NewInternal(err))
 		return
 	}
-	proxyReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, cfg.InternalTokenEndpoint, bytes.NewReader(body))
+	proxyReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, tokenEndpoint, bytes.NewReader(body))
 	if err != nil {
 		commonhttp.Error(w, domain.NewInternal(err))
 		return

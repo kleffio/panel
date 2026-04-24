@@ -50,6 +50,7 @@ type Manager struct {
 	capabilities map[string]map[string]bool // plugin ID → set of declared capabilities
 	routes       []pluginRoute              // flat list of all declared plugin HTTP routes
 	activeIDP    string                     // cached from store; set by SetActiveIDP and loaded on Start
+	caCerts      map[string][]byte          // ephemeral CA cert PEM per plugin, for mTLS
 }
 
 // pluginRoute is one entry in the route registry.
@@ -84,6 +85,7 @@ func New(
 		statuses:     make(map[string]domain.PluginStatus),
 		restarts:     make(map[string]int),
 		capabilities: make(map[string]map[string]bool),
+		caCerts:      make(map[string][]byte),
 	}
 	return m
 }
@@ -260,13 +262,17 @@ func (m *Manager) Install(ctx context.Context, manifest *domain.CatalogManifest,
 		}
 	}
 
-	spec := m.buildContainerSpec(p, manifest, config)
+	spec, caCertPEM, err := m.buildSecureContainerSpec(p, manifest, config)
+	if err != nil {
+		m.setStatus(p.ID, domain.PluginStatusError)
+		return nil, fmt.Errorf("install plugin: %w", err)
+	}
 	if err := m.rt.Deploy(ctx, spec); err != nil {
 		m.setStatus(p.ID, domain.PluginStatusError)
 		return nil, fmt.Errorf("install plugin: deploy: %w", err)
 	}
 
-	if err := m.pool.Dial(ctx, p.ID, grpcAddr); err != nil {
+	if err := m.pool.Dial(ctx, p.ID, grpcAddr, caCertPEM); err != nil {
 		m.setStatus(p.ID, domain.PluginStatusError)
 		return nil, fmt.Errorf("install plugin: dial gRPC: %w", err)
 	}
@@ -466,12 +472,15 @@ func (m *Manager) Reconfigure(ctx context.Context, pluginID string, config map[s
 
 	// Restart container with new env vars.
 	_ = m.pool.Close(pluginID)
-	spec := m.buildContainerSpec(p, manifest, config)
+	spec, caCertPEM, err := m.buildSecureContainerSpec(p, manifest, config)
+	if err != nil {
+		return fmt.Errorf("reconfigure plugin: %w", err)
+	}
 	if err := m.rt.Deploy(ctx, spec); err != nil {
 		return fmt.Errorf("reconfigure plugin: redeploy: %w", err)
 	}
 
-	return m.pool.Dial(ctx, p.ID, p.GRPCAddr)
+	return m.pool.Dial(ctx, p.ID, p.GRPCAddr, caCertPEM)
 }
 
 // GetPlugin returns the persisted plugin with its current in-memory status.
@@ -548,14 +557,15 @@ func (m *Manager) SetActiveIDP(ctx context.Context, pluginID string) error {
 
 		_ = m.pool.Close(prevIDP)
 
-		if err := m.rt.Remove(ctx, "kleff-"+prevIDP); err != nil {
+		cleanupCtx := context.Background() // Detach to ensure teardown completes even if request cancels
+		if err := m.rt.Remove(cleanupCtx, "kleff-"+prevIDP); err != nil {
 			m.logger.Warn("SetActiveIDP: remove old IDP container", "id", prevIDP, "error", err)
 		}
 
 		// Remove companion containers (e.g. Keycloak server) for the old IDP.
 		if manifest, err := m.registry.GetManifest(ctx, prevIDP); err == nil && manifest != nil {
 			for _, c := range manifest.Companions {
-				if stopErr := m.rt.Remove(ctx, c.ID); stopErr != nil {
+				if stopErr := m.rt.Remove(cleanupCtx, c.ID); stopErr != nil {
 					m.logger.Warn("SetActiveIDP: remove old companion", "companion", c.ID, "plugin", prevIDP, "error", stopErr)
 				}
 			}
@@ -769,7 +779,14 @@ func (m *Manager) ensureRunning(ctx context.Context, p *domain.Plugin) error {
 		return fmt.Errorf("status check: %w", err)
 	}
 
-	if st.State != runtime.StateRunning {
+	m.mu.RLock()
+	caCertPEM := m.caCerts[p.ID]
+	m.mu.RUnlock()
+
+	// Redeploy if the container isn't running, or if we have no CA cert for a
+	// connection we need to establish (e.g. after a platform restart).
+	needDeploy := st.State != runtime.StateRunning || (len(caCertPEM) == 0 && !m.pool.HasConnection(p.ID))
+	if needDeploy {
 		// Decode secrets for env injection.
 		secrets, _ := m.decryptSecrets(p.Secrets)
 		allConfig := mergeConfig(p.Config, secrets)
@@ -785,14 +802,18 @@ func (m *Manager) ensureRunning(ctx context.Context, p *domain.Plugin) error {
 			}
 		}
 
-		spec := m.buildContainerSpec(p, manifest, allConfig)
+		spec, newCA, err := m.buildSecureContainerSpec(p, manifest, allConfig)
+		if err != nil {
+			return fmt.Errorf("ensureRunning: %w", err)
+		}
+		caCertPEM = newCA
 		if err := m.rt.Deploy(ctx, spec); err != nil {
 			return fmt.Errorf("deploy: %w", err)
 		}
 	}
 
 	if !m.pool.HasConnection(p.ID) {
-		if err := m.pool.Dial(ctx, p.ID, p.GRPCAddr); err != nil {
+		if err := m.pool.Dial(ctx, p.ID, p.GRPCAddr, caCertPEM); err != nil {
 			return fmt.Errorf("dial gRPC: %w", err)
 		}
 	}
@@ -802,7 +823,20 @@ func (m *Manager) ensureRunning(ctx context.Context, p *domain.Plugin) error {
 	return nil
 }
 
-func (m *Manager) buildContainerSpec(p *domain.Plugin, manifest *domain.CatalogManifest, config map[string]string) runtime.ContainerSpec {
+// buildSecureContainerSpec generates an ephemeral mTLS cert pair, stores the CA
+// in m.caCerts, and returns the ready-to-deploy ContainerSpec plus the CA PEM.
+func (m *Manager) buildSecureContainerSpec(p *domain.Plugin, manifest *domain.CatalogManifest, config map[string]string) (runtime.ContainerSpec, []byte, error) {
+	caCertPEM, certPEM, keyPEM, err := generatePluginTLS(p.ID)
+	if err != nil {
+		return runtime.ContainerSpec{}, nil, fmt.Errorf("generate TLS certs: %w", err)
+	}
+	m.mu.Lock()
+	m.caCerts[p.ID] = caCertPEM
+	m.mu.Unlock()
+	return m.buildContainerSpec(p, manifest, config, certPEM, keyPEM), caCertPEM, nil
+}
+
+func (m *Manager) buildContainerSpec(p *domain.Plugin, manifest *domain.CatalogManifest, config map[string]string, certPEM, keyPEM []byte) runtime.ContainerSpec {
 	env := make(map[string]string, len(config)+2)
 	for k, v := range config {
 		if v != "" {
@@ -811,6 +845,10 @@ func (m *Manager) buildContainerSpec(p *domain.Plugin, manifest *domain.CatalogM
 	}
 	env["PLUGIN_ID"] = p.ID
 	env["PLUGIN_PORT"] = fmt.Sprintf("%d", grpcPort)
+	if len(certPEM) > 0 && len(keyPEM) > 0 {
+		env["PLUGIN_TLS_CERT_PEM"] = string(certPEM)
+		env["PLUGIN_TLS_KEY_PEM"] = string(keyPEM)
+	}
 
 	labels := map[string]string{
 		"kleff.io/managed":             "true",
@@ -913,14 +951,23 @@ func (m *Manager) checkPlugin(ctx context.Context, p *domain.Plugin) {
 				}
 			}
 		}
-		spec := m.buildContainerSpec(p, checkManifest, allConfig)
+		spec, _, err := m.buildSecureContainerSpec(p, checkManifest, allConfig)
+		if err != nil {
+			m.logger.Warn("healthLoop: build secure spec failed", "plugin", p.ID, "error", err)
+			m.incrementRestarts(p.ID)
+			m.setStatus(p.ID, domain.PluginStatusError)
+			return
+		}
 
 		if restartErr := m.rt.Deploy(ctx, spec); restartErr != nil {
 			m.incrementRestarts(p.ID)
 			m.setStatus(p.ID, domain.PluginStatusError)
 			return
 		}
-		if dialErr := m.pool.Dial(ctx, p.ID, p.GRPCAddr); dialErr != nil {
+		m.mu.RLock()
+		caCertPEM := m.caCerts[p.ID]
+		m.mu.RUnlock()
+		if dialErr := m.pool.Dial(ctx, p.ID, p.GRPCAddr, caCertPEM); dialErr != nil {
 			m.incrementRestarts(p.ID)
 			m.setStatus(p.ID, domain.PluginStatusError)
 			return
@@ -933,7 +980,10 @@ func (m *Manager) checkPlugin(ctx context.Context, p *domain.Plugin) {
 	// Container is running — check gRPC health.
 	hc, err := m.pool.HealthClient(p.ID)
 	if err != nil {
-		if dialErr := m.pool.Dial(ctx, p.ID, p.GRPCAddr); dialErr != nil {
+		m.mu.RLock()
+		reconnCA := m.caCerts[p.ID]
+		m.mu.RUnlock()
+		if dialErr := m.pool.Dial(ctx, p.ID, p.GRPCAddr, reconnCA); dialErr != nil {
 			m.setStatus(p.ID, domain.PluginStatusError)
 			return
 		}
