@@ -78,7 +78,7 @@ export function NotificationBell() {
         {/* Footer link to inbox */}
         <div className="px-3 py-1.5 border-b border-border/50">
           <Link
-            href="/notifications"
+            href="/account/notifications"
             className="flex items-center gap-1 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
           >
             View all notifications

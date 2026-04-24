@@ -1,25 +1,22 @@
 "use client";
 
-import React, { useContext } from "react";
+import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
-  LayoutGrid,
   Share2,
-  ShieldCheck,
   Store,
   Puzzle,
   Search,
-  Settings,
-  LogOut,
-  ChevronsUpDown,
   Check,
   Plus,
   ChevronDown,
+  ChevronsUpDown,
   Network,
   Activity,
   Users,
+  ArrowLeft,
 } from "lucide-react";
 import {
   cn,
@@ -28,8 +25,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Avatar,
-  AvatarFallback,
   Sheet,
   SheetContent,
   SheetHeader,
@@ -39,13 +34,12 @@ import {
   Button,
   Label,
 } from "@kleffio/ui";
-import { useAuth, broadcastSignout, useHasRole, useRoles, AuthConfigContext } from "@/features/auth";
-import { NotificationBell } from "@/features/notifications";
+import { useAuth, useRoles } from "@/features/auth";
 import { PluginSlot } from "@/features/plugins/ui/PluginSlot";
 import { useBackendPlugins } from "@/features/plugins/model/use-backend-plugins";
 import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
 import { createProject } from "@/lib/api/projects";
-import { revokeAllSessions } from "@/lib/api/plugins";
+import { SidebarUserFooter } from "./SidebarUserFooter";
 
 function slugify(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -190,8 +184,6 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const auth = useAuth();
-  const authConfig = useContext(AuthConfigContext);
-  const isAdmin = useHasRole("admin");
   const roles = useRoles();
   const { navItems: backendNavItems } = useBackendPlugins();
   const { projects, currentProjectID, setCurrentProjectID } = useCurrentProject();
@@ -210,10 +202,6 @@ export function Sidebar() {
     ? `/project/${username}/${currentProject.slug}`
     : null;
 
-  const user = auth.user;
-  const displayName = user?.profile?.name ?? user?.profile?.email ?? "User";
-  const initial = displayName[0]?.toUpperCase() ?? "U";
-
   async function handleCreateProject(e: React.FormEvent) {
     e.preventDefault();
     const name = newProjectName.trim();
@@ -226,19 +214,6 @@ export function Sidebar() {
       window.location.assign(`/project/${username}/${project.slug}`);
     } finally {
       setNewProjectLoading(false);
-    }
-  }
-
-  function handleSignOut() {
-    broadcastSignout();
-    if (authConfig?.auth_mode === "redirect" && authConfig?.end_session_endpoint) {
-      auth.signoutRedirect();
-    } else {
-      // Revoke all server-side sessions before clearing local state.
-      // Fire-and-forget: we navigate away regardless of whether it succeeds.
-      revokeAllSessions().catch(() => {});
-      auth.removeUser();
-      router.push("/auth/login");
     }
   }
 
@@ -341,8 +316,35 @@ export function Sidebar() {
         </button>
       </div>
 
+      {/* Back to home */}
+      <div className="px-2 pb-1">
+        <Link
+          href="/account"
+          className={cn(
+            "group flex items-center gap-2.5 rounded-lg px-2 py-[7px] text-sm font-medium transition-all",
+            pathname === "/account"
+              ? "bg-primary/[0.1] text-primary"
+              : "text-sidebar-foreground/50 hover:bg-white/[0.04] hover:text-sidebar-foreground/80"
+          )}
+        >
+          <span className={cn(
+            "flex size-[22px] shrink-0 items-center justify-center rounded-md transition-all",
+            pathname === "/account"
+              ? "bg-primary/[0.2] text-primary shadow-[0_0_10px_oklch(0.80_0.17_90_/_0.22)]"
+              : "bg-white/[0.05] text-sidebar-foreground/40 group-hover:bg-white/[0.07] group-hover:text-sidebar-foreground/60"
+          )}>
+            <ArrowLeft className="size-3" />
+          </span>
+          Back to home
+        </Link>
+      </div>
+
+      {/* Separator */}
+      <div className="mx-2 mb-2 h-px bg-sidebar-border" />
+
       {/* Navigation */}
       <nav className="flex-1 px-2 pb-2 overflow-y-auto">
+
         {projectBase ? (
           <>
             <NavItem
@@ -426,53 +428,8 @@ export function Sidebar() {
           })}
       </nav>
 
-      {/* User — pinned to bottom */}
-      <div className="border-t border-sidebar-border px-2 py-3">
-        <PluginSlot name="topbar.right" />
-        <div className="mb-1 flex items-center justify-end px-1">
-          <NotificationBell />
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-white/[0.05] focus-visible:outline-none">
-              <Avatar size="sm">
-                <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold ring-1 ring-primary/20">
-                  {initial}
-                </AvatarFallback>
-              </Avatar>
-              <span className="flex-1 truncate text-left text-xs font-medium text-sidebar-foreground/60">
-                {displayName}
-              </span>
-              <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/25" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-48 mb-1">
-            <DropdownMenuItem
-              onClick={() =>
-                projectBase ? router.push(projectBase) : router.push("/")
-              }
-            >
-              <LayoutGrid className="size-4" />
-              Workspace
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push("/account")}>
-              <Settings className="size-4" />
-              Account
-            </DropdownMenuItem>
-            {isAdmin && (
-              <DropdownMenuItem onClick={() => router.push("/admin")}>
-                <ShieldCheck className="size-4" />
-                Admin
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={handleSignOut}>
-              <LogOut className="size-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <PluginSlot name="topbar.right" />
+      <SidebarUserFooter workspaceHref={projectBase ?? "/"} />
     </aside>
   );
 }

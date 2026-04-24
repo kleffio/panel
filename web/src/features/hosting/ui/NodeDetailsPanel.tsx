@@ -16,7 +16,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import type { InfrastructureNode, NodeAction } from "@/features/hosting/model/types";
 import { getStatusMeta } from "@/features/hosting/lib/infrastructure-graph";
 import { Button } from "@kleffio/ui";
-import { Sheet, SheetContent } from "@kleffio/ui";
+import { Sheet, SheetContent, SheetTitle } from "@kleffio/ui";
 import { getProjectMetrics, type WorkloadMetricsDTO } from "@/lib/api/usage";
 import { getWorkloadLogs, type LogLineDTO } from "@/lib/api/logs";
 import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
@@ -25,13 +25,60 @@ import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvi
 
 const LOG_POLL_MS = 5_000;
 
-function streamColor(stream: "stdout" | "stderr" | string) {
-  return stream === "stderr" ? "text-red-400/80" : "text-white/70";
+type LogLevel = "error" | "warn" | "info" | "debug" | "trace" | "default";
+
+function detectLevel(line: string): LogLevel {
+  const u = line.toUpperCase();
+  if (/\/(ERROR|SEVERE|FATAL)\]|\[ERROR\]|\bERROR\b/.test(u)) return "error";
+  if (/\/WARN(ING)?\]|\[WARN\]|\bWARN\b/.test(u)) return "warn";
+  if (/\/DEBUG\]|\[DEBUG\]/.test(u)) return "debug";
+  if (/\/TRACE\]|\[TRACE\]|\[FINE\]/.test(u)) return "trace";
+  if (/\/INFO\]|\[INFO\]/.test(u)) return "info";
+  return "default";
+}
+
+const LEVEL_MSG_CLS: Record<LogLevel, string> = {
+  error:   "text-red-400/90",
+  warn:    "text-amber-300/85",
+  info:    "text-white/65",
+  debug:   "text-white/35",
+  trace:   "text-white/22",
+  default: "text-white/60",
+};
+
+function renderLogSegments(line: string, stream: string) {
+  if (stream === "stderr") return <span className="text-red-400/80">{line}</span>;
+
+  const level = detectLevel(line);
+  const msgCls = LEVEL_MSG_CLS[level];
+
+  // Split on bracketed tokens [...]
+  const parts = line.split(/(\[[^\]]*\])/);
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (!part.startsWith("[") || !part.endsWith("]")) {
+          return <span key={i} className={msgCls}>{part}</span>;
+        }
+        const u = part.toUpperCase();
+        const cls =
+          /\/ERROR\]|\/SEVERE\]|\/FATAL\]/.test(u) ? "text-red-400/75" :
+          /\/WARN(ING)?\]/.test(u)                  ? "text-amber-400/80" :
+          /\/INFO\]/.test(u)                         ? "text-emerald-400/55" :
+          /\/DEBUG\]/.test(u)                        ? "text-purple-400/50" :
+          /\/TRACE\]|\/FINE\]/.test(u)               ? "text-white/20" :
+                                                       "text-white/25";
+        return <span key={i} className={cls}>{part}</span>;
+      })}
+    </>
+  );
 }
 
 function LogViewer({ node }: { node: InfrastructureNode }) {
   const { currentProjectID } = useCurrentProject();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [lines, setLines] = useState<LogLineDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const autoScroll = useRef(true);
@@ -64,7 +111,8 @@ function LogViewer({ node }: { node: InfrastructureNode }) {
 
   return (
     <div
-      className="h-full overflow-y-auto bg-[#0a0c10] font-mono text-[11px] leading-5"
+      ref={containerRef}
+      className="h-full overflow-y-auto bg-[oklch(0.065_0_0)] font-mono text-[11px] leading-[1.65]"
       onScroll={(e) => {
         const el = e.currentTarget;
         autoScroll.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -77,14 +125,21 @@ function LogViewer({ node }: { node: InfrastructureNode }) {
         {!loading && lines.length === 0 && (
           <p className="text-white/25">No logs yet. Logs appear within ~5 seconds of output.</p>
         )}
-        {lines.map((l) => (
-          <div key={l.id} className="flex gap-3 py-[1px]">
-            <span className="w-16 shrink-0 select-none text-white/25">
-              {new Date(l.ts).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-            </span>
-            <span className={streamColor(l.stream)}>{l.line}</span>
-          </div>
-        ))}
+        {lines.map((l) => {
+          const level = l.stream === "stderr" ? "error" : detectLevel(l.line);
+          const rowBg =
+            level === "error" ? "bg-red-500/[0.06]" :
+            level === "warn"  ? "bg-amber-500/[0.05]" :
+            "";
+          return (
+            <div key={l.id} className={`flex gap-3 px-1 py-[1px] rounded-[2px] ${rowBg}`}>
+              <span className="w-[52px] shrink-0 select-none tabular-nums text-white/20 pt-px">
+                {new Date(l.ts).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              </span>
+              <span className="break-all">{renderLogSegments(l.line, l.stream)}</span>
+            </div>
+          );
+        })}
         <div ref={bottomRef} />
       </div>
     </div>
@@ -320,12 +375,13 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
     <Sheet open={isSheetOpen} onOpenChange={handleSheetOpenChange}>
       <SheetContent
         side="right"
-        className="origin-right flex !right-8 !top-5 !bottom-5 !h-auto w-[640px] max-w-[calc(100vw-5rem)] flex-col overflow-hidden rounded-[0.45rem] border border-white/14 bg-[linear-gradient(180deg,rgba(10,14,22,0.99)_0%,rgba(6,9,15,0.99)_100%)] p-0 text-white ring-1 ring-white/8 shadow-[0_84px_190px_rgba(0,0,0,0.9),_-44px_0_130px_rgba(0,0,0,0.68),0_0_0_1px_rgba(255,255,255,0.02)] backdrop-blur-sm data-[state=open]:duration-520 data-[state=open]:ease-[cubic-bezier(0.16,1,0.3,1)] data-[state=open]:slide-in-from-right-8 data-[state=open]:zoom-in-[97%] data-[state=closed]:duration-260 data-[state=closed]:ease-[cubic-bezier(0.4,0,1,1)] data-[state=closed]:slide-out-to-right-5 data-[state=closed]:zoom-out-[99%]"
+        className="origin-right flex !right-4 !top-4 !bottom-4 !h-auto !w-[820px] ![max-width:calc(100vw-4rem)] flex-col overflow-hidden rounded-[0.5rem] border border-white/[0.08] bg-[linear-gradient(160deg,oklch(0.11_0_0)_0%,oklch(0.085_0_0)_50%,oklch(0.07_0_0)_100%)] p-0 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_40px_80px_rgba(0,0,0,0.8),-60px_0_140px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm data-[state=open]:duration-520 data-[state=open]:ease-[cubic-bezier(0.16,1,0.3,1)] data-[state=open]:slide-in-from-right-8 data-[state=open]:zoom-in-[97%] data-[state=closed]:duration-260 data-[state=closed]:ease-[cubic-bezier(0.4,0,1,1)] data-[state=closed]:slide-out-to-right-5 data-[state=closed]:zoom-out-[99%]"
       >
+        <SheetTitle className="sr-only">Node Details</SheetTitle>
         {node ? (
           <>
             {/* ── Header ────────────────────────────────────────────── */}
-            <div className="border-b border-white/8 px-5 pt-6 pb-0">
+            <div className="border-b border-white/[0.07] px-5 pt-5 pb-0 bg-[linear-gradient(180deg,oklch(0.13_0_0)_0%,transparent_100%)]">
               <div className="mb-4 flex items-start justify-between gap-3 pr-8">
                 <div className="min-w-0">
                   <p className="truncate text-[17px] font-semibold leading-tight text-white">
@@ -349,8 +405,8 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                     onClick={() => setTab(t)}
                     className={`relative px-4 pb-3 text-[12px] font-medium capitalize transition-colors ${
                       tab === t
-                        ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-sky-300"
-                        : "text-white/40 hover:text-white/70"
+                        ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:rounded-full after:bg-primary"
+                        : "text-white/35 hover:text-white/65"
                     }`}
                   >
                     {t}
@@ -401,7 +457,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                     transition={{ duration: 0.17, ease: [0.22, 1, 0.36, 1] }}
                     className="h-full space-y-4 overflow-y-auto p-5"
                   >
-                    <div className="rounded-[0.4rem] border border-white/12 bg-[rgba(14,20,31,0.76)] p-4">
+                    <div className="rounded-[0.4rem] border border-white/[0.08] bg-white/[0.03] p-4 ring-1 ring-inset ring-white/[0.03]">
                       <p className="mb-2 text-[11px] uppercase tracking-wide text-white/70">
                         Container information
                       </p>
@@ -480,7 +536,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
             </div>
 
             {/* ── Footer action bar ─────────────────────────────────── */}
-            <div className="flex items-center justify-between border-t border-white/8 px-4 py-3">
+            <div className="flex items-center justify-between border-t border-white/[0.07] bg-[oklch(0.065_0_0)] px-4 py-3">
               <div className="flex items-center gap-1.5 text-[11px] text-white/40">
                 <StatusIcon status={node.status} />
                 <span>{status?.label}</span>
@@ -491,7 +547,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                   <Button
                     asChild
                     size="sm"
-                    className="h-8 rounded-[0.3rem] bg-white/10 text-[12px] text-white/80 hover:bg-sky-400/12 hover:text-sky-300"
+                    className="h-8 rounded-[0.3rem] bg-white/[0.07] text-[12px] text-white/70 hover:bg-primary/10 hover:text-primary"
                   >
                     <Link href={node.route}>
                       Open

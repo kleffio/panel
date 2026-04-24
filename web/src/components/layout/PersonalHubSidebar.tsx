@@ -1,60 +1,37 @@
 "use client";
 
-import { useContext } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { UserCircle, ShieldCheck, MonitorSmartphone, Bell, Settings, LogOut, ChevronsUpDown, LayoutGrid } from "lucide-react";
-import {
-  cn,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  Avatar,
-  AvatarFallback,
-} from "@kleffio/ui";
-import { useAuth, broadcastSignout, useHasRole, AuthConfigContext } from "@/features/auth";
+import { usePathname } from "next/navigation";
+import { useAuth } from "@/features/auth";
 import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
-import { revokeAllSessions } from "@/lib/api/plugins";
+import { useUnreadCount } from "@/features/notifications";
+import { LayoutDashboard, UserCircle, ShieldCheck, MonitorSmartphone, Bell } from "lucide-react";
+import { cn } from "@kleffio/ui";
+import { SidebarUserFooter } from "./SidebarUserFooter";
 
 const ACCOUNT_NAV = [
-  { href: "/account",           label: "Profile",       icon: UserCircle },
-  { href: "/account/security",  label: "Security",      icon: ShieldCheck },
-  { href: "/account/sessions",  label: "Sessions",      icon: MonitorSmartphone },
-  { href: "/notifications",     label: "Notifications", icon: Bell },
+  { href: "/account",                label: "Home",          icon: LayoutDashboard },
+  { href: "/account/profile",        label: "Profile",       icon: UserCircle },
+  { href: "/account/security",       label: "Security",      icon: ShieldCheck },
+  { href: "/account/sessions",       label: "Sessions",      icon: MonitorSmartphone },
+  { href: "/account/notifications",  label: "Notifications", icon: Bell },
 ];
 
 export function PersonalHubSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const auth = useAuth();
-  const authConfig = useContext(AuthConfigContext);
-  const isAdmin = useHasRole("admin");
   const { projects, currentProjectID } = useCurrentProject();
 
   const username = (auth.user?.profile?.preferred_username as string | undefined)
     ?? (auth.user?.profile?.sub as string | undefined)
     ?? "user";
+
+  const { data: unreadCount = 0 } = useUnreadCount();
+
   const currentProject = projects.find((p) => p.id === currentProjectID);
   const workspaceHref = currentProject
     ? `/project/${username}/${currentProject.slug}`
     : "/";
-
-  const user = auth.user;
-  const displayName = user?.profile?.name ?? user?.profile?.email ?? "User";
-  const initial = displayName[0]?.toUpperCase() ?? "U";
-
-  function handleSignOut() {
-    broadcastSignout();
-    if (authConfig?.auth_mode === "redirect" && authConfig?.end_session_endpoint) {
-      auth.signoutRedirect();
-    } else {
-      revokeAllSessions().catch(() => {});
-      auth.removeUser();
-      router.push("/auth/login");
-    }
-  }
 
   return (
     <aside className="flex h-full w-56 flex-col bg-sidebar border-r border-sidebar-border">
@@ -65,7 +42,7 @@ export function PersonalHubSidebar() {
           <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/15 ring-1 ring-primary/20">
             <span className="text-sm font-black text-primary leading-none">A</span>
           </div>
-          <span className="text-xs font-semibold text-sidebar-foreground">Account</span>
+          <span className="text-xs font-semibold text-sidebar-foreground truncate">{username}</span>
         </div>
       </div>
 
@@ -94,51 +71,18 @@ export function PersonalHubSidebar() {
               )}>
                 <Icon className="size-3.5" />
               </span>
-              {label}
+              <span className="flex-1">{label}</span>
+              {href === "/account/notifications" && unreadCount > 0 && (
+                <span className="flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white leading-none">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </Link>
           );
         })}
       </nav>
 
-      {/* User — pinned to bottom */}
-      <div className="border-t border-sidebar-border px-2 py-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-white/[0.05] focus-visible:outline-none">
-              <Avatar size="sm">
-                <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold ring-1 ring-primary/20">
-                  {initial}
-                </AvatarFallback>
-              </Avatar>
-              <span className="flex-1 truncate text-left text-xs font-medium text-sidebar-foreground/60">
-                {displayName}
-              </span>
-              <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/25" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-48 mb-1">
-            <DropdownMenuItem onClick={() => router.push(workspaceHref)}>
-              <LayoutGrid className="size-4" />
-              Workspace
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push("/account")}>
-              <Settings className="size-4" />
-              Account
-            </DropdownMenuItem>
-            {isAdmin && (
-              <DropdownMenuItem onClick={() => router.push("/admin")}>
-                <ShieldCheck className="size-4" />
-                Admin
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={handleSignOut}>
-              <LogOut className="size-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <SidebarUserFooter workspaceHref={workspaceHref} />
     </aside>
   );
 }
