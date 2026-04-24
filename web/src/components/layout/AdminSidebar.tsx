@@ -15,6 +15,7 @@ import {
   AvatarFallback,
 } from "@kleffio/ui";
 import { useAuth, broadcastSignout, useHasRole, AuthConfigContext } from "@/features/auth";
+import { revokeAllSessions } from "@/lib/api/plugins";
 
 const ADMIN_NAV = [
   { href: "/admin",         label: "Dashboard",  icon: LayoutDashboard },
@@ -36,9 +37,10 @@ export function AdminSidebar() {
 
   function handleSignOut() {
     broadcastSignout();
-    if (authConfig?.auth_mode === "redirect") {
+    if (authConfig?.auth_mode === "redirect" && authConfig?.end_session_endpoint) {
       auth.signoutRedirect();
     } else {
+      revokeAllSessions().catch(() => {});
       auth.removeUser();
       router.push("/auth/login");
     }

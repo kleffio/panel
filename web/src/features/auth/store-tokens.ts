@@ -22,6 +22,18 @@ export function clearStoredSession(): void {
   keysToRemove.forEach((k) => localStorage.removeItem(k));
 }
 
+export function getStoredSession(authority: string, clientId: string): User | null {
+  if (typeof window === "undefined") return null;
+  const key = `oidc.user:${authority}:${clientId}`;
+  const raw = localStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    return User.fromStorageString(raw);
+  } catch {
+    return null;
+  }
+}
+
 function decodeJwtPayload(jwt: string): Record<string, unknown> {
   try {
     const b64 = jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");

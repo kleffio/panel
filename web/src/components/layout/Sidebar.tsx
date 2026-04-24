@@ -45,6 +45,7 @@ import { PluginSlot } from "@/features/plugins/ui/PluginSlot";
 import { useBackendPlugins } from "@/features/plugins/model/use-backend-plugins";
 import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
 import { createProject } from "@/lib/api/projects";
+import { revokeAllSessions } from "@/lib/api/plugins";
 
 function slugify(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -230,9 +231,12 @@ export function Sidebar() {
 
   function handleSignOut() {
     broadcastSignout();
-    if (authConfig?.auth_mode === "redirect") {
+    if (authConfig?.auth_mode === "redirect" && authConfig?.end_session_endpoint) {
       auth.signoutRedirect();
     } else {
+      // Revoke all server-side sessions before clearing local state.
+      // Fire-and-forget: we navigate away regardless of whether it succeeds.
+      revokeAllSessions().catch(() => {});
       auth.removeUser();
       router.push("/auth/login");
     }

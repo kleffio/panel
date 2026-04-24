@@ -305,9 +305,25 @@ function SessionsSection({ sectionId, canRevoke }: { sectionId: string; canRevok
 
   const revokeMutation = useMutation({
     mutationFn: (sessionID: string) => revokeSession(sessionID),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
-      toast.success("Session revoked.");
+    onSuccess: async () => {
+      try {
+        const fresh = await listSessions(sid);
+        const now = Math.floor(Date.now() / 1000);
+        const remaining = (fresh?.sessions ?? []).filter(
+          (s) => s.current || !s.expires_at || s.expires_at > now,
+        );
+        if (remaining.length === 0) {
+          clearStoredSession();
+          broadcastSignout();
+          window.location.href = "/auth/login";
+          return;
+        }
+        queryClient.setQueryData(SESSIONS_KEY, fresh);
+        toast.success("Session revoked.");
+      } catch {
+        queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
+        toast.success("Session revoked.");
+      }
     },
     onError: () => {
       toast.error("Could not revoke session.");
@@ -316,9 +332,25 @@ function SessionsSection({ sectionId, canRevoke }: { sectionId: string; canRevok
 
   const revokeAllMutation = useMutation({
     mutationFn: () => revokeAllSessions(sid),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
-      toast.success("All other sessions signed out.");
+    onSuccess: async () => {
+      try {
+        const fresh = await listSessions(sid);
+        const now = Math.floor(Date.now() / 1000);
+        const remaining = (fresh?.sessions ?? []).filter(
+          (s) => s.current || !s.expires_at || s.expires_at > now,
+        );
+        if (remaining.length === 0) {
+          clearStoredSession();
+          broadcastSignout();
+          window.location.href = "/auth/login";
+          return;
+        }
+        queryClient.setQueryData(SESSIONS_KEY, fresh);
+        toast.success("All other sessions signed out.");
+      } catch {
+        queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
+        toast.success("All other sessions signed out.");
+      }
     },
     onError: () => {
       toast.error("Could not sign out other sessions.");

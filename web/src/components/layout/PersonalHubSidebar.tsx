@@ -16,6 +16,7 @@ import {
 } from "@kleffio/ui";
 import { useAuth, broadcastSignout, useHasRole, AuthConfigContext } from "@/features/auth";
 import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
+import { revokeAllSessions } from "@/lib/api/plugins";
 
 const ACCOUNT_NAV = [
   { href: "/account",           label: "Profile",       icon: UserCircle },
@@ -46,9 +47,10 @@ export function PersonalHubSidebar() {
 
   function handleSignOut() {
     broadcastSignout();
-    if (authConfig?.auth_mode === "redirect") {
+    if (authConfig?.auth_mode === "redirect" && authConfig?.end_session_endpoint) {
       auth.signoutRedirect();
     } else {
+      revokeAllSessions().catch(() => {});
       auth.removeUser();
       router.push("/auth/login");
     }
