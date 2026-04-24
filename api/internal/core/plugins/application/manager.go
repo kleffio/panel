@@ -262,16 +262,11 @@ func (m *Manager) Install(ctx context.Context, manifest *domain.CatalogManifest,
 		}
 	}
 
-	caCertPEM, certPEM, keyPEM, tlsErr := generatePluginTLS(p.ID)
-	if tlsErr != nil {
+	spec, caCertPEM, err := m.buildSecureContainerSpec(p, manifest, config)
+	if err != nil {
 		m.setStatus(p.ID, domain.PluginStatusError)
-		return nil, fmt.Errorf("install plugin: generate TLS certs: %w", tlsErr)
+		return nil, fmt.Errorf("install plugin: %w", err)
 	}
-	m.mu.Lock()
-	m.caCerts[p.ID] = caCertPEM
-	m.mu.Unlock()
-
-	spec := m.buildContainerSpec(p, manifest, config, certPEM, keyPEM)
 	if err := m.rt.Deploy(ctx, spec); err != nil {
 		m.setStatus(p.ID, domain.PluginStatusError)
 		return nil, fmt.Errorf("install plugin: deploy: %w", err)
@@ -477,15 +472,10 @@ func (m *Manager) Reconfigure(ctx context.Context, pluginID string, config map[s
 
 	// Restart container with new env vars.
 	_ = m.pool.Close(pluginID)
-	caCertPEM, certPEM, keyPEM, tlsErr := generatePluginTLS(p.ID)
-	if tlsErr != nil {
-		return fmt.Errorf("reconfigure plugin: generate TLS certs: %w", tlsErr)
+	spec, caCertPEM, err := m.buildSecureContainerSpec(p, manifest, config)
+	if err != nil {
+		return fmt.Errorf("reconfigure plugin: %w", err)
 	}
-	m.mu.Lock()
-	m.caCerts[p.ID] = caCertPEM
-	m.mu.Unlock()
-
-	spec := m.buildContainerSpec(p, manifest, config, certPEM, keyPEM)
 	if err := m.rt.Deploy(ctx, spec); err != nil {
 		return fmt.Errorf("reconfigure plugin: redeploy: %w", err)
 	}
@@ -812,19 +802,11 @@ func (m *Manager) ensureRunning(ctx context.Context, p *domain.Plugin) error {
 			}
 		}
 
-		var certPEM, keyPEM []byte
-		newCA, newCert, newKey, tlsErr := generatePluginTLS(p.ID)
-		if tlsErr != nil {
-			return fmt.Errorf("ensureRunning: generate TLS certs: %w", tlsErr)
+		spec, newCA, err := m.buildSecureContainerSpec(p, manifest, allConfig)
+		if err != nil {
+			return fmt.Errorf("ensureRunning: %w", err)
 		}
 		caCertPEM = newCA
-		certPEM = newCert
-		keyPEM = newKey
-		m.mu.Lock()
-		m.caCerts[p.ID] = caCertPEM
-		m.mu.Unlock()
-
-		spec := m.buildContainerSpec(p, manifest, allConfig, certPEM, keyPEM)
 		if err := m.rt.Deploy(ctx, spec); err != nil {
 			return fmt.Errorf("deploy: %w", err)
 		}
@@ -839,6 +821,19 @@ func (m *Manager) ensureRunning(ctx context.Context, p *domain.Plugin) error {
 	m.setStatus(p.ID, domain.PluginStatusRunning)
 	m.discoverCapabilities(context.Background(), p.ID)
 	return nil
+}
+
+// buildSecureContainerSpec generates an ephemeral mTLS cert pair, stores the CA
+// in m.caCerts, and returns the ready-to-deploy ContainerSpec plus the CA PEM.
+func (m *Manager) buildSecureContainerSpec(p *domain.Plugin, manifest *domain.CatalogManifest, config map[string]string) (runtime.ContainerSpec, []byte, error) {
+	caCertPEM, certPEM, keyPEM, err := generatePluginTLS(p.ID)
+	if err != nil {
+		return runtime.ContainerSpec{}, nil, fmt.Errorf("generate TLS certs: %w", err)
+	}
+	m.mu.Lock()
+	m.caCerts[p.ID] = caCertPEM
+	m.mu.Unlock()
+	return m.buildContainerSpec(p, manifest, config, certPEM, keyPEM), caCertPEM, nil
 }
 
 func (m *Manager) buildContainerSpec(p *domain.Plugin, manifest *domain.CatalogManifest, config map[string]string, certPEM, keyPEM []byte) runtime.ContainerSpec {
@@ -956,21 +951,13 @@ func (m *Manager) checkPlugin(ctx context.Context, p *domain.Plugin) {
 				}
 			}
 		}
-		var certPEM, keyPEM []byte
-		newCA, newCert, newKey, tlsErr := generatePluginTLS(p.ID)
-		if tlsErr != nil {
-			m.logger.Warn("healthLoop: TLS cert generation failed", "plugin", p.ID, "error", tlsErr)
+		spec, _, err := m.buildSecureContainerSpec(p, checkManifest, allConfig)
+		if err != nil {
+			m.logger.Warn("healthLoop: build secure spec failed", "plugin", p.ID, "error", err)
 			m.incrementRestarts(p.ID)
 			m.setStatus(p.ID, domain.PluginStatusError)
 			return
 		}
-		m.mu.Lock()
-		m.caCerts[p.ID] = newCA
-		m.mu.Unlock()
-		certPEM = newCert
-		keyPEM = newKey
-
-		spec := m.buildContainerSpec(p, checkManifest, allConfig, certPEM, keyPEM)
 
 		if restartErr := m.rt.Deploy(ctx, spec); restartErr != nil {
 			m.incrementRestarts(p.ID)
