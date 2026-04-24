@@ -14,6 +14,7 @@ import {
 } from "@kleffio/ui";
 import { useAuth, broadcastSignout, useHasRole, AuthConfigContext } from "@/features/auth";
 import { useUnreadCount, useNotificationStream } from "@/features/notifications";
+import { revokeSession } from "@/lib/api/plugins";
 
 export function SidebarUserFooter({ workspaceHref = "/" }: { workspaceHref?: string }) {
   const router = useRouter();
@@ -30,11 +31,20 @@ export function SidebarUserFooter({ workspaceHref = "/" }: { workspaceHref?: str
   const displayName = user?.profile?.name ?? user?.profile?.email ?? "User";
   const initial = displayName[0]?.toUpperCase() ?? "U";
 
-  function handleSignOut() {
-    broadcastSignout();
+  async function handleSignOut() {
     if (authConfig?.auth_mode === "redirect") {
+      broadcastSignout();
       auth.signoutRedirect();
     } else {
+      const sid = auth.user?.profile?.sid as string | undefined;
+      if (sid) {
+        try {
+          await revokeSession(sid);
+        } catch {
+          // best-effort — still clear local session
+        }
+      }
+      broadcastSignout();
       auth.removeUser();
       router.push("/auth/login");
     }
