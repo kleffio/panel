@@ -99,5 +99,5 @@ type PluginManager interface {
 	MatchPluginRoute(method, path string) (pluginID string, public bool, ok bool)
 
 	// HandlePluginRoute forwards an HTTP request to the given plugin via gRPC.
-	HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HTTPRequest) (*pluginsv1.HTTPResponse, error)
+	HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HandleRequest) (*pluginsv1.HandleResponse, error)
 }

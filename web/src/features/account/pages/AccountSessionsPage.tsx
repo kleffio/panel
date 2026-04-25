@@ -207,7 +207,7 @@ export function AccountSessionsPage() {
         sessionSections.map((section) => (
           <Card key={section.id}>
             <CardHeader>
-              <CardTitle>{section.title}</CardTitle>
+              <CardTitle>{section.label}</CardTitle>
               {section.description && <CardDescription>{section.description}</CardDescription>}
             </CardHeader>
             <CardContent>

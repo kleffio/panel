@@ -11,7 +11,7 @@ import (
 // PluginRouter is the subset of PluginManager used by PluginRouteInterceptor.
 type PluginRouter interface {
 	MatchPluginRoute(method, path string) (pluginID string, public bool, ok bool)
-	HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HTTPRequest) (*pluginsv1.HTTPResponse, error)
+	HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HandleRequest) (*pluginsv1.HandleResponse, error)
 }
 
 // PluginRouteInterceptor wraps the entire handler stack. For routes declared by
@@ -27,7 +27,7 @@ func PluginRouteInterceptor(router PluginRouter, verifier TokenVerifier) func(ht
 				return
 			}
 
-			req := &pluginsv1.HTTPRequest{
+			req := &pluginsv1.HandleRequest{
 				Method:   r.Method,
 				Path:     r.URL.Path,
 				RawQuery: r.URL.RawQuery,
@@ -48,7 +48,7 @@ func PluginRouteInterceptor(router PluginRouter, verifier TokenVerifier) func(ht
 					http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 					return
 				}
-				req.UserID = result.Subject
+				req.UserId = result.Subject
 				req.Roles = result.Roles
 			}
 
@@ -64,7 +64,7 @@ func PluginRouteInterceptor(router PluginRouter, verifier TokenVerifier) func(ht
 			if w.Header().Get("Content-Type") == "" {
 				w.Header().Set("Content-Type", "application/json")
 			}
-			w.WriteHeader(resp.StatusCode)
+			w.WriteHeader(int(resp.Status))
 			_, _ = w.Write(resp.Body)
 		})
 	}

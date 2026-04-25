@@ -6,7 +6,7 @@ export interface BackendNavItem {
   label: string;
   /** Lucide icon name (e.g. "Globe", "Server"). Falls back to Puzzle icon. */
   icon?: string;
-  path: string;
+  href: string;
   /** Role name required to see this item (e.g. "admin"). Omit = visible to all. */
   permission?: string;
   children?: BackendNavItem[];
@@ -14,8 +14,8 @@ export interface BackendNavItem {
 
 export interface BackendSettingsPage {
   label: string;
-  /** URL-safe identifier used as the iframe section key. */
-  path: string;
+  /** Panel route for this settings page (e.g. "/settings/identity"). */
+  href: string;
   /** URL to load inside an iframe. If omitted the section is skipped. */
   iframe_url?: string;
 }
@@ -33,7 +33,7 @@ export interface BackendSignupConfig {
 
 export interface BackendProfileSection {
   id: string;
-  title: string;
+  label: string;
   description?: string;
   iframe_url?: string;
   /** Native action keys this section supports (e.g. "change_password"). */

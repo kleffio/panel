@@ -72,7 +72,7 @@ export function AccountSecurityPage() {
           <Card key={section.id}>
             <CardHeader className="flex flex-row items-start justify-between gap-4">
               <div>
-                <CardTitle>{section.title}</CardTitle>
+                <CardTitle>{section.label}</CardTitle>
                 {section.description && <CardDescription>{section.description}</CardDescription>}
               </div>
               {section.iframe_url && !section.actions?.length && (

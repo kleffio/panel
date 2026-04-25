@@ -507,12 +507,20 @@ func (m *Manager) ListPlugins(ctx context.Context) ([]*domain.Plugin, error) {
 
 // ── Identity (auth) ───────────────────────────────────────────────────────────
 
-func (m *Manager) getActiveIDP(ctx context.Context) (pluginsv1.IdentityPluginClient, error) {
+func (m *Manager) getActiveIDPProvider(ctx context.Context) (pluginsv1.IdentityProviderClient, error) {
 	activeID, err := m.store.GetSetting(ctx, activeIDPSettingKey)
 	if err != nil || activeID == "" {
 		return nil, err
 	}
-	return m.pool.IDPClient(activeID)
+	return m.pool.IDPProviderClient(activeID)
+}
+
+func (m *Manager) getActiveIDPFramework(ctx context.Context) (pluginsv1.IdentityFrameworkClient, error) {
+	activeID, err := m.store.GetSetting(ctx, activeIDPSettingKey)
+	if err != nil || activeID == "" {
+		return nil, err
+	}
+	return m.pool.IDPFrameworkClient(activeID)
 }
 
 func (m *Manager) SetActiveIDP(ctx context.Context, pluginID string) error {
@@ -585,7 +593,7 @@ func (m *Manager) GetActiveIDPID() string {
 }
 
 func (m *Manager) ValidateToken(ctx context.Context, token string) (*pluginsv1.TokenClaims, error) {
-	idp, err := m.getActiveIDP(ctx)
+	idp, err := m.getActiveIDPProvider(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("validate token: %w", err)
 	}
@@ -596,14 +604,14 @@ func (m *Manager) ValidateToken(ctx context.Context, token string) (*pluginsv1.T
 	if err != nil {
 		return nil, fmt.Errorf("validate token: %w", err)
 	}
-	if resp.Error != nil {
-		return nil, fmt.Errorf("%s", resp.Error.Message)
+	if e := resp.GetError(); e != nil {
+		return nil, pluginsv1.ProtoErrorToPluginError(e)
 	}
-	return resp.Claims, nil
+	return resp.GetClaims(), nil
 }
 
 func (m *Manager) Login(ctx context.Context, username, password string) (*pluginsv1.TokenSet, error) {
-	idp, err := m.getActiveIDP(ctx)
+	idp, err := m.getActiveIDPProvider(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("login: %w", err)
 	}
@@ -614,14 +622,14 @@ func (m *Manager) Login(ctx context.Context, username, password string) (*plugin
 	if err != nil {
 		return nil, fmt.Errorf("login: %w", err)
 	}
-	if resp.Error != nil {
-		return nil, resp.Error
+	if e := resp.GetError(); e != nil {
+		return nil, pluginsv1.ProtoErrorToPluginError(e)
 	}
-	return resp.Token, nil
+	return resp.GetToken(), nil
 }
 
 func (m *Manager) Register(ctx context.Context, req *pluginsv1.RegisterRequest) (string, error) {
-	idp, err := m.getActiveIDP(ctx)
+	idp, err := m.getActiveIDPProvider(ctx)
 	if err != nil {
 		return "", fmt.Errorf("register: %w", err)
 	}
@@ -632,14 +640,14 @@ func (m *Manager) Register(ctx context.Context, req *pluginsv1.RegisterRequest) 
 	if err != nil {
 		return "", fmt.Errorf("register: %w", err)
 	}
-	if resp.Error != nil {
-		return "", resp.Error
+	if e := resp.GetError(); e != nil {
+		return "", pluginsv1.ProtoErrorToPluginError(e)
 	}
-	return resp.UserID, nil
+	return resp.GetUserId(), nil
 }
 
 func (m *Manager) GetOIDCConfig(ctx context.Context) (*pluginsv1.OIDCConfig, error) {
-	idp, err := m.getActiveIDP(ctx)
+	idp, err := m.getActiveIDPProvider(ctx)
 	if err != nil || idp == nil {
 		return nil, err
 	}
@@ -647,14 +655,14 @@ func (m *Manager) GetOIDCConfig(ctx context.Context) (*pluginsv1.OIDCConfig, err
 	if err != nil {
 		return nil, fmt.Errorf("get OIDC config: %w", err)
 	}
-	if resp.Error != nil {
-		return nil, fmt.Errorf("%s", resp.Error.Message)
+	if e := resp.GetError(); e != nil {
+		return nil, fmt.Errorf("%s", e.Message)
 	}
-	return resp.Config, nil
+	return resp.GetConfig(), nil
 }
 
 func (m *Manager) RefreshToken(ctx context.Context, refreshToken string) (*pluginsv1.TokenSet, error) {
-	idp, err := m.getActiveIDP(ctx)
+	idp, err := m.getActiveIDPProvider(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("refresh token: %w", err)
 	}
@@ -665,14 +673,14 @@ func (m *Manager) RefreshToken(ctx context.Context, refreshToken string) (*plugi
 	if err != nil {
 		return nil, fmt.Errorf("refresh token: %w", err)
 	}
-	if resp.Error != nil {
-		return nil, resp.Error
+	if e := resp.GetError(); e != nil {
+		return nil, pluginsv1.ProtoErrorToPluginError(e)
 	}
-	return resp.Token, nil
+	return resp.GetToken(), nil
 }
 
 func (m *Manager) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
-	idp, err := m.getActiveIDP(ctx)
+	idp, err := m.getActiveIDPFramework(ctx)
 	if err != nil {
 		return fmt.Errorf("change password: %w", err)
 	}
@@ -680,21 +688,21 @@ func (m *Manager) ChangePassword(ctx context.Context, userID, currentPassword, n
 		return fmt.Errorf("no active IDP plugin")
 	}
 	resp, err := idp.ChangePassword(ctx, &pluginsv1.ChangePasswordRequest{
-		UserID:          userID,
+		UserId:          userID,
 		CurrentPassword: currentPassword,
 		NewPassword:     newPassword,
 	})
 	if err != nil {
 		return fmt.Errorf("change password: %w", err)
 	}
-	if resp.Error != nil {
-		return resp.Error
+	if e := resp.GetError(); e != nil {
+		return pluginsv1.ProtoErrorToPluginError(e)
 	}
 	return nil
 }
 
 func (m *Manager) ListSessions(ctx context.Context, userID, currentSessionID string) ([]*pluginsv1.Session, error) {
-	idp, err := m.getActiveIDP(ctx)
+	idp, err := m.getActiveIDPFramework(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list sessions: %w", err)
 	}
@@ -702,16 +710,16 @@ func (m *Manager) ListSessions(ctx context.Context, userID, currentSessionID str
 		return nil, fmt.Errorf("no active IDP plugin")
 	}
 	resp, err := idp.ListSessions(ctx, &pluginsv1.ListSessionsRequest{
-		UserID:           userID,
-		CurrentSessionID: currentSessionID,
+		UserId:           userID,
+		CurrentSessionId: currentSessionID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list sessions: %w", err)
 	}
-	if resp.Error != nil {
-		return nil, resp.Error
+	if e := resp.GetError(); e != nil {
+		return nil, pluginsv1.ProtoErrorToPluginError(e)
 	}
-	return resp.Sessions, nil
+	return resp.GetSessions().GetItems(), nil
 }
 
 func (m *Manager) RevokeAllSessions(ctx context.Context, userID, currentSessionID string) error {
@@ -724,8 +732,8 @@ func (m *Manager) RevokeAllSessions(ctx context.Context, userID, currentSessionI
 		if s.Current {
 			continue
 		}
-		if err := m.RevokeSession(ctx, userID, s.ID); err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", s.ID, err))
+		if err := m.RevokeSession(ctx, userID, s.Id); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", s.Id, err))
 		}
 	}
 	if len(errs) > 0 {
@@ -735,7 +743,7 @@ func (m *Manager) RevokeAllSessions(ctx context.Context, userID, currentSessionI
 }
 
 func (m *Manager) RevokeSession(ctx context.Context, userID, sessionID string) error {
-	idp, err := m.getActiveIDP(ctx)
+	idp, err := m.getActiveIDPFramework(ctx)
 	if err != nil {
 		return fmt.Errorf("revoke session: %w", err)
 	}
@@ -743,14 +751,14 @@ func (m *Manager) RevokeSession(ctx context.Context, userID, sessionID string) e
 		return fmt.Errorf("no active IDP plugin")
 	}
 	resp, err := idp.RevokeSession(ctx, &pluginsv1.RevokeSessionRequest{
-		UserID:    userID,
-		SessionID: sessionID,
+		UserId:    userID,
+		SessionId: sessionID,
 	})
 	if err != nil {
 		return fmt.Errorf("revoke session: %w", err)
 	}
-	if resp.Error != nil {
-		return resp.Error
+	if e := resp.GetError(); e != nil {
+		return pluginsv1.ProtoErrorToPluginError(e)
 	}
 	return nil
 }
@@ -1004,10 +1012,10 @@ func (m *Manager) checkPlugin(ctx context.Context, p *domain.Plugin) {
 	}
 
 	switch resp.Status {
-	case pluginsv1.HealthStatusHealthy:
+	case pluginsv1.HealthResponse_HEALTHY:
 		m.resetRestarts(p.ID)
 		m.setStatus(p.ID, domain.PluginStatusRunning)
-		
+
 		// If capabilities missed during install, retry collecting them.
 		m.mu.RLock()
 		missingCaps := len(m.capabilities[p.ID]) == 0
@@ -1015,8 +1023,8 @@ func (m *Manager) checkPlugin(ctx context.Context, p *domain.Plugin) {
 		if missingCaps {
 			m.discoverCapabilities(ctx, p.ID)
 		}
-		
-	case pluginsv1.HealthStatusDegraded:
+
+	case pluginsv1.HealthResponse_DEGRADED:
 		m.setStatus(p.ID, domain.PluginStatusRunning) // degraded but still serving
 	default:
 		m.setStatus(p.ID, domain.PluginStatusError)
@@ -1119,7 +1127,7 @@ func (m *Manager) IDPReady() bool {
 
 // discoverRoutes calls GetRoutes on a plugin and registers them in the route table.
 func (m *Manager) discoverRoutes(ctx context.Context, id string) {
-	hc, err := m.pool.HTTPPluginClient(id)
+	hc, err := m.pool.APIRoutesClient(id)
 	if err != nil {
 		return
 	}
@@ -1127,11 +1135,12 @@ func (m *Manager) discoverRoutes(ctx context.Context, id string) {
 	defer cancel()
 
 	resp, err := hc.GetRoutes(rCtx, &pluginsv1.GetRoutesRequest{})
-	if err != nil || resp.Error != nil {
+	if err != nil || resp.GetError() != nil {
 		m.logger.Warn("plugin routes: GetRoutes failed", "plugin", id, "error", err)
 		return
 	}
 
+	items := resp.GetRoutes().GetItems()
 	m.mu.Lock()
 	// Remove any previously registered routes for this plugin.
 	filtered := m.routes[:0]
@@ -1140,18 +1149,17 @@ func (m *Manager) discoverRoutes(ctx context.Context, id string) {
 			filtered = append(filtered, r)
 		}
 	}
-	for _, r := range resp.Routes {
+	for _, r := range items {
 		filtered = append(filtered, pluginRoute{
 			pluginID: id,
 			method:   r.Method,
-			path:     r.Path,
-			public:   r.Public,
+			path:     r.Pattern,
 		})
 	}
 	m.routes = filtered
 	m.mu.Unlock()
 
-	m.logger.Info("plugin routes registered", "plugin", id, "count", len(resp.Routes))
+	m.logger.Info("plugin routes registered", "plugin", id, "count", len(items))
 }
 
 // MatchPluginRoute returns the plugin ID and public flag for the first route
@@ -1171,19 +1179,16 @@ func (m *Manager) MatchPluginRoute(method, path string) (pluginID string, public
 }
 
 // HandlePluginRoute forwards an HTTP request to the plugin's Handle gRPC method.
-func (m *Manager) HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HTTPRequest) (*pluginsv1.HTTPResponse, error) {
-	hc, err := m.pool.HTTPPluginClient(pluginID)
+func (m *Manager) HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HandleRequest) (*pluginsv1.HandleResponse, error) {
+	hc, err := m.pool.APIRoutesClient(pluginID)
 	if err != nil {
 		return nil, fmt.Errorf("plugin route: no client for %q: %w", pluginID, err)
 	}
-	resp, err := hc.Handle(ctx, &pluginsv1.HandleHTTPRequest{Request: req})
+	resp, err := hc.Handle(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("plugin route: Handle gRPC: %w", err)
 	}
-	if resp.Error != nil {
-		return nil, fmt.Errorf("plugin route: %s", resp.Error.Message)
-	}
-	return resp.Response, nil
+	return resp, nil
 }
 
 func routeMethodMatches(pattern, method string) bool {
@@ -1216,7 +1221,7 @@ func (m *Manager) RunMiddleware(ctx context.Context, userID string, roles []stri
 	}
 
 	req := &pluginsv1.MiddlewareRequest{
-		UserID: userID,
+		UserId: userID,
 		Roles:  roles,
 		Method: method,
 		Path:   path,
@@ -1235,8 +1240,8 @@ func (m *Manager) RunMiddleware(ctx context.Context, userID string, roles []stri
 		}
 		if !resp.Allow {
 			msg := "forbidden by plugin"
-			if resp.Error != nil && resp.Error.Message != "" {
-				msg = resp.Error.Message
+			if resp.DenyReason != "" {
+				msg = resp.DenyReason
 			}
 			return fmt.Errorf("%s", msg)
 		}
@@ -1262,13 +1267,13 @@ func (m *Manager) GetUIManifests(ctx context.Context) ([]*pluginsv1.UIManifest, 
 			continue
 		}
 		resp, err := uc.GetUIManifest(ctx, &pluginsv1.GetUIManifestRequest{})
-		if err != nil || resp.Error != nil {
+		if err != nil || resp.GetError() != nil {
 			m.logger.Warn("plugin UI: GetUIManifest error", "plugin", id, "error", err)
 			continue
 		}
-		if resp.Manifest != nil {
-			resp.Manifest.PluginID = id
-			manifests = append(manifests, resp.Manifest)
+		if mf := resp.GetManifest(); mf != nil {
+			mf.PluginId = id
+			manifests = append(manifests, mf)
 		}
 	}
 	return manifests, nil
