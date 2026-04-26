@@ -876,9 +876,6 @@ func (m *Manager) buildContainerSpec(p *domain.Plugin, manifest *domain.CatalogM
 	ports := []runtime.PortMapping{
 		{ContainerPort: grpcPort, Protocol: "tcp"},
 	}
-	if p.Type == "ui" {
-		ports = append(ports, runtime.PortMapping{ContainerPort: 3001, HostPort: 3001, Protocol: "tcp"})
-	}
 
 	return runtime.ContainerSpec{
 		ID:    "kleff-" + p.ID,
