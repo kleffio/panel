@@ -19,18 +19,22 @@ import (
 
 	"google.golang.org/grpc"
 
-	pluginsv1 "github.com/kleffio/plugin-sdk-go/v1"
+	commonDomain "github.com/kleff/go-common/domain"
 	grpcpool "github.com/kleffio/platform/internal/core/plugins/adapters/grpc"
 	"github.com/kleffio/platform/internal/core/plugins/domain"
 	"github.com/kleffio/platform/internal/core/plugins/ports"
 	"github.com/kleffio/platform/internal/shared/runtime"
+	pluginsv1 "github.com/kleffio/plugin-sdk-go/v1"
 )
 
 const (
-	activeIDPSettingKey = "active_idp_plugin"
-	grpcPort            = 50051
-	healthCheckInterval = 30 * time.Second
-	maxRestartAttempts  = 3
+	activeIDPSettingKey   = "active_idp_plugin"
+	grpcPort              = 50051
+	healthCheckInterval   = 30 * time.Second
+	maxRestartAttempts    = 3
+	refreshCooldown       = 5 * time.Minute
+	autoSyncInterval      = 24 * time.Hour
+	autoSyncCheckInterval = time.Hour
 )
 
 // Manager implements ports.PluginManager.
@@ -124,6 +128,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 
 	go m.healthLoop(ctx)
+	go m.registrySyncLoop(ctx)
 	return nil
 }
 
@@ -203,14 +208,7 @@ func (m *Manager) Install(ctx context.Context, manifest *domain.CatalogManifest,
 			return nil, fmt.Errorf("install plugin: save: %w", err)
 		}
 		m.setStatus(p.ID, domain.PluginStatusRunning)
-		// Register manifest-declared capabilities directly (no gRPC discovery).
-		caps := make(map[string]bool, len(manifest.Capabilities))
-		for _, c := range manifest.Capabilities {
-			caps[c] = true
-		}
-		m.mu.Lock()
-		m.capabilities[p.ID] = caps
-		m.mu.Unlock()
+		m.setStaticCapabilities(p.ID, manifest)
 		m.logger.Info("plugin installed (static/tier-0)", "id", p.ID)
 		return p, nil
 	}
@@ -859,11 +857,11 @@ func (m *Manager) buildContainerSpec(p *domain.Plugin, manifest *domain.CatalogM
 	}
 
 	labels := map[string]string{
-		"kleff.io/managed":             "true",
-		"kleff.io/plugin-id":           p.ID,
-		"kleff.io/type":                p.Type,
-		"com.docker.compose.project":   m.projectName,
-		"com.docker.compose.service":   p.ID,
+		"kleff.io/managed":           "true",
+		"kleff.io/plugin-id":         p.ID,
+		"kleff.io/type":              p.Type,
+		"com.docker.compose.project": m.projectName,
+		"com.docker.compose.service": p.ID,
 	}
 
 	var volumes []runtime.VolumeMount
@@ -878,10 +876,10 @@ func (m *Manager) buildContainerSpec(p *domain.Plugin, manifest *domain.CatalogM
 	}
 
 	return runtime.ContainerSpec{
-		ID:    "kleff-" + p.ID,
-		Image: p.Image,
-		Env:   env,
-		Ports: ports,
+		ID:            "kleff-" + p.ID,
+		Image:         p.Image,
+		Env:           env,
+		Ports:         ports,
 		Labels:        labels,
 		Volumes:       volumes,
 		RestartPolicy: runtime.RestartAlways,
@@ -924,7 +922,7 @@ func (m *Manager) checkPlugin(ctx context.Context, p *domain.Plugin) {
 		m.setStatus(p.ID, domain.PluginStatusRunning)
 		return
 	}
-	
+
 	// Skip health check if the plugin is currently being removed or disabled
 	currentStatus := m.getStatus(p.ID)
 	if currentStatus == domain.PluginStatusRemoving || currentStatus == domain.PluginStatusDisabled {
@@ -1335,11 +1333,11 @@ func (m *Manager) deployCompanions(ctx context.Context, manifest *domain.Catalog
 			Volumes: volumes,
 			User:    c.User,
 			Labels: map[string]string{
-				"kleff.io/managed":             "true",
-				"kleff.io/plugin-id":           manifest.ID,
-				"kleff.io/companion":           "true",
-				"com.docker.compose.project":   m.projectName,
-				"com.docker.compose.service":   c.ID,
+				"kleff.io/managed":           "true",
+				"kleff.io/plugin-id":         manifest.ID,
+				"kleff.io/companion":         "true",
+				"com.docker.compose.project": m.projectName,
+				"com.docker.compose.service": c.ID,
 			},
 			RestartPolicy: runtime.RestartAlways,
 		}
@@ -1563,4 +1561,336 @@ func DeriveSecretKey(raw string) []byte {
 	}
 	h := sha256.Sum256([]byte(raw))
 	return h[:]
+}
+
+// ── Registry management ───────────────────────────────────────────────────────
+
+func (m *Manager) ListRegistries(ctx context.Context) ([]*domain.PluginRegistryConfig, error) {
+	return m.store.ListRegistries(ctx)
+}
+
+func (m *Manager) AddRegistry(ctx context.Context, name, url string) (*domain.PluginRegistryConfig, error) {
+	id, err := generateRegistryID()
+	if err != nil {
+		return nil, fmt.Errorf("add registry: generate id: %w", err)
+	}
+	reg := &domain.PluginRegistryConfig{
+		ID:       id,
+		Name:     name,
+		URL:      url,
+		IsActive: true, // Enabled by default in multi-registry model.
+	}
+	if err := m.store.SaveRegistry(ctx, reg); err != nil {
+		return nil, fmt.Errorf("add registry: %w", err)
+	}
+
+	// Pre-fetch catalog so plugins are immediately visible; non-fatal.
+	if syncer, ok := m.registry.(ports.RegistrySyncer); ok {
+		if syncErr := syncer.SyncForRegistry(ctx, id, url); syncErr != nil {
+			m.logger.Warn("add registry: initial sync failed", "id", id, "error", syncErr)
+		} else {
+			now := time.Now()
+			_ = m.store.UpdateRegistrySyncMeta(ctx, id, now, nil)
+		}
+	}
+	return reg, nil
+}
+
+func (m *Manager) DeleteRegistry(ctx context.Context, id string) error {
+	if _, err := m.store.GetRegistryByID(ctx, id); err != nil {
+		return err
+	}
+	if err := m.store.DeleteRegistry(ctx, id); err != nil {
+		return err
+	}
+	if syncer, ok := m.registry.(ports.RegistrySyncer); ok {
+		syncer.InvalidateCache()
+	}
+	return nil
+}
+
+func (m *Manager) ToggleRegistry(ctx context.Context, id string, enabled bool) error {
+	reg, err := m.store.GetRegistryByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	reg.IsActive = enabled
+	if err := m.store.SaveRegistry(ctx, reg); err != nil {
+		return err
+	}
+	if syncer, ok := m.registry.(ports.RegistrySyncer); ok {
+		syncer.InvalidateCache()
+	}
+	return nil
+}
+
+func (m *Manager) RefreshRegistry(ctx context.Context, id string) error {
+	reg, err := m.store.GetRegistryByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if reg.CooldownUntil != nil && time.Now().Before(*reg.CooldownUntil) {
+		return &domain.CooldownError{Until: *reg.CooldownUntil}
+	}
+
+	if syncer, ok := m.registry.(ports.RegistrySyncer); ok {
+		if err := syncer.SyncForRegistry(ctx, id, reg.URL); err != nil {
+			return err
+		}
+		syncer.InvalidateCache()
+	}
+
+	now := time.Now()
+	cooldown := now.Add(refreshCooldown)
+	if err := m.store.UpdateRegistrySyncMeta(ctx, id, now, &cooldown); err != nil {
+		m.logger.Warn("refresh registry: update sync meta", "id", id, "error", err)
+	}
+	return nil
+}
+
+// ── Conflict resolution ───────────────────────────────────────────────────────
+
+func (m *Manager) ListConflicts(ctx context.Context) ([]domain.PluginConflict, error) {
+	if lister, ok := m.registry.(ports.RegistryConflictLister); ok {
+		return lister.ListConflicts(ctx)
+	}
+	return nil, nil
+}
+
+func (m *Manager) ResolveConflict(ctx context.Context, pluginID, registryID string) error {
+	selectedManifest, err := m.getManifestFromRegistry(ctx, pluginID, registryID)
+	if err != nil {
+		return fmt.Errorf("resolve conflict: %w", err)
+	}
+
+	currentManifest, err := m.registry.GetManifest(ctx, pluginID)
+	if err != nil {
+		return fmt.Errorf("resolve conflict: get current manifest: %w", err)
+	}
+
+	installed, err := m.store.FindByID(ctx, pluginID)
+	if err != nil && err != commonDomain.ErrNotFound {
+		return fmt.Errorf("resolve conflict: load installed plugin: %w", err)
+	}
+	if err == commonDomain.ErrNotFound {
+		installed = nil
+	}
+
+	if err := m.store.SetRegistryPreference(ctx, pluginID, registryID); err != nil {
+		return fmt.Errorf("resolve conflict: %w", err)
+	}
+	if syncer, ok := m.registry.(ports.RegistrySyncer); ok {
+		syncer.InvalidateCache()
+	}
+
+	if installed == nil {
+		return nil
+	}
+
+	if !installedPluginNeedsReinstall(installed, selectedManifest) {
+		if installed.DisplayName != selectedManifest.Name {
+			installed.DisplayName = selectedManifest.Name
+			installed.UpdatedAt = time.Now().UTC()
+			if err := m.store.Save(ctx, installed); err != nil {
+				return fmt.Errorf("resolve conflict: sync installed plugin metadata: %w", err)
+			}
+		}
+		return nil
+	}
+
+	if err := m.reinstallInstalledPlugin(ctx, installed, currentManifest, selectedManifest); err != nil {
+		return fmt.Errorf("resolve conflict: reinstall installed plugin: %w", err)
+	}
+	return nil
+}
+
+func (m *Manager) ResetConflictPreference(ctx context.Context, pluginID string) error {
+	if err := m.store.DeleteRegistryPreference(ctx, pluginID); err != nil {
+		return fmt.Errorf("reset conflict preference: %w", err)
+	}
+	if syncer, ok := m.registry.(ports.RegistrySyncer); ok {
+		syncer.InvalidateCache()
+	}
+	return nil
+}
+
+func (m *Manager) ListRegistryPreferences(ctx context.Context) ([]*domain.RegistryPreference, error) {
+	return m.store.ListRegistryPreferences(ctx)
+}
+
+func (m *Manager) getManifestFromRegistry(ctx context.Context, pluginID, registryID string) (*domain.CatalogManifest, error) {
+	regs, err := m.store.ListEnabledRegistries(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list enabled registries: %w", err)
+	}
+
+	enabled := false
+	for _, reg := range regs {
+		if reg.ID == registryID {
+			enabled = true
+			break
+		}
+	}
+	if !enabled {
+		return nil, fmt.Errorf("registry %q is not enabled", registryID)
+	}
+
+	catalogs, err := m.store.GetAllCachedCatalogs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load cached catalogs: %w", err)
+	}
+	for _, manifest := range catalogs[registryID] {
+		if manifest.ID == pluginID {
+			return manifest, nil
+		}
+	}
+	return nil, fmt.Errorf("plugin %q was not found in registry %q", pluginID, registryID)
+}
+
+func installedPluginNeedsReinstall(p *domain.Plugin, manifest *domain.CatalogManifest) bool {
+	expectedImage := ""
+	expectedGRPCAddr := ""
+	if !isStaticTier(manifest) {
+		expectedImage = fmt.Sprintf("%s:%s", manifest.Image, manifest.Version)
+		expectedGRPCAddr = fmt.Sprintf("kleff-%s:%d", manifest.ID, grpcPort)
+	}
+
+	return p.Type != manifest.Type ||
+		p.Image != expectedImage ||
+		p.Version != manifest.Version ||
+		p.FrontendURL != manifest.FrontendURL ||
+		p.GRPCAddr != expectedGRPCAddr ||
+		!sameStrings(p.Dependencies, manifest.Dependencies)
+}
+
+func sameStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Manager) reinstallInstalledPlugin(ctx context.Context, p *domain.Plugin, oldManifest, newManifest *domain.CatalogManifest) error {
+	m.setStatus(p.ID, domain.PluginStatusInstalling)
+
+	_ = m.pool.Close(p.ID)
+	if p.GRPCAddr != "" {
+		if err := m.rt.Remove(ctx, "kleff-"+p.ID); err != nil {
+			m.logger.Warn("reinstall plugin: remove existing container failed", "id", p.ID, "error", err)
+		}
+	}
+	if oldManifest != nil {
+		m.removeCompanions(ctx, oldManifest)
+	}
+	m.clearCapabilities(p.ID)
+
+	p.Type = newManifest.Type
+	p.DisplayName = newManifest.Name
+	p.Version = newManifest.Version
+	p.FrontendURL = newManifest.FrontendURL
+	p.Dependencies = append([]string(nil), newManifest.Dependencies...)
+	p.UpdatedAt = time.Now().UTC()
+
+	if isStaticTier(newManifest) {
+		p.Image = ""
+		p.GRPCAddr = ""
+	} else {
+		p.Image = fmt.Sprintf("%s:%s", newManifest.Image, newManifest.Version)
+		p.GRPCAddr = fmt.Sprintf("kleff-%s:%d", newManifest.ID, grpcPort)
+	}
+
+	if err := m.store.Save(ctx, p); err != nil {
+		m.setStatus(p.ID, domain.PluginStatusError)
+		return fmt.Errorf("save updated plugin: %w", err)
+	}
+
+	if !p.Enabled {
+		m.setStatus(p.ID, domain.PluginStatusDisabled)
+		return nil
+	}
+
+	if isStaticTier(newManifest) {
+		m.setStaticCapabilities(p.ID, newManifest)
+		m.setStatus(p.ID, domain.PluginStatusRunning)
+		return nil
+	}
+
+	if err := m.ensureRunning(ctx, p); err != nil {
+		m.setStatus(p.ID, domain.PluginStatusError)
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) setStaticCapabilities(id string, manifest *domain.CatalogManifest) {
+	caps := make(map[string]bool, len(manifest.Capabilities))
+	for _, c := range manifest.Capabilities {
+		caps[c] = true
+	}
+
+	if permitted := permittedCapabilities(manifest.Tags); permitted != nil {
+		for c := range caps {
+			if !permitted[c] {
+				m.logger.Warn("plugin capability denied by tag permissions",
+					"plugin", id, "capability", c)
+				delete(caps, c)
+			}
+		}
+	}
+
+	m.mu.Lock()
+	m.capabilities[id] = caps
+	m.mu.Unlock()
+}
+
+// registrySyncLoop runs hourly and auto-syncs all enabled registries that haven't
+// been synced recently.
+func (m *Manager) registrySyncLoop(ctx context.Context) {
+	ticker := time.NewTicker(autoSyncCheckInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.autoSyncEnabledRegistries(ctx)
+		}
+	}
+}
+
+func (m *Manager) autoSyncEnabledRegistries(ctx context.Context) {
+	regs, err := m.store.ListEnabledRegistries(ctx)
+	if err != nil || len(regs) == 0 {
+		return
+	}
+	for _, reg := range regs {
+		if reg.LastSyncedAt != nil && time.Since(*reg.LastSyncedAt) < autoSyncInterval {
+			continue
+		}
+		m.logger.Info("plugin registry: auto-syncing", "id", reg.ID)
+		if syncer, ok := m.registry.(ports.RegistrySyncer); ok {
+			if err := syncer.SyncForRegistry(ctx, reg.ID, reg.URL); err != nil {
+				m.logger.Warn("plugin registry: auto-sync failed", "id", reg.ID, "error", err)
+				continue
+			}
+			syncer.InvalidateCache()
+		}
+		now := time.Now()
+		if err := m.store.UpdateRegistrySyncMeta(ctx, reg.ID, now, nil); err != nil {
+			m.logger.Warn("plugin registry: auto-sync: update sync meta", "id", reg.ID, "error", err)
+		}
+	}
+}
+
+func generateRegistryID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", b), nil
 }

@@ -16,6 +16,7 @@ import { useHasRole } from "@/features/auth";
 import { useMarketplace } from "@/features/plugins/hooks/useMarketplace";
 import { DepsSheet } from "@/features/plugins/ui/DepsSheet";
 import { ConfigFieldInput } from "@/features/plugins/ui/ConfigFieldInput";
+import { RegistriesSection } from "@/features/plugins/ui/RegistriesSection";
 import { PLUGIN_TIER } from "@/features/plugins/model/types";
 import type { CatalogPlugin } from "@/lib/api/plugins";
 
@@ -194,6 +195,8 @@ export function InfraPluginsPage() {
           <span className="text-xs font-medium text-destructive">Admin only</span>
         </div>
       </div>
+
+      {isAdmin && <RegistriesSection />}
 
       <div className="flex flex-wrap gap-2 items-center">
         <div className="relative flex-1 min-w-[200px] max-w-sm">

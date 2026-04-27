@@ -2,17 +2,27 @@
 //
 // Routes (all under /api/v1/admin/plugins, require admin role):
 //
-//	GET    /api/v1/admin/plugins/catalog          – list remote plugin catalog
-//	POST   /api/v1/admin/plugins/catalog/refresh  – force catalog refresh
-//	GET    /api/v1/admin/plugins                  – list installed plugins
-//	POST   /api/v1/admin/plugins                  – install a plugin
-//	GET    /api/v1/admin/plugins/{id}             – get a single plugin
-//	PATCH  /api/v1/admin/plugins/{id}/config      – update plugin config
-//	POST   /api/v1/admin/plugins/{id}/enable      – enable plugin
-//	POST   /api/v1/admin/plugins/{id}/disable     – disable plugin
-//	DELETE /api/v1/admin/plugins/{id}             – remove plugin
-//	GET    /api/v1/admin/plugins/{id}/status      – live container/gRPC status
-//	POST   /api/v1/admin/plugins/{id}/set-active  – set as active IDP
+//	GET    /api/v1/admin/plugins/catalog                     – list remote plugin catalog
+//	POST   /api/v1/admin/plugins/catalog/refresh             – force catalog refresh
+//	GET    /api/v1/admin/plugins                             – list installed plugins
+//	POST   /api/v1/admin/plugins                             – install a plugin
+//	GET    /api/v1/admin/plugins/{id}                        – get a single plugin
+//	PATCH  /api/v1/admin/plugins/{id}/config                 – update plugin config
+//	POST   /api/v1/admin/plugins/{id}/enable                 – enable plugin
+//	POST   /api/v1/admin/plugins/{id}/disable                – disable plugin
+//	DELETE /api/v1/admin/plugins/{id}                        – remove plugin
+//	GET    /api/v1/admin/plugins/{id}/status                 – live container/gRPC status
+//	POST   /api/v1/admin/plugins/{id}/set-active             – set as active IDP
+//
+//	GET    /api/v1/admin/plugin-registries                   – list registry sources
+//	POST   /api/v1/admin/plugin-registries                   – add registry source
+//	DELETE /api/v1/admin/plugin-registries/{id}              – remove registry source
+//	POST   /api/v1/admin/plugin-registries/{id}/toggle       – enable/disable registry
+//	POST   /api/v1/admin/plugin-registries/{id}/refresh      – manual catalog refresh
+//	GET    /api/v1/admin/plugin-registries/conflicts         – list plugin ID conflicts
+//	POST   /api/v1/admin/plugin-registries/conflicts/resolve – resolve a conflict
+//	GET    /api/v1/admin/plugin-registries/preferences       – list all preferences
+//	DELETE /api/v1/admin/plugin-registries/preferences/{plugin_id} – reset preference
 //
 // Authenticated (any role):
 //
@@ -22,6 +32,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -69,6 +80,16 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Delete("/api/v1/admin/plugins/{id}", h.handleRemove)
 	r.Get("/api/v1/admin/plugins/{id}/status", h.handleStatus)
 	r.Post("/api/v1/admin/plugins/{id}/set-active", h.handleSetActive)
+
+	r.Get("/api/v1/admin/plugin-registries", h.handleListRegistries)
+	r.Post("/api/v1/admin/plugin-registries", h.handleAddRegistry)
+	r.Delete("/api/v1/admin/plugin-registries/{id}", h.handleDeleteRegistry)
+	r.Post("/api/v1/admin/plugin-registries/{id}/toggle", h.handleToggleRegistry)
+	r.Post("/api/v1/admin/plugin-registries/{id}/refresh", h.handleRefreshRegistry)
+	r.Get("/api/v1/admin/plugin-registries/conflicts", h.handleListConflicts)
+	r.Post("/api/v1/admin/plugin-registries/conflicts/resolve", h.handleResolveConflict)
+	r.Get("/api/v1/admin/plugin-registries/preferences", h.handleListPreferences)
+	r.Delete("/api/v1/admin/plugin-registries/preferences/{plugin_id}", h.handleResetPreference)
 }
 
 // ── Catalog ───────────────────────────────────────────────────────────────────
@@ -375,6 +396,195 @@ func toResponses(plugins []*plugindomain.Plugin) []pluginResponse {
 	out := make([]pluginResponse, len(plugins))
 	for i, p := range plugins {
 		out[i] = toResponse(p)
+	}
+	return out
+}
+
+// ── Registry management ───────────────────────────────────────────────────────
+
+func (h *Handler) handleListRegistries(w http.ResponseWriter, r *http.Request) {
+	regs, err := h.manager.ListRegistries(r.Context())
+	if err != nil {
+		h.logger.Error("list registries", "error", err)
+		commonhttp.Error(w, domain.NewInternal(err))
+		return
+	}
+	commonhttp.Success(w, map[string]any{"registries": toRegistryResponses(regs)})
+}
+
+type addRegistryRequest struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+func (h *Handler) handleAddRegistry(w http.ResponseWriter, r *http.Request) {
+	var req addRegistryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		commonhttp.Error(w, domain.NewBadRequest("invalid request body"))
+		return
+	}
+	if req.Name == "" {
+		commonhttp.Error(w, domain.NewBadRequest("name is required"))
+		return
+	}
+	if req.URL == "" {
+		commonhttp.Error(w, domain.NewBadRequest("url is required"))
+		return
+	}
+	reg, err := h.manager.AddRegistry(r.Context(), req.Name, req.URL)
+	if err != nil {
+		h.logger.Warn("add registry failed", "error", err)
+		commonhttp.Error(w, domain.NewBadRequest(err.Error()))
+		return
+	}
+	commonhttp.Created(w, toRegistryResponse(reg))
+}
+
+func (h *Handler) handleDeleteRegistry(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.manager.DeleteRegistry(r.Context(), id); err != nil {
+		commonhttp.Error(w, err)
+		return
+	}
+	commonhttp.NoContent(w)
+}
+
+func (h *Handler) handleToggleRegistry(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		commonhttp.Error(w, domain.NewBadRequest("invalid request body"))
+		return
+	}
+	if err := h.manager.ToggleRegistry(r.Context(), id, req.Enabled); err != nil {
+		h.logger.Warn("toggle registry failed", "id", id, "error", err)
+		commonhttp.Error(w, err)
+		return
+	}
+	commonhttp.NoContent(w)
+}
+
+func (h *Handler) handleRefreshRegistry(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	err := h.manager.RefreshRegistry(r.Context(), id)
+	if err != nil {
+		var ce *plugindomain.CooldownError
+		if errors.As(err, &ce) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error":          ce.Error(),
+				"cooldown_until": ce.Until.UTC().Format(time.RFC3339),
+			})
+			return
+		}
+		h.logger.Warn("refresh registry failed", "id", id, "error", err)
+		commonhttp.Error(w, err)
+		return
+	}
+	commonhttp.Success(w, map[string]string{"status": "ok"})
+}
+
+// ── Conflict resolution ───────────────────────────────────────────────────────
+
+func (h *Handler) handleListConflicts(w http.ResponseWriter, r *http.Request) {
+	conflicts, err := h.manager.ListConflicts(r.Context())
+	if err != nil {
+		h.logger.Error("list conflicts", "error", err)
+		commonhttp.Error(w, domain.NewInternal(err))
+		return
+	}
+	if conflicts == nil {
+		conflicts = []plugindomain.PluginConflict{}
+	}
+	commonhttp.Success(w, map[string]any{"conflicts": conflicts})
+}
+
+func (h *Handler) handleResolveConflict(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PluginID   string `json:"plugin_id"`
+		RegistryID string `json:"registry_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		commonhttp.Error(w, domain.NewBadRequest("invalid request body"))
+		return
+	}
+	if req.PluginID == "" || req.RegistryID == "" {
+		commonhttp.Error(w, domain.NewBadRequest("plugin_id and registry_id are required"))
+		return
+	}
+	if err := h.manager.ResolveConflict(r.Context(), req.PluginID, req.RegistryID); err != nil {
+		h.logger.Warn("resolve conflict failed", "error", err)
+		commonhttp.Error(w, domain.NewBadRequest(err.Error()))
+		return
+	}
+	commonhttp.NoContent(w)
+}
+
+func (h *Handler) handleListPreferences(w http.ResponseWriter, r *http.Request) {
+	prefs, err := h.manager.ListRegistryPreferences(r.Context())
+	if err != nil {
+		h.logger.Error("list preferences", "error", err)
+		commonhttp.Error(w, domain.NewInternal(err))
+		return
+	}
+	if prefs == nil {
+		prefs = []*plugindomain.RegistryPreference{}
+	}
+	commonhttp.Success(w, map[string]any{"preferences": prefs})
+}
+
+func (h *Handler) handleResetPreference(w http.ResponseWriter, r *http.Request) {
+	pluginID := chi.URLParam(r, "plugin_id")
+	if pluginID == "" {
+		commonhttp.Error(w, domain.NewBadRequest("plugin_id is required"))
+		return
+	}
+	if err := h.manager.ResetConflictPreference(r.Context(), pluginID); err != nil {
+		h.logger.Warn("reset preference failed", "plugin_id", pluginID, "error", err)
+		commonhttp.Error(w, err)
+		return
+	}
+	commonhttp.NoContent(w)
+}
+
+// ── Registry response mapping ─────────────────────────────────────────────────
+
+type registryResponse struct {
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	URL           string  `json:"url"`
+	IsActive      bool    `json:"is_active"`
+	LastSyncedAt  *string `json:"last_synced_at"`
+	CooldownUntil *string `json:"cooldown_until"`
+	CreatedAt     string  `json:"created_at"`
+}
+
+func toRegistryResponse(r *plugindomain.PluginRegistryConfig) registryResponse {
+	resp := registryResponse{
+		ID:        r.ID,
+		Name:      r.Name,
+		URL:       r.URL,
+		IsActive:  r.IsActive,
+		CreatedAt: r.CreatedAt.Format(time.RFC3339),
+	}
+	if r.LastSyncedAt != nil {
+		s := r.LastSyncedAt.UTC().Format(time.RFC3339)
+		resp.LastSyncedAt = &s
+	}
+	if r.CooldownUntil != nil && r.CooldownUntil.After(time.Now()) {
+		s := r.CooldownUntil.UTC().Format(time.RFC3339)
+		resp.CooldownUntil = &s
+	}
+	return resp
+}
+
+func toRegistryResponses(regs []*plugindomain.PluginRegistryConfig) []registryResponse {
+	out := make([]registryResponse, len(regs))
+	for i, r := range regs {
+		out[i] = toRegistryResponse(r)
 	}
 	return out
 }

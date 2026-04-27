@@ -107,13 +107,19 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 	}
 
 	pluginStore := pluginpersistence.NewPostgresPluginStore(db)
-	catalogRegistry := pluginregistry.New(cfg.PluginRegistryURL, time.Duration(cfg.PluginRegistryTTL)*time.Second)
+
+	dbRegistry := pluginregistry.NewDBRegistry(pluginStore, cfg.PluginRegistryURL)
+	// Seed the default registry row if this is a fresh install. Non-fatal.
+	if err := dbRegistry.EnsureDefault(context.Background()); err != nil {
+		logger.Warn("plugin registry: ensure default warning", "error", err)
+	}
+
 	secretKey := pluginapplication.DeriveSecretKey(cfg.SecretKey)
 
-	pluginMgr := pluginapplication.New(pluginStore, catalogRegistry, rt, secretKey, cfg.PluginNetwork, cfg.CompanionEnv, logger)
+	pluginMgr := pluginapplication.New(pluginStore, dbRegistry, rt, secretKey, cfg.PluginNetwork, cfg.CompanionEnv, logger)
 
 	// Start plugin manager: loads installed plugins from DB, ensures containers
-	// are running, starts health-check goroutine.
+	// are running, starts health-check and registry-sync goroutines.
 	if err := pluginMgr.Start(context.Background()); err != nil {
 		logger.Warn("plugin manager start warning", "error", err)
 		// Non-fatal: server continues even if some plugins fail to start.
@@ -178,7 +184,7 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 		PluginManager: pluginMgr,
 
 		AuthHandler:          pluginhttp.NewAuthHandler(pluginMgr, logger),
-		SetupHandler:         pluginhttp.NewSetupHandler(pluginMgr, catalogRegistry, logger),
+		SetupHandler:         pluginhttp.NewSetupHandler(pluginMgr, dbRegistry, logger),
 		CatalogHandler:       cataloghttp.NewHandler(catalogStore, logger),
 		OrganizationsHandler: organizationshttp.NewHandler(orgStore, notificationSvc, logger),
 		DeploymentsHandler:   deploymentshttp.NewHandler(createDeployment, serverAction, deploymentStore, cfg.SecretKey, logger),
@@ -190,7 +196,7 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 		LogsHandler:          logshttp.NewHandler(logspersistence.NewPostgresLogStore(db), logger),
 		AuditHandler:         audithttp.NewHandler(logger),
 		AdminHandler:         adminhttp.NewHandler(logger),
-		PluginsHandler:       pluginhttp.NewHandler(pluginMgr, catalogRegistry, logger),
+		PluginsHandler:       pluginhttp.NewHandler(pluginMgr, dbRegistry, logger),
 		NotificationsHandler: notificationshttp.NewHandler(notificationSvc, notificationHub, logger),
 		NotificationService:  notificationSvc,
 		NotificationHub:      notificationHub,
