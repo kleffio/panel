@@ -39,6 +39,7 @@ import (
 	projectspersistence "github.com/kleffio/platform/internal/core/projects/adapters/persistence"
 	logshttp "github.com/kleffio/platform/internal/core/logs/adapters/http"
 	logspersistence "github.com/kleffio/platform/internal/core/logs/adapters/persistence"
+	logsrouting "github.com/kleffio/platform/internal/core/logs/adapters/routing"
 	usagehttp "github.com/kleffio/platform/internal/core/usage/adapters/http"
 	usagepersistence "github.com/kleffio/platform/internal/core/usage/adapters/persistence"
 	workloadshttp "github.com/kleffio/platform/internal/core/workloads/adapters/http"
@@ -182,7 +183,16 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 		NodesHandler:         nodeshttp.NewHandler(nodeStore, logger),
 		BillingHandler:       billinghttp.NewHandler(logger),
 		UsageHandler:         usagehttp.NewHandler(usagepersistence.NewPostgresUsageStore(db), logger),
-		LogsHandler:          logshttp.NewHandler(logspersistence.NewPostgresLogStore(db), logger),
+		LogsHandler: logshttp.NewHandler(logsrouting.NewStore(
+			logspersistence.NewPostgresLogStore(db),
+			func(ctx context.Context) string {
+				summaries, err := pluginMgr.GetActivePluginsByCapability(ctx, "monitoring.logs")
+				if err != nil || len(summaries) == 0 {
+					return ""
+				}
+				return summaries[0].ScrapeURL
+			},
+		), logger),
 		AuditHandler:         audithttp.NewHandler(logger),
 		AdminHandler:         adminhttp.NewHandler(logger),
 		PluginsHandler:       pluginhttp.NewHandler(pluginMgr, catalogRegistry, logger),

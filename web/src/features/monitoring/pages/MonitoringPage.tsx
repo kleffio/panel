@@ -162,7 +162,7 @@ export function MonitoringPage() {
       </div>
 
       {/* Plugin-injected charts (e.g. Prometheus time-series) */}
-      <PluginSlot name="monitoring.charts" slotProps={{ projectId: currentProjectID, refreshKey }} />
+      <PluginSlot name="monitoring.charts" slotProps={{ projectId: currentProjectID, refreshKey }} exclusive />
 
       {/* Per-workload table */}
       <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">

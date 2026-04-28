@@ -30,6 +30,101 @@ type CatalogManifest struct {
 	// Dependencies lists plugin IDs that must be installed and enabled before
 	// this plugin can be installed. Example: ["billing-framework"].
 	Dependencies []string `json:"dependencies,omitempty"`
+
+	// Scrape describes the Prometheus-compatible scrape endpoint for monitoring.source
+	// plugins. When set, the platform includes this plugin in the HTTP SD response
+	// without needing any gRPC implementation.
+	Scrape *ScrapeConfig `json:"scrape,omitempty"`
+
+	// Output declares the telemetry write endpoint this plugin exposes to collector plugins.
+	// Collector plugins (e.g. Alloy) query the platform for active outputs and generate
+	// their forwarding config dynamically — no collector changes needed when backends are added.
+	Output *PluginOutput `json:"output,omitempty"`
+
+	// AlertmanagerReceiver declares an Alertmanager receiver block this notification plugin
+	// provides. String values in Config may contain ${ENV_VAR} placeholders; the platform
+	// substitutes the plugin's actual config/secret values before generating alertmanager.yml.
+	AlertmanagerReceiver *AlertmanagerReceiver `json:"alertmanagerReceiver,omitempty"`
+
+	// Ports exposes container ports on the host for tier 1 plugins (e.g. Grafana :3000,
+	// Alertmanager :9093). Tier 2 plugins use the built-in gRPC port; tier 0 has no container.
+	Ports []CompanionPort `json:"ports,omitempty"`
+
+	// Privileged grants the plugin container extended host privileges.
+	// Required for plugins that need deep host access (e.g. cAdvisor reading cgroups).
+	Privileged bool `json:"privileged,omitempty"`
+
+	// Command overrides the container's default CMD (optional).
+	// Example: ["--path.rootfs=/host"] for node-exporter.
+	Command []string `json:"command,omitempty"`
+}
+
+// PluginOutput declares the telemetry write endpoint a backend plugin exposes.
+// Collector plugins query /api/v1/monitoring/alloy-config to get the full
+// generated River config for all active outputs — no collector manifest changes needed.
+type PluginOutput struct {
+	// Protocol identifies the write protocol: "remote_write", "loki_push", or "otlp".
+	Protocol string `json:"protocol"`
+	// Path is the URL path appended to the companion's internalAddr to form the full write URL.
+	// Example: "/api/v1/write" for VictoriaMetrics, "/loki/api/v1/push" for Loki.
+	// May contain ${ENV_VAR} placeholders substituted from the plugin's config/secrets.
+	Path string `json:"path"`
+	// BearerToken is an optional bearer token for authenticating write requests.
+	// May contain ${ENV_VAR} placeholders.
+	BearerToken string `json:"bearerToken,omitempty"`
+	// Headers is an optional map of extra HTTP headers to include in write requests.
+	// Values may contain ${ENV_VAR} placeholders.
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
+// ScrapeConfig describes a static Prometheus scrape endpoint for a source plugin.
+type ScrapeConfig struct {
+	// Port is the port the exporter listens on, e.g. 9100 for node-exporter.
+	Port int `json:"port"`
+	// Path is the metrics HTTP path; defaults to "/metrics".
+	Path string `json:"path,omitempty"`
+	// Scheme is "http" or "https"; defaults to "http".
+	Scheme string `json:"scheme,omitempty"`
+}
+
+// AlertmanagerReceiver declares the Alertmanager receiver configuration a notification
+// plugin provides. Config mirrors Alertmanager's receiver YAML structure as a nested
+// map. String values may contain ${ENV_VAR} placeholders which the platform substitutes
+// with the plugin's actual config/secret values before generating alertmanager.yml.
+type AlertmanagerReceiver struct {
+	Name   string                 `json:"name"`
+	Config map[string]interface{} `json:"config"`
+}
+
+// AlertmanagerReceiverInstance is a resolved AlertmanagerReceiver with all ${ENV_VAR}
+// placeholders substituted with the plugin's actual config/secret values.
+type AlertmanagerReceiverInstance struct {
+	Name   string
+	Config map[string]interface{}
+}
+
+// MonitoringOutput describes one active telemetry write endpoint, combining
+// the plugin's declared output protocol with the resolved companion address.
+type MonitoringOutput struct {
+	// PluginID is the plugin that exposes this output.
+	PluginID string
+	// Protocol identifies the write protocol: "remote_write", "loki_push", or "otlp".
+	Protocol string
+	// URL is the full write endpoint: companion internalAddr + output path (env vars substituted).
+	URL string
+	// BearerToken is an optional resolved bearer token for authenticating write requests.
+	BearerToken string
+	// Headers is an optional map of resolved extra HTTP headers for write requests.
+	Headers map[string]string
+}
+
+// PluginSummary is a lightweight view of an installed plugin used by capability
+// discovery queries (e.g. collector plugins finding their backends).
+type PluginSummary struct {
+	ID           string
+	Capability   string
+	InternalAddr string // gRPC addr of the plugin container
+	ScrapeURL    string // companion internalAddr, if any (e.g. VictoriaMetrics HTTP)
 }
 
 // CompanionSpec declares a dependency container that the platform spins up
@@ -90,10 +185,12 @@ type CompanionPort struct {
 	Protocol      string `json:"protocol,omitempty"` // default: "tcp"
 }
 
-// CompanionVolume maps a named Docker volume to a path inside the companion container.
+// CompanionVolume maps a named Docker volume or host path to a path inside the container.
 type CompanionVolume struct {
-	Name   string `json:"name"`   // Docker volume name, e.g. "kleff-keycloak-data"
-	Target string `json:"target"` // Mount path inside container, e.g. "/opt/keycloak/data"
+	Name     string `json:"name"`             // Docker volume name, e.g. "kleff-keycloak-data". Empty when HostPath is set.
+	Target   string `json:"target"`           // Mount path inside container, e.g. "/opt/keycloak/data"
+	HostPath string `json:"hostPath,omitempty"` // If set, bind-mount this host path instead of a named volume
+	ReadOnly bool   `json:"readOnly,omitempty"` // Mount as read-only
 }
 
 // ConfigField describes one configuration value the plugin expects.
@@ -123,4 +220,10 @@ type ConfigField struct {
 
 	// Advanced indicates if the field should be tucked away in advanced settings
 	Advanced bool `json:"advanced,omitempty"`
+
+	// ResolveFromCapability, if set, causes the platform to automatically populate
+	// this field at install time with the ScrapeURL of the first active plugin with
+	// the given capability (e.g. "monitoring.metrics"). An admin-provided value
+	// always takes precedence. Fields with this set are not required from the admin.
+	ResolveFromCapability string `json:"resolveFromCapability,omitempty"`
 }

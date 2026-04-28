@@ -131,11 +131,14 @@ function LogViewer({ node }: { node: InfrastructureNode }) {
             level === "error" ? "bg-red-500/[0.06]" :
             level === "warn"  ? "bg-amber-500/[0.05]" :
             "";
+          const hasEmbeddedTimestamp = /^\[\d{2}:\d{2}:\d{2}\]/.test(l.line.trimStart());
           return (
             <div key={l.id} className={`flex gap-3 px-1 py-[1px] rounded-[2px] ${rowBg}`}>
-              <span className="w-[52px] shrink-0 select-none tabular-nums text-white/20 pt-px">
-                {new Date(l.ts).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-              </span>
+              {!hasEmbeddedTimestamp && (
+                <span className="w-[52px] shrink-0 select-none tabular-nums text-white/20 pt-px">
+                  {new Date(l.ts).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                </span>
+              )}
               <span className="break-all">{renderLogSegments(l.line, l.stream)}</span>
             </div>
           );

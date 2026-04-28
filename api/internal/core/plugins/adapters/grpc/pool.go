@@ -140,6 +140,39 @@ func (p *Pool) MonitoringFrameworkClient(id string) (pluginsv1.MonitoringFramewo
 	return pluginsv1.NewMonitoringFrameworkClient(conn), nil
 }
 
+// MonitoringSourceClient returns a MonitoringSourceClient for the given plugin ID.
+func (p *Pool) MonitoringSourceClient(id string) (pluginsv1.MonitoringSourceClient, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	conn, ok := p.conns[id]
+	if !ok {
+		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
+	}
+	return pluginsv1.NewMonitoringSourceClient(conn), nil
+}
+
+// MonitoringLogsClient returns a MonitoringLogsClient for the given plugin ID.
+func (p *Pool) MonitoringLogsClient(id string) (pluginsv1.MonitoringLogsClient, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	conn, ok := p.conns[id]
+	if !ok {
+		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
+	}
+	return pluginsv1.NewMonitoringLogsClient(conn), nil
+}
+
+// MonitoringTracesClient returns a MonitoringTracesClient for the given plugin ID.
+func (p *Pool) MonitoringTracesClient(id string) (pluginsv1.MonitoringTracesClient, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	conn, ok := p.conns[id]
+	if !ok {
+		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
+	}
+	return pluginsv1.NewMonitoringTracesClient(conn), nil
+}
+
 // HasConnection reports whether a live connection exists for id.
 func (p *Pool) HasConnection(id string) bool {
 	p.mu.RLock()

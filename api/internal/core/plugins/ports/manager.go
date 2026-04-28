@@ -101,12 +101,39 @@ type PluginManager interface {
 	// HandlePluginRoute forwards an HTTP request to the given plugin via gRPC.
 	HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HTTPRequest) (*pluginsv1.HTTPResponse, error)
 
-	// ── Observability (monitoring.framework capability) ───────────────────────
+	// ── Observability ────────────────────────────────────────────────────────────
 
 	// GetMetricsBackendURL returns the PromQL-compatible query URL of the active
-	// monitoring plugin's time-series backend (e.g. VictoriaMetrics).
+	// monitoring.metrics plugin's time-series backend (e.g. VictoriaMetrics).
 	// Returns ("", nil) when no monitoring plugin is installed.
 	GetMetricsBackendURL(ctx context.Context) (string, error)
+
+	// GetScrapeTargets aggregates scrape endpoints from all active monitoring.source
+	// plugins. Used to build the Prometheus HTTP SD response.
+	GetScrapeTargets(ctx context.Context) ([]*pluginsv1.ScrapeTarget, error)
+
+	// GetActivePluginsByCapability returns a summary of all active plugins that
+	// declare the given capability. Collector plugins use this to discover backends.
+	GetActivePluginsByCapability(ctx context.Context, capability string) ([]domain.PluginSummary, error)
+
+	// GetMonitoringOutputs returns one entry for each running plugin that declares
+	// an Output block in its manifest. Collector plugins call /api/v1/monitoring/alloy-config
+	// to get a full River config built from these outputs — no collector changes needed
+	// when new backends are installed.
+	GetMonitoringOutputs(ctx context.Context) ([]domain.MonitoringOutput, error)
+
+	// GetAlertmanagerReceivers returns one entry per running plugin that declares an
+	// AlertmanagerReceiver block, with ${ENV_VAR} placeholders substituted from the
+	// plugin's stored config and secrets. Alertmanager polls this to build its config.
+	GetAlertmanagerReceivers(ctx context.Context) ([]domain.AlertmanagerReceiverInstance, error)
+
+	// IngestWorkloadLog forwards a log entry to the active monitoring.logs plugin.
+	// Non-fatal: silently drops if no logs plugin is installed.
+	IngestWorkloadLog(ctx context.Context, entry *pluginsv1.LogEntry) error
+
+	// IngestWorkloadSpan forwards a trace span to the active monitoring.traces plugin.
+	// Non-fatal: silently drops if no traces plugin is installed.
+	IngestWorkloadSpan(ctx context.Context, span *pluginsv1.Span) error
 
 	// GetPluginInternalFrontendURL returns the internal (Docker-network) URL of
 	// the plugin's frontend JS bundle, or "" if the plugin has no frontend.

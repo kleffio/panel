@@ -90,16 +90,26 @@ func (r *Runtime) Deploy(ctx context.Context, spec runtime.ContainerSpec) error 
 		restartPolicy = container.RestartPolicy{Name: container.RestartPolicyDisabled}
 	}
 
-	// Build volume binds: "volume-name:/target/path".
+	// Build volume binds: host-path or named volume → "/target/path[:ro]".
 	var binds []string
 	for _, v := range spec.Volumes {
-		binds = append(binds, v.Name+":"+v.Target)
+		var bind string
+		if v.HostPath != "" {
+			bind = v.HostPath + ":" + v.Target
+		} else {
+			bind = v.Name + ":" + v.Target
+		}
+		if v.ReadOnly {
+			bind += ":ro"
+		}
+		binds = append(binds, bind)
 	}
 
 	hostCfg := &container.HostConfig{
 		PortBindings:  portBindings,
 		RestartPolicy: restartPolicy,
 		Binds:         binds,
+		Privileged:    spec.Privileged,
 	}
 	if spec.Resources.MemoryMB > 0 {
 		hostCfg.Memory = spec.Resources.MemoryMB * 1024 * 1024

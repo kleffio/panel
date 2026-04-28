@@ -15,15 +15,18 @@ interface PluginSlotProps {
   slotProps?: Record<string, unknown>;
   /** When provided, renders as a div with this className instead of a fragment. */
   className?: string;
+  /** When true, only the highest-priority registration is rendered. */
+  exclusive?: boolean;
 }
 
-export function PluginSlot({ name, slotProps, className }: PluginSlotProps) {
+export function PluginSlot({ name, slotProps, className, exclusive }: PluginSlotProps) {
   useSyncExternalStore(
     pluginRegistry.subscribe.bind(pluginRegistry),
     pluginRegistry.getSnapshot.bind(pluginRegistry),
     pluginRegistry.getSnapshot.bind(pluginRegistry),
   );
-  const registrations = pluginRegistry.getSlotRegistrations(name);
+  const all = pluginRegistry.getSlotRegistrations(name);
+  const registrations = exclusive ? all.slice(0, 1) : all;
 
   const content = registrations.map((reg, index) => {
     const Component = reg.component;

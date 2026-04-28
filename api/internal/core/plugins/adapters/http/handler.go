@@ -58,12 +58,18 @@ func NewHandler(
 func (h *Handler) RegisterAnonymousRoutes(r chi.Router) {
 	r.Get("/api/v1/plugins/{id}/js", h.handlePluginJS)
 	r.Get("/api/v1/metrics/query_range", h.handleMetricsQueryRange)
+	// Internal HTTP SD endpoint — reachable by collectors inside the Docker network.
+	r.Get("/api/v1/monitoring/targets", h.handleMonitoringTargets)
+	// Dynamic Alloy River config — polled by alloy-collector inside the Docker network.
+	r.Get("/api/v1/monitoring/alloy-config", h.handleAlloyConfig)
+	r.Get("/api/v1/monitoring/alertmanager-config", h.handleAlertmanagerConfig)
 }
 
 // RegisterPublicRoutes attaches authenticated-but-not-admin plugin routes.
 func (h *Handler) RegisterPublicRoutes(r chi.Router) {
 	r.Get("/api/v1/plugins/catalog", h.handleMarketplaceCatalog)
 	r.Get("/api/v1/plugins/installed", h.handleListInstalledPublic)
+	r.Get("/api/v1/plugins/by-capability", h.handlePluginsByCapability)
 }
 
 // RegisterRoutes attaches all plugin routes to the provided router.
@@ -431,6 +437,60 @@ func (h *Handler) handlePluginJS(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(w, resp.Body)
 }
 
+// handleMonitoringTargets returns a Prometheus HTTP SD-compatible JSON response
+// listing all scrape targets from active monitoring.source plugins.
+// Collectors (Alloy, vmagent, Prometheus) point their http_sd_configs here.
+func (h *Handler) handleMonitoringTargets(w http.ResponseWriter, r *http.Request) {
+	targets, err := h.manager.GetScrapeTargets(r.Context())
+	if err != nil {
+		h.logger.Error("monitoring targets", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	type sdTarget struct {
+		Targets []string          `json:"targets"`
+		Labels  map[string]string `json:"labels"`
+	}
+
+	out := make([]sdTarget, 0, len(targets))
+	for _, t := range targets {
+		labels := t.Labels
+		if labels == nil {
+			labels = map[string]string{}
+		}
+		if t.MetricsPath != "" && t.MetricsPath != "/metrics" {
+			labels["__metrics_path__"] = t.MetricsPath
+		}
+		if t.Scheme != "" && t.Scheme != "http" {
+			labels["__scheme__"] = t.Scheme
+		}
+		out = append(out, sdTarget{Targets: []string{t.Address}, Labels: labels})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// handlePluginsByCapability returns active plugins that declare the requested capability.
+// Collector plugins call this to discover backend addresses for remote_write.
+func (h *Handler) handlePluginsByCapability(w http.ResponseWriter, r *http.Request) {
+	capability := r.URL.Query().Get("capability")
+	if capability == "" {
+		commonhttp.Error(w, domain.NewBadRequest("capability query param required"))
+		return
+	}
+
+	summaries, err := h.manager.GetActivePluginsByCapability(r.Context(), capability)
+	if err != nil {
+		h.logger.Error("plugins by capability", "capability", capability, "error", err)
+		commonhttp.Error(w, domain.NewInternal(err))
+		return
+	}
+
+	commonhttp.Success(w, map[string]any{"plugins": summaries})
+}
+
 // handleMetricsQueryRange proxies a PromQL query_range request to the active
 // monitoring plugin's time-series backend (e.g. VictoriaMetrics).
 func (h *Handler) handleMetricsQueryRange(w http.ResponseWriter, r *http.Request) {
@@ -452,4 +512,168 @@ func (h *Handler) handleMetricsQueryRange(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
+}
+
+// handleAlertmanagerConfig generates a complete alertmanager.yml from all active plugins
+// that declare an AlertmanagerReceiver block. The alertmanager-alerting plugin polls this
+// endpoint and hot-reloads whenever the response changes.
+func (h *Handler) handleAlertmanagerConfig(w http.ResponseWriter, r *http.Request) {
+	receivers, err := h.manager.GetAlertmanagerReceivers(r.Context())
+	if err != nil {
+		h.logger.Error("alertmanager config: get receivers", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	var buf strings.Builder
+	buf.WriteString("global:\n  resolve_timeout: 5m\n\n")
+	buf.WriteString("route:\n")
+	buf.WriteString("  receiver: default\n")
+	buf.WriteString("  group_by: [alertname, severity]\n")
+	buf.WriteString("  group_wait: 10s\n")
+	buf.WriteString("  group_interval: 10s\n")
+	buf.WriteString("  repeat_interval: 1h\n")
+	if len(receivers) > 0 {
+		buf.WriteString("  routes:\n")
+		for _, rec := range receivers {
+			buf.WriteString("    - receiver: " + rec.Name + "\n")
+			buf.WriteString("      continue: true\n")
+		}
+	}
+	buf.WriteString("\nreceivers:\n")
+	buf.WriteString("  - name: default\n")
+	for _, rec := range receivers {
+		buf.WriteString("  - name: " + rec.Name + "\n")
+		for cfgKey, cfgVal := range rec.Config {
+			buf.WriteString("    " + cfgKey + ":\n")
+			items, ok := cfgVal.([]interface{})
+			if !ok {
+				continue
+			}
+			for _, item := range items {
+				itemMap, ok := item.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				first := true
+				for k, v := range itemMap {
+					prefix := "      - "
+					if !first {
+						prefix = "        "
+					}
+					first = false
+					buf.WriteString(prefix + k + ": " + yamlScalar(v)        + "\n")
+				}
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = io.WriteString(w, buf.String())
+}
+
+// yamlScalar serialises a value as a YAML scalar. All strings are wrapped in
+// single quotes (YAML single-quoted scalar) so template syntax like {{ }} and
+// leading * or # never break the parser. Literal single-quotes are doubled.
+func yamlScalar(v interface{}) string {
+	s, ok := v.(string)
+	if !ok {
+		return fmt.Sprintf("%v", v)
+	}
+	s = strings.ReplaceAll(s, "'", "''")
+	return "'" + s + "'"
+}
+
+// handleAlloyConfig generates a complete Alloy River config from all active plugins
+// that declare an Output block. The alloy-collector polls this endpoint and hot-reloads
+// its config whenever the response changes — no Alloy restart needed when backends change.
+func (h *Handler) handleAlloyConfig(w http.ResponseWriter, r *http.Request) {
+	platformURL := r.URL.Query().Get("platform_url")
+
+	outputs, err := h.manager.GetMonitoringOutputs(r.Context())
+	if err != nil {
+		h.logger.Error("alloy config: get outputs", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	var buf strings.Builder
+
+	// HTTP SD discovery block — always present so Alloy can scrape targets.
+	buf.WriteString("discovery.http \"kleff\" {\n")
+	buf.WriteString("  url              = \"" + platformURL + "/api/v1/monitoring/targets\"\n")
+	buf.WriteString("  refresh_interval = \"30s\"\n")
+	buf.WriteString("}\n\n")
+
+	var metricsReceivers []string
+	var logsForwardTargets []string
+
+	for _, out := range outputs {
+		safeName := strings.NewReplacer("-", "_", ".", "_").Replace(out.PluginID)
+		switch out.Protocol {
+		case "remote_write":
+			metricsReceivers = append(metricsReceivers, "prometheus.remote_write."+safeName+".receiver")
+			buf.WriteString("prometheus.remote_write \"" + safeName + "\" {\n")
+			buf.WriteString("  endpoint {\n")
+			buf.WriteString("    url = \"" + out.URL + "\"\n")
+			if out.BearerToken != "" {
+				buf.WriteString("    bearer_token = \"" + out.BearerToken + "\"\n")
+			}
+			for k, v := range out.Headers {
+				buf.WriteString("    headers = { \"" + k + "\" = \"" + v + "\" }\n")
+			}
+			buf.WriteString("  }\n}\n\n")
+		case "otlp":
+			metricsReceivers = append(metricsReceivers, "otelcol.exporter.prometheus."+safeName+".input")
+			buf.WriteString("otelcol.exporter.otlphttp \"" + safeName + "\" {\n")
+			buf.WriteString("  client {\n")
+			buf.WriteString("    endpoint = \"" + out.URL + "\"\n")
+			buf.WriteString("  }\n}\n\n")
+		case "loki_push":
+			logsForwardTargets = append(logsForwardTargets, "loki.write."+safeName+".receiver")
+			buf.WriteString("loki.write \"" + safeName + "\" {\n")
+			buf.WriteString("  endpoint {\n")
+			buf.WriteString("    url = \"" + out.URL + "\"\n")
+			buf.WriteString("  }\n}\n\n")
+		}
+	}
+
+	if len(metricsReceivers) > 0 {
+		buf.WriteString("prometheus.scrape \"kleff\" {\n")
+		buf.WriteString("  targets    = discovery.http.kleff.targets\n")
+		buf.WriteString("  forward_to = [" + strings.Join(metricsReceivers, ", ") + "]\n")
+		buf.WriteString("}\n\n")
+	}
+
+	if len(logsForwardTargets) > 0 {
+		buf.WriteString("discovery.docker \"containers\" {\n")
+		buf.WriteString("  host = \"unix:///var/run/docker.sock\"\n")
+		buf.WriteString("}\n\n")
+
+		buf.WriteString("loki.relabel \"containers\" {\n")
+		buf.WriteString("  forward_to = []\n\n")
+		buf.WriteString("  rule {\n")
+		buf.WriteString("    source_labels = [\"__meta_docker_container_name\"]\n")
+		buf.WriteString("    regex         = \"/(.*)\"\n")
+		buf.WriteString("    target_label  = \"container\"\n")
+		buf.WriteString("  }\n\n")
+		buf.WriteString("  rule {\n")
+		buf.WriteString("    source_labels = [\"__meta_docker_container_label_kleff_io_plugin_id\"]\n")
+		buf.WriteString("    target_label  = \"kleff_plugin_id\"\n")
+		buf.WriteString("  }\n\n")
+		buf.WriteString("  rule {\n")
+		buf.WriteString("    source_labels = [\"__meta_docker_container_label_kleff_io_workload_id\"]\n")
+		buf.WriteString("    target_label  = \"workload_id\"\n")
+		buf.WriteString("  }\n}\n\n")
+
+		buf.WriteString("loki.source.docker \"containers\" {\n")
+		buf.WriteString("  host          = \"unix:///var/run/docker.sock\"\n")
+		buf.WriteString("  targets       = discovery.docker.containers.targets\n")
+		buf.WriteString("  forward_to    = [" + strings.Join(logsForwardTargets, ", ") + "]\n")
+		buf.WriteString("  relabel_rules = loki.relabel.containers.rules\n")
+		buf.WriteString("}\n")
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = io.WriteString(w, buf.String())
 }
