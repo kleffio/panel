@@ -8,7 +8,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/kleff/go-common v0.0.0
-	github.com/kleffio/plugin-sdk-go v0.1.6
+	github.com/kleffio/plugin-sdk-go v0.1.7
 	github.com/redis/go-redis/v9 v9.18.0
 	google.golang.org/grpc v1.64.0
 )

@@ -6,7 +6,7 @@ export interface BackendNavItem {
   label: string;
   /** Lucide icon name (e.g. "Globe", "Server"). Falls back to Puzzle icon. */
   icon?: string;
-  path: string;
+  href: string;
   /** Role name required to see this item (e.g. "admin"). Omit = visible to all. */
   permission?: string;
   children?: BackendNavItem[];
@@ -14,8 +14,8 @@ export interface BackendNavItem {
 
 export interface BackendSettingsPage {
   label: string;
-  /** URL-safe identifier used as the iframe section key. */
-  path: string;
+  /** Panel route for this settings page (e.g. "/settings/identity"). */
+  href: string;
   /** URL to load inside an iframe. If omitted the section is skipped. */
   iframe_url?: string;
 }
@@ -33,7 +33,7 @@ export interface BackendSignupConfig {
 
 export interface BackendProfileSection {
   id: string;
-  title: string;
+  label: string;
   description?: string;
   iframe_url?: string;
   /** Native action keys this section supports (e.g. "change_password"). */
@@ -147,6 +147,100 @@ export function getPlugin(id: string) {
 
 export function updatePluginConfig(id: string, config: Record<string, string>) {
   return patch<void, { config: Record<string, string> }>(`/api/v1/admin/plugins/${id}/config`, { config });
+}
+
+// ─── Plugin registries ────────────────────────────────────────────────────────
+
+export interface PluginRegistry {
+  id: string;
+  name: string;
+  url: string;
+  is_active: boolean;
+  last_synced_at: string | null;
+  /** Present only while the cooldown window is active */
+  cooldown_until: string | null;
+  created_at: string;
+}
+
+export interface PluginRegistriesResponse {
+  registries: PluginRegistry[];
+}
+
+export function listRegistries() {
+  return get<{ data: PluginRegistriesResponse }>("/api/v1/admin/plugin-registries").then((r) => r.data);
+}
+
+export function addRegistry(name: string, url: string) {
+  return post<{ data: PluginRegistry }, { name: string; url: string }>(
+    "/api/v1/admin/plugin-registries",
+    { name, url }
+  ).then((r) => r.data);
+}
+
+export function deleteRegistry(id: string) {
+  return del<void>(`/api/v1/admin/plugin-registries/${id}`);
+}
+
+export function toggleRegistry(id: string, enabled: boolean) {
+  return post<void, { enabled: boolean }>(`/api/v1/admin/plugin-registries/${id}/toggle`, { enabled });
+}
+
+export function refreshRegistry(id: string) {
+  return post<{ data: { status: string } }, Record<string, never>>(
+    `/api/v1/admin/plugin-registries/${id}/refresh`,
+    {}
+  );
+}
+
+// ── Conflict resolution ───────────────────────────────────────────────────────
+
+export interface ConflictSource {
+  registry_id: string;
+  registry_name: string;
+  version: string;
+  author: string;
+}
+
+export interface PluginConflict {
+  plugin_id: string;
+  plugin_name: string;
+  registries: ConflictSource[];
+  preferred_registry_id: string;
+}
+
+export interface ConflictsResponse {
+  conflicts: PluginConflict[];
+}
+
+export function listConflicts() {
+  return get<{ data: ConflictsResponse }>("/api/v1/admin/plugin-registries/conflicts").then((r) => r.data);
+}
+
+export function resolveConflict(pluginId: string, registryId: string) {
+  return post<void, { plugin_id: string; registry_id: string }>(
+    "/api/v1/admin/plugin-registries/conflicts/resolve",
+    { plugin_id: pluginId, registry_id: registryId }
+  );
+}
+
+// ── Registry preferences ──────────────────────────────────────────────────────
+
+export interface RegistryPreference {
+  plugin_id: string;
+  registry_id: string;
+  created_at: string;
+}
+
+export interface PreferencesResponse {
+  preferences: RegistryPreference[];
+}
+
+export function listPreferences() {
+  return get<{ data: PreferencesResponse }>("/api/v1/admin/plugin-registries/preferences").then((r) => r.data);
+}
+
+export function resetPreference(pluginId: string) {
+  return del<void>(`/api/v1/admin/plugin-registries/preferences/${pluginId}`);
 }
 
 export function changePassword(currentPassword: string, newPassword: string) {

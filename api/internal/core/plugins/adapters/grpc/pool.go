@@ -3,11 +3,14 @@ package grpc
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"sync"
 
 	pluginsv1 "github.com/kleffio/plugin-sdk-go/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -25,7 +28,9 @@ func NewPool() *Pool {
 
 // Dial opens a gRPC connection to the plugin at addr and registers it under id.
 // If a connection already exists for id, it is closed first.
-func (p *Pool) Dial(ctx context.Context, id, addr string) error {
+// When caCertPEM is non-empty the connection uses mTLS; otherwise it falls back
+// to plaintext (only acceptable for local development without TLS configured).
+func (p *Pool) Dial(ctx context.Context, id, addr string, caCertPEM []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -35,9 +40,20 @@ func (p *Pool) Dial(ctx context.Context, id, addr string) error {
 		delete(p.conns, id)
 	}
 
-	conn, err := grpc.NewClient(addr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
+	var transportCreds grpc.DialOption
+	if len(caCertPEM) > 0 {
+		certPool := x509.NewCertPool()
+		certPool.AppendCertsFromPEM(caCertPEM)
+		tlsCfg := &tls.Config{
+			RootCAs:    certPool,
+			ServerName: "kleff-" + id,
+		}
+		transportCreds = grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg))
+	} else {
+		transportCreds = grpc.WithTransportCredentials(insecure.NewCredentials())
+	}
+
+	conn, err := grpc.NewClient(addr, transportCreds)
 	if err != nil {
 		return fmt.Errorf("grpc pool: dial %q at %q: %w", id, addr, err)
 	}
@@ -69,9 +85,19 @@ func (p *Pool) CloseAll() {
 	}
 }
 
+// IDPProviderClient returns an IdentityPluginClient for the given plugin ID.
+func (p *Pool) IDPProviderClient(id string) (pluginsv1.IdentityPluginClient, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	conn, ok := p.conns[id]
+	if !ok {
+		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
+	}
+	return pluginsv1.NewIdentityPluginClient(conn), nil
+}
 
-// IDPClient returns an IdentityPluginClient for the given plugin ID.
-func (p *Pool) IDPClient(id string) (pluginsv1.IdentityPluginClient, error) {
+// IDPFrameworkClient returns an IdentityPluginClient for the given plugin ID.
+func (p *Pool) IDPFrameworkClient(id string) (pluginsv1.IdentityPluginClient, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	conn, ok := p.conns[id]
@@ -117,8 +143,8 @@ func (p *Pool) UIClient(id string) (pluginsv1.PluginUIClient, error) {
 	return pluginsv1.NewPluginUIClient(conn), nil
 }
 
-// HTTPPluginClient returns a PluginHTTPClient for the given plugin ID.
-func (p *Pool) HTTPPluginClient(id string) (pluginsv1.PluginHTTPClient, error) {
+// APIRoutesClient returns a PluginHTTPClient for the given plugin ID.
+func (p *Pool) APIRoutesClient(id string) (pluginsv1.PluginHTTPClient, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 

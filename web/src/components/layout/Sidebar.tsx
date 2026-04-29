@@ -400,11 +400,11 @@ export function Sidebar() {
           .filter((item) => !item.permission || roles.includes(item.permission))
           .map((item) => {
             const active =
-              pathname === item.path || pathname.startsWith(`${item.path}/`);
+              pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
-                key={item.path}
-                href={item.path}
+                key={item.href}
+                href={item.href}
                 className={cn(
                   "group flex items-center gap-2.5 rounded-lg px-2 py-[7px] text-sm font-medium transition-all",
                   active

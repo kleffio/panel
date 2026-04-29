@@ -39,6 +39,18 @@ export async function fetchCurrentUser(): Promise<CurrentUser> {
   return { userId: res.data.data.user_id, email: res.data.data.email, roles: res.data.data.roles ?? [] };
 }
 
+/** POST /api/v1/auth/refresh - headless mode token refresh. */
+export async function refreshTokens(refreshToken: string): Promise<ApiTokenResponse> {
+  const res = await fetch("/api/v1/auth/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "Refresh failed. Please sign in again.");
+  return data.data as ApiTokenResponse;
+}
+
 export interface AuthConfig {
   enabled: boolean;
   /** True when no IDP plugin is installed — the user must complete initial setup. */

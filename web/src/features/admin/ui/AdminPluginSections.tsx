@@ -21,7 +21,7 @@ export function AdminPluginSections() {
         </p>
       </div>
       {adminPages.map((page) => (
-        <Card key={page.path}>
+        <Card key={page.href}>
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <CardTitle>{page.label}</CardTitle>
             <Button variant="outline" size="sm" className="shrink-0" asChild>

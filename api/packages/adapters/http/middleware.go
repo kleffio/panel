@@ -74,10 +74,9 @@ func CORS(allowedOrigins ...string) func(http.Handler) http.Handler {
 			origin := r.Header.Get("Origin")
 
 			if len(originSet) == 0 {
-				// No restrictions — allow all origins.
+				// No allowlist configured — allow any origin.
 				w.Header().Set("Access-Control-Allow-Origin", "*")
 			} else if origin != "" && originSet[origin] {
-				// Echo the matched origin and mark the response as varying by Origin.
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Vary", "Origin")
 			}

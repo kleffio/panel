@@ -99,7 +99,7 @@ type PluginManager interface {
 	MatchPluginRoute(method, path string) (pluginID string, public bool, ok bool)
 
 	// HandlePluginRoute forwards an HTTP request to the given plugin via gRPC.
-	HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HTTPRequest) (*pluginsv1.HTTPResponse, error)
+	HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HandleHTTPRequest) (*pluginsv1.HandleHTTPResponse, error)
 
 	// ── Observability ────────────────────────────────────────────────────────────
 
@@ -138,4 +138,38 @@ type PluginManager interface {
 	// GetPluginInternalFrontendURL returns the internal (Docker-network) URL of
 	// the plugin's frontend JS bundle, or "" if the plugin has no frontend.
 	GetPluginInternalFrontendURL(ctx context.Context, pluginID string) (string, error)
+
+	// ── Registry management ───────────────────────────────────────────────────
+
+	// ListRegistries returns all configured plugin registry sources.
+	ListRegistries(ctx context.Context) ([]*domain.PluginRegistryConfig, error)
+
+	// AddRegistry adds a new registry source and attempts an initial catalog sync.
+	// The new registry is enabled by default.
+	AddRegistry(ctx context.Context, name, url string) (*domain.PluginRegistryConfig, error)
+
+	// DeleteRegistry removes a registry and its cached catalog.
+	DeleteRegistry(ctx context.Context, id string) error
+
+	// ToggleRegistry enables or disables a registry.
+	// Disabled registries don't contribute plugins to the catalog.
+	ToggleRegistry(ctx context.Context, id string, enabled bool) error
+
+	// RefreshRegistry re-fetches the catalog for the given registry.
+	// Returns domain.CooldownError if the registry is still within its cooldown window.
+	RefreshRegistry(ctx context.Context, id string) error
+
+	// ── Conflict resolution ───────────────────────────────────────────────
+
+	// ListConflicts returns all plugin IDs that appear in multiple enabled registries.
+	ListConflicts(ctx context.Context) ([]domain.PluginConflict, error)
+
+	// ResolveConflict sets the admin's preferred registry for a conflicting plugin.
+	ResolveConflict(ctx context.Context, pluginID, registryID string) error
+
+	// ResetConflictPreference removes the admin's preference for a plugin (revert to auto).
+	ResetConflictPreference(ctx context.Context, pluginID string) error
+
+	// ListRegistryPreferences returns all saved per-plugin registry preferences.
+	ListRegistryPreferences(ctx context.Context) ([]*domain.RegistryPreference, error)
 }
