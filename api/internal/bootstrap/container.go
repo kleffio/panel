@@ -203,9 +203,8 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 				if err != nil || len(summaries) == 0 {
 					return ""
 				}
-				return summaries[0].ScrapeURL
+				return summaries[0].QueryURL
 			},
-			pluginMgr.IngestWorkloadLog,
 		), logger),
 		AuditHandler:         audithttp.NewHandler(logger),
 		AdminHandler:         adminhttp.NewHandler(logger),

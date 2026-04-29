@@ -41,6 +41,10 @@ type CatalogManifest struct {
 	// their forwarding config dynamically — no collector changes needed when backends are added.
 	Output *PluginOutput `json:"output,omitempty"`
 
+	// Query declares the normalized read endpoint this plugin exposes for the platform to
+	// proxy log/metric queries to. Replaces any backend-specific adapter in the platform.
+	Query *PluginQuery `json:"query,omitempty"`
+
 	// AlertmanagerReceiver declares an Alertmanager receiver block this notification plugin
 	// provides. String values in Config may contain ${ENV_VAR} placeholders; the platform
 	// substitutes the plugin's actual config/secret values before generating alertmanager.yml.
@@ -57,6 +61,18 @@ type CatalogManifest struct {
 	// Command overrides the container's default CMD (optional).
 	// Example: ["--path.rootfs=/host"] for node-exporter.
 	Command []string `json:"command,omitempty"`
+}
+
+// PluginQuery declares the normalized log/metric query endpoint a backend plugin exposes.
+// The platform proxies read requests to this URL with standard query params and expects
+// a standard JSON response — no backend-specific knowledge in the platform.
+type PluginQuery struct {
+	// URL is the full base URL of the plugin's own HTTP query server.
+	// Example: "http://kleff-loki-plugin:8080"
+	URL string `json:"url"`
+	// Path is the query endpoint path appended to URL.
+	// Example: "/logs" — called as GET <URL><Path>?workload_id=<id>&limit=<n>
+	Path string `json:"path"`
 }
 
 // PluginOutput declares the telemetry write endpoint a backend plugin exposes.
@@ -125,6 +141,7 @@ type PluginSummary struct {
 	Capability   string
 	InternalAddr string // gRPC addr of the plugin container
 	ScrapeURL    string // companion internalAddr, if any (e.g. VictoriaMetrics HTTP)
+	QueryURL     string // full URL of the plugin's normalized query endpoint, if any
 }
 
 // CompanionSpec declares a dependency container that the platform spins up

@@ -1845,13 +1845,15 @@ func (m *Manager) GetActivePluginsByCapability(ctx context.Context, capability s
 			Capability:   capability,
 			InternalAddr: p.GRPCAddr,
 		}
-		// Include the first companion internalAddr as ScrapeURL (e.g. VictoriaMetrics HTTP).
 		if manifest, err := m.registry.GetManifest(ctx, id); err == nil && manifest != nil {
 			for _, c := range manifest.Companions {
 				if c.InternalAddr != "" {
 					summary.ScrapeURL = c.InternalAddr
 					break
 				}
+			}
+			if manifest.Query != nil && manifest.Query.URL != "" {
+				summary.QueryURL = manifest.Query.URL + manifest.Query.Path
 			}
 		}
 		summaries = append(summaries, summary)
