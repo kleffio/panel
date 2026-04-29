@@ -205,6 +205,7 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 				}
 				return summaries[0].ScrapeURL
 			},
+			pluginMgr.IngestWorkloadLog,
 		), logger),
 		AuditHandler:         audithttp.NewHandler(logger),
 		AdminHandler:         adminhttp.NewHandler(logger),
