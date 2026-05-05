@@ -23,10 +23,6 @@ jobs:
         working-directory: api
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout plugin-sdk-go dependency
-        run: |
-          mkdir -p ../../plugins
-          git clone https://github.com/kleffio/plugin-sdk-go.git ../../plugins/plugin-sdk-go
       - uses: actions/setup-go@v5
         with:
           go-version-file: api/go.mod
