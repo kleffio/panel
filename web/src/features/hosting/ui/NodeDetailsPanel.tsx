@@ -76,12 +76,12 @@ function renderLogSegments(line: string, stream: string) {
 }
 
 function LogViewer({ node }: { node: InfrastructureNode }) {
-  const { currentProjectID } = useCurrentProject();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [lines, setLines] = useState<LogLineDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const autoScroll = useRef(true);
+  const { currentProjectID } = useCurrentProject();
 
   useEffect(() => {
     if (!currentProjectID) return;
@@ -90,16 +90,23 @@ function LogViewer({ node }: { node: InfrastructureNode }) {
     setLines([]);
     autoScroll.current = true;
 
-    const fetch = () => {
-      getWorkloadLogs(currentProjectID, node.id).then((res) => {
-        if (cancelled) return;
-        setLines(res.lines ?? []);
-        setLoading(false);
-      }).catch(() => { if (!cancelled) setLoading(false); });
-    };
+    getWorkloadLogs(currentProjectID, node.id, 500).then((res) => {
+      if (cancelled) return;
+      setLines(res.lines ?? []);
+      setLoading(false);
+    }).catch(() => { if (!cancelled) setLoading(false); });
 
-    fetch();
-    const id = setInterval(fetch, LOG_POLL_MS);
+    const id = setInterval(() => {
+      getWorkloadLogs(currentProjectID, node.id, 500).then((res) => {
+        if (cancelled) return;
+        setLines((prev) => {
+          const lastId = prev.length > 0 ? prev[prev.length - 1].id : -1;
+          const newLines = (res.lines ?? []).filter((l) => l.id > lastId);
+          return newLines.length === 0 ? prev : [...prev, ...newLines];
+        });
+      }).catch(() => {});
+    }, LOG_POLL_MS);
+
     return () => { cancelled = true; clearInterval(id); };
   }, [node.id, currentProjectID]);
 
@@ -125,7 +132,7 @@ function LogViewer({ node }: { node: InfrastructureNode }) {
         {!loading && lines.length === 0 && (
           <p className="text-white/25">No logs yet. Logs appear within ~5 seconds of output.</p>
         )}
-        {lines.map((l) => {
+        {lines.map((l, i) => {
           const level = l.stream === "stderr" ? "error" : detectLevel(l.line);
           const rowBg =
             level === "error" ? "bg-red-500/[0.06]" :
@@ -133,7 +140,7 @@ function LogViewer({ node }: { node: InfrastructureNode }) {
             "";
           const hasEmbeddedTimestamp = /^\[\d{2}:\d{2}:\d{2}\]/.test(l.line.trimStart());
           return (
-            <div key={l.id} className={`flex gap-3 px-1 py-[1px] rounded-[2px] ${rowBg}`}>
+            <div key={i} className={`flex gap-3 px-1 py-[1px] rounded-[2px] ${rowBg}`}>
               {!hasEmbeddedTimestamp && (
                 <span className="w-[52px] shrink-0 select-none tabular-nums text-white/20 pt-px">
                   {new Date(l.ts).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}

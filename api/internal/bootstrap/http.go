@@ -82,6 +82,7 @@ func buildRouter(c *Container) http.Handler {
 			r.Use(middleware.RequireRole("admin"))
 			c.AdminHandler.RegisterRoutes(r)
 			c.PluginsHandler.RegisterRoutes(r)
+			c.UsageHandler.RegisterAdminRoutes(r)
 		})
 	})
 

@@ -108,6 +108,11 @@ type PluginManager interface {
 	// Returns ("", nil) when no monitoring plugin is installed.
 	GetMetricsBackendURL(ctx context.Context) (string, error)
 
+	// GetLogsBackendURL returns the LogQL-compatible query URL of the active
+	// monitoring.logs plugin's log store (e.g. Loki).
+	// Returns ("", nil) when no logs plugin is installed.
+	GetLogsBackendURL(ctx context.Context) (string, error)
+
 	// GetScrapeTargets aggregates scrape endpoints from all active monitoring.source
 	// plugins. Used to build the Prometheus HTTP SD response.
 	GetScrapeTargets(ctx context.Context) ([]*pluginsv1.ScrapeTarget, error)

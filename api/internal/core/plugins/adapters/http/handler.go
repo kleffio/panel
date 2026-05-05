@@ -69,6 +69,8 @@ func NewHandler(
 func (h *Handler) RegisterAnonymousRoutes(r chi.Router) {
 	r.Get("/api/v1/plugins/{id}/js", h.handlePluginJS)
 	r.Get("/api/v1/metrics/query_range", h.handleMetricsQueryRange)
+	r.Get("/api/v1/metrics/query", h.handleMetricsQuery)
+	r.Get("/api/v1/logs/query_range", h.handleLogsQueryRange)
 	// Internal HTTP SD endpoint — reachable by collectors inside the Docker network.
 	r.Get("/api/v1/monitoring/targets", h.handleMonitoringTargets)
 	// Dynamic Alloy River config — polled by alloy-collector inside the Docker network.
@@ -535,6 +537,51 @@ func (h *Handler) handleMetricsQueryRange(w http.ResponseWriter, r *http.Request
 	_, _ = io.Copy(w, resp.Body)
 }
 
+// handleMetricsQuery proxies a PromQL instant query to the active metrics backend.
+func (h *Handler) handleMetricsQuery(w http.ResponseWriter, r *http.Request) {
+	backendURL, err := h.manager.GetMetricsBackendURL(r.Context())
+	if err != nil || backendURL == "" {
+		commonhttp.Error(w, domain.NewBadRequest("no monitoring plugin installed"))
+		return
+	}
+
+	target := backendURL + "/api/v1/query?" + r.URL.RawQuery
+	resp, err := http.Get(target) //nolint:noctx
+	if err != nil {
+		h.logger.Warn("metrics instant query proxy: upstream error", "url", target, "error", err)
+		http.Error(w, "upstream unavailable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
+}
+
+// handleLogsQueryRange proxies a LogQL query_range request to the active
+// monitoring.logs plugin's log store (e.g. Loki).
+func (h *Handler) handleLogsQueryRange(w http.ResponseWriter, r *http.Request) {
+	backendURL, err := h.manager.GetLogsBackendURL(r.Context())
+	if err != nil || backendURL == "" {
+		commonhttp.Error(w, domain.NewBadRequest("no logs plugin installed"))
+		return
+	}
+
+	target := strings.TrimRight(backendURL, "/") + "/loki/api/v1/query_range?" + r.URL.RawQuery
+	resp, err := http.Get(target) //nolint:noctx
+	if err != nil {
+		h.logger.Warn("logs proxy: upstream error", "url", target, "error", err)
+		http.Error(w, "upstream unavailable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
+}
+
 // handleAlertmanagerConfig generates a complete alertmanager.yml from all active plugins
 // that declare an AlertmanagerReceiver block. The alertmanager-alerting plugin polls this
 // endpoint and hot-reloads whenever the response changes.
@@ -685,6 +732,10 @@ func (h *Handler) handleAlloyConfig(w http.ResponseWriter, r *http.Request) {
 		buf.WriteString("  rule {\n")
 		buf.WriteString("    source_labels = [\"__meta_docker_container_label_kleff_io_workload_id\"]\n")
 		buf.WriteString("    target_label  = \"workload_id\"\n")
+		buf.WriteString("  }\n\n")
+		buf.WriteString("  rule {\n")
+		buf.WriteString("    source_labels = [\"__meta_docker_log_stream\"]\n")
+		buf.WriteString("    target_label  = \"stream\"\n")
 		buf.WriteString("  }\n}\n\n")
 
 		buf.WriteString("loki.source.docker \"containers\" {\n")

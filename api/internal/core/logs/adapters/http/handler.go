@@ -77,9 +77,7 @@ func (h *Handler) ingestLines(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getLogs(w http.ResponseWriter, r *http.Request) {
-	projectID := chi.URLParam(r, "projectID")
 	workloadID := chi.URLParam(r, "workloadID")
-	_ = projectID
 
 	limit := 200
 	if s := r.URL.Query().Get("limit"); s != "" {

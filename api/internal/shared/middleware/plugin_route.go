@@ -27,14 +27,14 @@ func PluginRouteInterceptor(router PluginRouter, verifier TokenVerifier) func(ht
 				return
 			}
 
-			httpReq := &pluginsv1.HTTPRequest{
+			grpcReq := &pluginsv1.HandleHTTPRequest{
 				Method:   r.Method,
 				Path:     r.URL.Path,
 				RawQuery: r.URL.RawQuery,
 				Headers:  extractHeaders(r),
 			}
 			if body, err := io.ReadAll(r.Body); err == nil {
-				httpReq.Body = body
+				grpcReq.Body = body
 			}
 
 			if !public {
@@ -48,28 +48,24 @@ func PluginRouteInterceptor(router PluginRouter, verifier TokenVerifier) func(ht
 					http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 					return
 				}
-				httpReq.UserID = result.Subject
-				httpReq.Roles = result.Roles
+				grpcReq.UserId = result.Subject
+				grpcReq.Roles = result.Roles
 			}
 
-			resp, err := router.HandlePluginRoute(r.Context(), pluginID, &pluginsv1.HandleHTTPRequest{Request: httpReq})
+			resp, err := router.HandlePluginRoute(r.Context(), pluginID, grpcReq)
 			if err != nil {
 				http.Error(w, `{"error":"plugin unavailable"}`, http.StatusServiceUnavailable)
 				return
 			}
-			if resp.Response == nil {
-				http.Error(w, `{"error":"plugin unavailable"}`, http.StatusServiceUnavailable)
-				return
-			}
 
-			for k, v := range resp.Response.Headers {
+			for k, v := range resp.GetHeaders() {
 				w.Header().Set(k, v)
 			}
 			if w.Header().Get("Content-Type") == "" {
 				w.Header().Set("Content-Type", "application/json")
 			}
-			w.WriteHeader(resp.Response.StatusCode)
-			_, _ = w.Write(resp.Response.Body)
+			w.WriteHeader(int(resp.GetStatus()))
+			_, _ = w.Write(resp.GetBody())
 		})
 	}
 }

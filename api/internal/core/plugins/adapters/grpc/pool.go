@@ -85,26 +85,26 @@ func (p *Pool) CloseAll() {
 	}
 }
 
-// IDPProviderClient returns an IdentityPluginClient for the given plugin ID.
-func (p *Pool) IDPProviderClient(id string) (pluginsv1.IdentityPluginClient, error) {
+// IDPProviderClient returns an IdentityProviderClient for the given plugin ID.
+func (p *Pool) IDPProviderClient(id string) (pluginsv1.IdentityProviderClient, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	conn, ok := p.conns[id]
 	if !ok {
 		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
 	}
-	return pluginsv1.NewIdentityPluginClient(conn), nil
+	return pluginsv1.NewIdentityProviderClient(conn), nil
 }
 
-// IDPFrameworkClient returns an IdentityPluginClient for the given plugin ID.
-func (p *Pool) IDPFrameworkClient(id string) (pluginsv1.IdentityPluginClient, error) {
+// IDPFrameworkClient returns an IdentityFrameworkClient for the given plugin ID.
+func (p *Pool) IDPFrameworkClient(id string) (pluginsv1.IdentityFrameworkClient, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	conn, ok := p.conns[id]
 	if !ok {
 		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
 	}
-	return pluginsv1.NewIdentityPluginClient(conn), nil
+	return pluginsv1.NewIdentityFrameworkClient(conn), nil
 }
 
 // HealthClient returns a PluginHealthClient for the given plugin ID.

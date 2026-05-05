@@ -116,7 +116,7 @@ func (h *AuthHandler) handleConfig(w http.ResponseWriter, r *http.Request) {
 	// Return ready:false so the frontend keeps polling every 3 s.
 	// Use HasIdentityProvider() for enabled so the login page shows the spinner
 	// rather than the form (which would show even when no IDP is configured).
-	if cfg == nil || cfg.Authority == "" || cfg.ClientID == "" {
+	if cfg == nil || cfg.Authority == "" || cfg.ClientId == "" {
 		hasIDP := h.manager.HasIdentityProvider()
 		commonhttp.Success(w, map[string]any{
 			"enabled":        hasIDP,
@@ -128,8 +128,8 @@ func (h *AuthHandler) handleConfig(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{
 		"enabled":   true,
 		"authority": cfg.Authority,
-		"client_id": cfg.ClientID,
-		"jwks_uri":  cfg.JwksURI,
+		"client_id": cfg.ClientId,
+		"jwks_uri":  cfg.JwksUri,
 		"scopes":    cfg.Scopes,
 		"auth_mode": cfg.AuthMode,
 		"ready":     true,
@@ -317,12 +317,12 @@ func normaliseSession(s *pluginsv1.Session) sessionDTO {
 		return v
 	}
 	return sessionDTO{
-		ID:         s.ID,
-		IPAddress:  s.IPAddress,
-		UserAgent:  s.UserAgent,
-		StartedAt:  toSeconds(s.StartedAt),
-		LastAccess: toSeconds(s.LastAccess),
-		Current:    s.Current,
+		ID:         s.GetId(),
+		IPAddress:  s.GetIpAddress(),
+		UserAgent:  s.GetUserAgent(),
+		StartedAt:  toSeconds(s.GetCreatedAt()),
+		LastAccess: toSeconds(s.GetLastAccess()),
+		Current:    s.GetCurrent(),
 	}
 }
 

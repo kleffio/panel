@@ -3,6 +3,7 @@
 package application
 
 import (
+	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
@@ -13,6 +14,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -342,6 +344,9 @@ func (m *Manager) Install(ctx context.Context, manifest *domain.CatalogManifest,
 		m.setStatus(p.ID, domain.PluginStatusError)
 		return nil, fmt.Errorf("install plugin: deploy: %w", err)
 	}
+	m.mu.Lock()
+	m.caCerts[p.ID] = caCertPEM
+	m.mu.Unlock()
 
 	if err := m.pool.Dial(ctx, p.ID, grpcAddr, caCertPEM); err != nil {
 		m.setStatus(p.ID, domain.PluginStatusError)
@@ -577,6 +582,9 @@ func (m *Manager) Reconfigure(ctx context.Context, pluginID string, config map[s
 	if err := m.rt.Deploy(ctx, spec); err != nil {
 		return fmt.Errorf("reconfigure plugin: redeploy: %w", err)
 	}
+	m.mu.Lock()
+	m.caCerts[p.ID] = caCertPEM
+	m.mu.Unlock()
 	if p.GRPCAddr != "" {
 		return m.pool.Dial(ctx, p.ID, p.GRPCAddr, caCertPEM)
 	}
@@ -607,7 +615,7 @@ func (m *Manager) ListPlugins(ctx context.Context) ([]*domain.Plugin, error) {
 
 // ── Identity (auth) ───────────────────────────────────────────────────────────
 
-func (m *Manager) getActiveIDPProvider(ctx context.Context) (pluginsv1.IdentityPluginClient, error) {
+func (m *Manager) getActiveIDPProvider(ctx context.Context) (pluginsv1.IdentityProviderClient, error) {
 	activeID, err := m.store.GetSetting(ctx, activeIDPSettingKey)
 	if err != nil || activeID == "" {
 		return nil, err
@@ -615,7 +623,7 @@ func (m *Manager) getActiveIDPProvider(ctx context.Context) (pluginsv1.IdentityP
 	return m.pool.IDPProviderClient(activeID)
 }
 
-func (m *Manager) getActiveIDPFramework(ctx context.Context) (pluginsv1.IdentityPluginClient, error) {
+func (m *Manager) getActiveIDPFramework(ctx context.Context) (pluginsv1.IdentityFrameworkClient, error) {
 	activeID, err := m.store.GetSetting(ctx, activeIDPSettingKey)
 	if err != nil || activeID == "" {
 		return nil, err
@@ -704,10 +712,10 @@ func (m *Manager) ValidateToken(ctx context.Context, token string) (*pluginsv1.T
 	if err != nil {
 		return nil, fmt.Errorf("validate token: %w", err)
 	}
-	if e := resp.Error; e != nil {
+	if e := pluginsv1.ProtoErrorToPluginError(resp.GetError()); e != nil {
 		return nil, e
 	}
-	return resp.Claims, nil
+	return resp.GetClaims(), nil
 }
 
 func (m *Manager) Login(ctx context.Context, username, password string) (*pluginsv1.TokenSet, error) {
@@ -722,10 +730,10 @@ func (m *Manager) Login(ctx context.Context, username, password string) (*plugin
 	if err != nil {
 		return nil, fmt.Errorf("login: %w", err)
 	}
-	if e := resp.Error; e != nil {
+	if e := pluginsv1.ProtoErrorToPluginError(resp.GetError()); e != nil {
 		return nil, e
 	}
-	return resp.Token, nil
+	return resp.GetToken(), nil
 }
 
 func (m *Manager) Register(ctx context.Context, req *pluginsv1.RegisterRequest) (string, error) {
@@ -740,10 +748,10 @@ func (m *Manager) Register(ctx context.Context, req *pluginsv1.RegisterRequest) 
 	if err != nil {
 		return "", fmt.Errorf("register: %w", err)
 	}
-	if e := resp.Error; e != nil {
+	if e := pluginsv1.ProtoErrorToPluginError(resp.GetError()); e != nil {
 		return "", e
 	}
-	return resp.UserID, nil
+	return resp.GetUserId(), nil
 }
 
 func (m *Manager) GetOIDCConfig(ctx context.Context) (*pluginsv1.OIDCConfig, error) {
@@ -755,10 +763,10 @@ func (m *Manager) GetOIDCConfig(ctx context.Context) (*pluginsv1.OIDCConfig, err
 	if err != nil {
 		return nil, fmt.Errorf("get OIDC config: %w", err)
 	}
-	if e := resp.Error; e != nil {
+	if e := pluginsv1.ProtoErrorToPluginError(resp.GetError()); e != nil {
 		return nil, e
 	}
-	return resp.Config, nil
+	return resp.GetConfig(), nil
 }
 
 func (m *Manager) RefreshToken(ctx context.Context, refreshToken string) (*pluginsv1.TokenSet, error) {
@@ -773,10 +781,10 @@ func (m *Manager) RefreshToken(ctx context.Context, refreshToken string) (*plugi
 	if err != nil {
 		return nil, fmt.Errorf("refresh token: %w", err)
 	}
-	if e := resp.Error; e != nil {
+	if e := pluginsv1.ProtoErrorToPluginError(resp.GetError()); e != nil {
 		return nil, e
 	}
-	return resp.Token, nil
+	return resp.GetToken(), nil
 }
 
 func (m *Manager) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
@@ -788,14 +796,14 @@ func (m *Manager) ChangePassword(ctx context.Context, userID, currentPassword, n
 		return fmt.Errorf("no active IDP plugin")
 	}
 	resp, err := idp.ChangePassword(ctx, &pluginsv1.ChangePasswordRequest{
-		UserID:          userID,
+		UserId:          userID,
 		CurrentPassword: currentPassword,
 		NewPassword:     newPassword,
 	})
 	if err != nil {
 		return fmt.Errorf("change password: %w", err)
 	}
-	if e := resp.Error; e != nil {
+	if e := pluginsv1.ProtoErrorToPluginError(resp.GetError()); e != nil {
 		return e
 	}
 	return nil
@@ -810,16 +818,19 @@ func (m *Manager) ListSessions(ctx context.Context, userID, currentSessionID str
 		return nil, fmt.Errorf("no active IDP plugin")
 	}
 	resp, err := idp.ListSessions(ctx, &pluginsv1.ListSessionsRequest{
-		UserID:           userID,
-		CurrentSessionID: currentSessionID,
+		UserId:           userID,
+		CurrentSessionId: currentSessionID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list sessions: %w", err)
 	}
-	if e := resp.Error; e != nil {
+	if e := pluginsv1.ProtoErrorToPluginError(resp.GetError()); e != nil {
 		return nil, e
 	}
-	return resp.Sessions, nil
+	if sl := resp.GetSessions(); sl != nil {
+		return sl.GetItems(), nil
+	}
+	return nil, nil
 }
 
 func (m *Manager) RevokeAllSessions(ctx context.Context, userID, currentSessionID string) error {
@@ -829,11 +840,11 @@ func (m *Manager) RevokeAllSessions(ctx context.Context, userID, currentSessionI
 	}
 	var errs []string
 	for _, s := range sessions {
-		if s.Current {
+		if s.GetId() == currentSessionID {
 			continue
 		}
-		if err := m.RevokeSession(ctx, userID, s.ID); err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", s.ID, err))
+		if err := m.RevokeSession(ctx, userID, s.GetId()); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", s.GetId(), err))
 		}
 	}
 	if len(errs) > 0 {
@@ -851,13 +862,13 @@ func (m *Manager) RevokeSession(ctx context.Context, userID, sessionID string) e
 		return fmt.Errorf("no active IDP plugin")
 	}
 	resp, err := idp.RevokeSession(ctx, &pluginsv1.RevokeSessionRequest{
-		UserID:    userID,
-		SessionID: sessionID,
+		UserId:    userID,
+		SessionId: sessionID,
 	})
 	if err != nil {
 		return fmt.Errorf("revoke session: %w", err)
 	}
-	if e := resp.Error; e != nil {
+	if e := pluginsv1.ProtoErrorToPluginError(resp.GetError()); e != nil {
 		return e
 	}
 	return nil
@@ -916,10 +927,13 @@ func (m *Manager) ensureRunning(ctx context.Context, p *domain.Plugin) error {
 		if err != nil {
 			return fmt.Errorf("ensureRunning: %w", err)
 		}
-		caCertPEM = newCA
 		if err := m.rt.Deploy(ctx, spec); err != nil {
 			return fmt.Errorf("deploy: %w", err)
 		}
+		m.mu.Lock()
+		m.caCerts[p.ID] = newCA
+		m.mu.Unlock()
+		caCertPEM = newCA
 	}
 
 	// Tier 2: dial gRPC and discover capabilities dynamically.
@@ -945,16 +959,15 @@ func (m *Manager) ensureRunning(ctx context.Context, p *domain.Plugin) error {
 	return nil
 }
 
-// buildSecureContainerSpec generates an ephemeral mTLS cert pair, stores the CA
-// in m.caCerts, and returns the ready-to-deploy ContainerSpec plus the CA PEM.
+// buildSecureContainerSpec generates an ephemeral mTLS cert pair and returns
+// the ready-to-deploy ContainerSpec plus the CA PEM. The caller is responsible
+// for storing the CA in m.caCerts only after a successful Deploy, to prevent
+// overwriting a valid CA when a concurrent deploy attempt fails (e.g. "Conflict").
 func (m *Manager) buildSecureContainerSpec(p *domain.Plugin, manifest *domain.CatalogManifest, config map[string]string) (runtime.ContainerSpec, []byte, error) {
 	caCertPEM, certPEM, keyPEM, err := generatePluginTLS(p.ID)
 	if err != nil {
 		return runtime.ContainerSpec{}, nil, fmt.Errorf("generate TLS certs: %w", err)
 	}
-	m.mu.Lock()
-	m.caCerts[p.ID] = caCertPEM
-	m.mu.Unlock()
 	return m.buildContainerSpec(p, manifest, config, certPEM, keyPEM), caCertPEM, nil
 }
 
@@ -1106,7 +1119,7 @@ func (m *Manager) checkPlugin(ctx context.Context, p *domain.Plugin) {
 			}
 			m.resolveCapabilityFields(ctx, checkManifest, allConfig)
 		}
-		spec, _, err := m.buildSecureContainerSpec(p, checkManifest, allConfig)
+		spec, newCA, err := m.buildSecureContainerSpec(p, checkManifest, allConfig)
 		if err != nil {
 			m.logger.Warn("healthLoop: build secure spec failed", "plugin", p.ID, "error", err)
 			m.incrementRestarts(p.ID)
@@ -1125,12 +1138,13 @@ func (m *Manager) checkPlugin(ctx context.Context, p *domain.Plugin) {
 			m.setStatus(p.ID, domain.PluginStatusError)
 			return
 		}
+		// Store CA only after the container is successfully deployed with this cert.
+		m.mu.Lock()
+		m.caCerts[p.ID] = newCA
+		m.mu.Unlock()
 		// Tier 1: no gRPC to redial.
 		if p.GRPCAddr != "" {
-			m.mu.RLock()
-			caCertPEM := m.caCerts[p.ID]
-			m.mu.RUnlock()
-			if dialErr := m.pool.Dial(ctx, p.ID, p.GRPCAddr, caCertPEM); dialErr != nil {
+			if dialErr := m.pool.Dial(ctx, p.ID, p.GRPCAddr, newCA); dialErr != nil {
 				m.incrementRestarts(p.ID)
 				m.setStatus(p.ID, domain.PluginStatusError)
 				return
@@ -1304,7 +1318,7 @@ func (m *Manager) discoverRoutes(ctx context.Context, id string) {
 	defer cancel()
 
 	resp, err := hc.GetRoutes(rCtx, &pluginsv1.GetRoutesRequest{})
-	if err != nil || resp.Error != nil {
+	if err != nil || resp.GetError() != nil {
 		m.logger.Warn("plugin routes: GetRoutes failed", "plugin", id, "error", err)
 		return
 	}
@@ -1317,18 +1331,17 @@ func (m *Manager) discoverRoutes(ctx context.Context, id string) {
 			filtered = append(filtered, r)
 		}
 	}
-	for _, r := range resp.Routes {
+	for _, r := range resp.GetRoutes().GetItems() {
 		filtered = append(filtered, pluginRoute{
 			pluginID: id,
-			method:   r.Method,
-			path:     r.Path,
-			public:   r.Public,
+			method:   r.GetMethod(),
+			path:     r.GetPattern(),
 		})
 	}
 	m.routes = filtered
 	m.mu.Unlock()
 
-	m.logger.Info("plugin routes registered", "plugin", id, "count", len(resp.Routes))
+	m.logger.Info("plugin routes registered", "plugin", id, "count", len(resp.GetRoutes().GetItems()))
 }
 
 // MatchPluginRoute returns the plugin ID and public flag for the first route
@@ -1390,7 +1403,7 @@ func (m *Manager) RunMiddleware(ctx context.Context, userID string, roles []stri
 	}
 
 	req := &pluginsv1.MiddlewareRequest{
-		UserID: userID,
+		UserId: userID,
 		Roles:  roles,
 		Method: method,
 		Path:   path,
@@ -1409,8 +1422,8 @@ func (m *Manager) RunMiddleware(ctx context.Context, userID string, roles []stri
 		}
 		if !resp.Allow {
 			msg := "forbidden by plugin"
-			if resp.Error != nil && resp.Error.Message != "" {
-				msg = resp.Error.Message
+			if resp.GetDenyReason() != "" {
+				msg = resp.GetDenyReason()
 			}
 			return fmt.Errorf("%s", msg)
 		}
@@ -1436,13 +1449,13 @@ func (m *Manager) GetUIManifests(ctx context.Context) ([]*pluginsv1.UIManifest, 
 			continue
 		}
 		resp, err := uc.GetUIManifest(ctx, &pluginsv1.GetUIManifestRequest{})
-		if err != nil || resp.Error != nil {
+		if err != nil || resp.GetError() != nil {
 			m.logger.Warn("plugin UI: GetUIManifest error", "plugin", id, "error", err)
 			continue
 		}
-		if resp.Manifest != nil {
-			resp.Manifest.PluginID = id
-			manifests = append(manifests, resp.Manifest)
+		if resp.GetManifest() != nil {
+			resp.GetManifest().PluginId = id
+			manifests = append(manifests, resp.GetManifest())
 		}
 	}
 	return manifests, nil
@@ -1582,41 +1595,64 @@ func (m *Manager) removeCompanions(ctx context.Context, manifest *domain.Catalog
 
 // ── Observability ─────────────────────────────────────────────────────────────
 
-// IngestWorkloadMetrics finds the active monitoring.metrics plugin and
-// forwards a metric sample to it via gRPC. Non-fatal: errors are logged only.
+// IngestWorkloadMetrics finds the active monitoring.metrics plugin and writes
+// the sample directly to its VictoriaMetrics companion via HTTP, bypassing gRPC
+// (the monitoring gRPC types use plain Go structs that don't satisfy proto.Message).
 func (m *Manager) IngestWorkloadMetrics(ctx context.Context, sample *pluginsv1.MetricSample) error {
-	m.mu.RLock()
-	var frameworkID string
-	for id, caps := range m.capabilities {
-		if caps[pluginsv1.CapabilityMonitoringMetrics] {
-			frameworkID = id
-			break
-		}
-	}
-	m.mu.RUnlock()
-
-	if frameworkID == "" {
-		return nil // no observability plugin installed — silently drop
+	backendURL, err := m.GetMetricsBackendURL(ctx)
+	if err != nil || backendURL == "" {
+		return nil // no metrics backend configured — silently drop
 	}
 
-	if !m.pool.HasConnection(frameworkID) {
-		return nil // plugin uses remote_write (no gRPC) — Alloy handles ingest
+	ts := sample.Timestamp * 1000 // VictoriaMetrics expects milliseconds
+	labels := fmt.Sprintf(
+		`workload_id=%q,workload_name=%q,node_id=%q,org_id=%q,project_id=%q`,
+		sample.WorkloadID, sample.WorkloadName, sample.NodeID, sample.OrgID, sample.ProjectID,
+	)
+
+	var sb strings.Builder
+	if sample.CPUMillicores > 0 {
+		fmt.Fprintf(&sb, "kleff_workload_cpu_millicores{%s} %d %d\n", labels, sample.CPUMillicores, ts)
+	}
+	if sample.MemoryMB > 0 {
+		fmt.Fprintf(&sb, "kleff_workload_memory_mb{%s} %d %d\n", labels, sample.MemoryMB, ts)
+	}
+	if sample.NetworkRxMB > 0 {
+		fmt.Fprintf(&sb, "kleff_workload_network_rx_mb{%s} %g %d\n", labels, sample.NetworkRxMB, ts)
+	}
+	if sample.NetworkTxMB > 0 {
+		fmt.Fprintf(&sb, "kleff_workload_network_tx_mb{%s} %g %d\n", labels, sample.NetworkTxMB, ts)
+	}
+	if sample.DiskReadMB > 0 {
+		fmt.Fprintf(&sb, "kleff_workload_disk_read_mb{%s} %g %d\n", labels, sample.DiskReadMB, ts)
+	}
+	if sample.DiskWriteMB > 0 {
+		fmt.Fprintf(&sb, "kleff_workload_disk_write_mb{%s} %g %d\n", labels, sample.DiskWriteMB, ts)
 	}
 
-	client, err := m.pool.MonitoringFrameworkClient(frameworkID)
-	if err != nil {
-		return fmt.Errorf("observability framework client: %w", err)
+	body := sb.String()
+	if body == "" {
+		return nil
 	}
 
+	url := strings.TrimRight(backendURL, "/") + "/api/v1/import/prometheus"
 	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	resp, err := client.IngestMetrics(callCtx, &pluginsv1.IngestMetricsRequest{Sample: sample})
+	req, err := http.NewRequestWithContext(callCtx, http.MethodPost, url, bytes.NewBufferString(body))
 	if err != nil {
-		return fmt.Errorf("IngestMetrics: %w", err)
+		return fmt.Errorf("ingest metrics: build request: %w", err)
 	}
-	if resp.Error != nil {
-		return fmt.Errorf("IngestMetrics: %s", resp.Error.Message)
+	req.Header.Set("Content-Type", "text/plain")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("ingest metrics: post: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("ingest metrics: unexpected status %d", resp.StatusCode)
 	}
 	return nil
 }
@@ -1640,6 +1676,35 @@ func (m *Manager) GetMetricsBackendURL(ctx context.Context) (string, error) {
 	}
 
 	manifest, err := m.registry.GetManifest(ctx, frameworkID)
+	if err != nil || manifest == nil {
+		return "", nil
+	}
+	for _, c := range manifest.Companions {
+		if c.InternalAddr != "" {
+			return c.InternalAddr, nil
+		}
+	}
+	return "", nil
+}
+
+// GetLogsBackendURL returns the LogQL-compatible query URL of the active
+// monitoring.logs plugin's log store (e.g. Loki).
+func (m *Manager) GetLogsBackendURL(ctx context.Context) (string, error) {
+	m.mu.RLock()
+	var logsID string
+	for id, caps := range m.capabilities {
+		if caps[pluginsv1.CapabilityMonitoringLogs] {
+			logsID = id
+			break
+		}
+	}
+	m.mu.RUnlock()
+
+	if logsID == "" {
+		return "", nil
+	}
+
+	manifest, err := m.registry.GetManifest(ctx, logsID)
 	if err != nil || manifest == nil {
 		return "", nil
 	}
@@ -1696,7 +1761,7 @@ func (m *Manager) GetScrapeTargets(ctx context.Context) ([]*pluginsv1.ScrapeTarg
 		callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		resp, err := client.GetScrapeTargets(callCtx, &pluginsv1.GetScrapeTargetsRequest{})
 		cancel()
-		if err != nil || resp.Error != nil {
+		if err != nil {
 			continue
 		}
 		targets = append(targets, resp.Targets...)
@@ -1793,6 +1858,9 @@ func (m *Manager) reResolveCapabilityDependents(ctx context.Context, newPluginID
 			m.logger.Warn("reResolveCapabilityDependents: redeploy failed", "plugin", p.ID, "error", err)
 			continue
 		}
+		m.mu.Lock()
+		m.caCerts[p.ID] = caCertPEM
+		m.mu.Unlock()
 		if p.GRPCAddr != "" {
 			if err := m.pool.Dial(ctx, p.ID, p.GRPCAddr, caCertPEM); err != nil {
 				m.logger.Warn("reResolveCapabilityDependents: redial failed", "plugin", p.ID, "error", err)

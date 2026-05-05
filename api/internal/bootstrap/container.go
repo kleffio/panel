@@ -41,8 +41,10 @@ import (
 	projectshttp "github.com/kleffio/platform/internal/core/projects/adapters/http"
 	projectspersistence "github.com/kleffio/platform/internal/core/projects/adapters/persistence"
 	logshttp "github.com/kleffio/platform/internal/core/logs/adapters/http"
+	logsdomain "github.com/kleffio/platform/internal/core/logs/domain"
 	logspersistence "github.com/kleffio/platform/internal/core/logs/adapters/persistence"
 	logsrouting "github.com/kleffio/platform/internal/core/logs/adapters/routing"
+	pluginsv1 "github.com/kleffio/plugin-sdk-go/v1"
 	usagehttp "github.com/kleffio/platform/internal/core/usage/adapters/http"
 	usagepersistence "github.com/kleffio/platform/internal/core/usage/adapters/persistence"
 	workloadshttp "github.com/kleffio/platform/internal/core/workloads/adapters/http"
@@ -204,6 +206,20 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 					return ""
 				}
 				return summaries[0].QueryURL
+			},
+			func(lines []*logsdomain.LogLine) {
+				ctx := context.Background()
+				for _, l := range lines {
+					if err := pluginMgr.IngestWorkloadLog(ctx, &pluginsv1.LogEntry{
+						WorkloadID: l.WorkloadID,
+						ProjectID:  l.ProjectID,
+						Timestamp:  l.Ts.UnixNano(),
+						Message:    l.Line,
+						Level:      l.Stream,
+					}); err != nil {
+						logger.Warn("log forward to plugin failed", "error", err, "workload_id", l.WorkloadID)
+					}
+				}
 			},
 		), logger),
 		AuditHandler:         audithttp.NewHandler(logger),

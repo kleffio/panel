@@ -20,3 +20,7 @@ export function getProjectMetrics(projectID: string) {
     `/api/v1/usage/metrics?project_id=${encodeURIComponent(projectID)}`
   );
 }
+
+export function getAllMetrics() {
+  return get<{ workloads: WorkloadMetricsDTO[] }>(`/api/v1/admin/usage/metrics`);
+}

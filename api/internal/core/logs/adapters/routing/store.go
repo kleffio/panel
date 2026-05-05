@@ -25,24 +25,34 @@ import (
 type Store struct {
 	primary  ports.LogRepository
 	queryURL func(ctx context.Context) string
+	forward  func(lines []*domain.LogLine)
 	client   *http.Client
 }
 
-func NewStore(primary ports.LogRepository, queryURL func(ctx context.Context) string) *Store {
+func NewStore(primary ports.LogRepository, queryURL func(ctx context.Context) string, forward func(lines []*domain.LogLine)) *Store {
 	return &Store{
 		primary:  primary,
 		queryURL: queryURL,
+		forward:  forward,
 		client:   &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
 func (s *Store) SaveBatch(ctx context.Context, lines []*domain.LogLine) error {
-	return s.primary.SaveBatch(ctx, lines)
+	if err := s.primary.SaveBatch(ctx, lines); err != nil {
+		return err
+	}
+	if s.forward != nil && len(lines) > 0 {
+		go s.forward(lines)
+	}
+	return nil
 }
 
 func (s *Store) ListByWorkload(ctx context.Context, workloadID string, limit int) ([]*domain.LogLine, error) {
 	if u := s.queryURL(ctx); u != "" {
-		return s.queryBackend(ctx, u, workloadID, limit)
+		if lines, err := s.queryBackend(ctx, u, workloadID, limit); err == nil && len(lines) > 0 {
+			return lines, nil
+		}
 	}
 	return s.primary.ListByWorkload(ctx, workloadID, limit)
 }
