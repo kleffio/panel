@@ -11,7 +11,7 @@ import (
 // PluginRouter is the subset of PluginManager used by PluginRouteInterceptor.
 type PluginRouter interface {
 	MatchPluginRoute(method, path string) (pluginID string, public bool, ok bool)
-	HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HandleRequest) (*pluginsv1.HandleResponse, error)
+	HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HandleHTTPRequest) (*pluginsv1.HandleHTTPResponse, error)
 }
 
 // PluginRouteInterceptor wraps the entire handler stack. For routes declared by
@@ -27,14 +27,14 @@ func PluginRouteInterceptor(router PluginRouter, verifier TokenVerifier) func(ht
 				return
 			}
 
-			req := &pluginsv1.HandleRequest{
+			grpcReq := &pluginsv1.HandleHTTPRequest{
 				Method:   r.Method,
 				Path:     r.URL.Path,
 				RawQuery: r.URL.RawQuery,
 				Headers:  extractHeaders(r),
 			}
 			if body, err := io.ReadAll(r.Body); err == nil {
-				req.Body = body
+				grpcReq.Body = body
 			}
 
 			if !public {
@@ -48,24 +48,24 @@ func PluginRouteInterceptor(router PluginRouter, verifier TokenVerifier) func(ht
 					http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 					return
 				}
-				req.UserId = result.Subject
-				req.Roles = result.Roles
+				grpcReq.UserId = result.Subject
+				grpcReq.Roles = result.Roles
 			}
 
-			resp, err := router.HandlePluginRoute(r.Context(), pluginID, req)
+			resp, err := router.HandlePluginRoute(r.Context(), pluginID, grpcReq)
 			if err != nil {
 				http.Error(w, `{"error":"plugin unavailable"}`, http.StatusServiceUnavailable)
 				return
 			}
 
-			for k, v := range resp.Headers {
+			for k, v := range resp.GetHeaders() {
 				w.Header().Set(k, v)
 			}
 			if w.Header().Get("Content-Type") == "" {
 				w.Header().Set("Content-Type", "application/json")
 			}
-			w.WriteHeader(int(resp.Status))
-			_, _ = w.Write(resp.Body)
+			w.WriteHeader(int(resp.GetStatus()))
+			_, _ = w.Write(resp.GetBody())
 		})
 	}
 }

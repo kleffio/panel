@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Activity, Cpu, HardDrive, MemoryStick, RefreshCw, Wifi } from "lucide-react";
+import { Activity, BarChart2, Cpu, HardDrive, MemoryStick, RefreshCw, Wifi } from "lucide-react";
 import { getProjectMetrics, type WorkloadMetricsDTO } from "@/lib/api/usage";
 import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
+import { PluginSlot } from "@/features/plugins/ui/PluginSlot";
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -28,6 +29,7 @@ export function MonitoringPage() {
   const [lastUpdated, setLastUpdated] = React.useState<Date | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = React.useState(0);
 
   const fetchMetrics = React.useCallback(async () => {
     if (!currentProjectID) return;
@@ -119,7 +121,7 @@ export function MonitoringPage() {
             </span>
           )}
           <button
-            onClick={fetchMetrics}
+            onClick={() => { fetchMetrics(); setRefreshKey((k) => k + 1); }}
             className="flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-xs text-muted-foreground hover:bg-white/[0.08] transition-colors"
           >
             <RefreshCw className="size-3" />
@@ -128,112 +130,109 @@ export function MonitoringPage() {
         </div>
       </div>
 
-      {/* Error */}
-      {error && (
-        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-          {error}
+      {/* Metric cards — only when there is data */}
+      {!loading && !error && hasData && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {metricCards.map((m) => (
+            <div
+              key={m.label}
+              className="rounded-xl border border-white/[0.07] bg-card p-5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.4)]"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground">{m.label}</p>
+                <span className="flex size-7 items-center justify-center rounded-md bg-white/[0.04]">
+                  <m.icon className="size-4 text-muted-foreground/50" />
+                </span>
+              </div>
+              <p className="text-3xl font-semibold tracking-tight">
+                {m.value}
+                {m.value !== "—" && (
+                  <span className="text-lg font-normal text-muted-foreground ml-1">{m.unit}</span>
+                )}
+              </p>
+              <p className="text-xs text-muted-foreground/40">{m.sub}</p>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {metricCards.map((m) => (
-          <div
-            key={m.label}
-            className="rounded-xl border border-white/[0.07] bg-card p-5 flex flex-col gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.4)]"
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">{m.label}</p>
-              <span className="flex size-7 items-center justify-center rounded-md bg-white/[0.04]">
-                <m.icon className="size-4 text-muted-foreground/50" />
-              </span>
-            </div>
-            <p className={`text-3xl font-semibold tracking-tight ${hasData ? "text-foreground" : "text-foreground/30"}`}>
-              {loading ? <span className="animate-pulse">…</span> : m.value}
-              {!loading && m.value !== "—" && (
-                <span className="text-lg font-normal text-muted-foreground ml-1">{m.unit}</span>
-              )}
-            </p>
-            <p className="text-xs text-muted-foreground/40">{m.sub}</p>
+      {!loading && workloads.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 py-32">
+          <div className="flex size-14 items-center justify-center rounded-2xl border border-white/[0.12] bg-white/[0.06]">
+            <BarChart2 className="size-6 text-muted-foreground/60" />
           </div>
-        ))}
-      </div>
-
-      {/* Per-workload table */}
-      <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
-        <div className="border-b border-white/[0.06] px-6 py-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
-            <Activity className="size-4 text-primary" />
-            Workload Metrics
-          </h2>
-          <span className="text-xs text-muted-foreground/50">{workloads.length} workload{workloads.length !== 1 ? "s" : ""}</span>
+          <p className="text-sm font-medium text-muted-foreground">No metrics yet</p>
+          <p className="text-xs text-muted-foreground/60 max-w-xs text-center">Start a workload and metrics will appear here within 30 seconds.</p>
         </div>
+      ) : (
+        <>
+          {/* Plugin-injected charts (e.g. Prometheus time-series) */}
+          <PluginSlot name="monitoring.charts" slotProps={{ projectId: currentProjectID, refreshKey }} />
 
-        {!loading && workloads.length === 0 ? (
-          <div className="px-6 py-10 flex flex-col items-center justify-center gap-3 text-center">
-            <div className="size-12 rounded-full border border-white/[0.07] bg-white/[0.03] flex items-center justify-center">
-              <Activity className="size-5 text-muted-foreground/30" />
+          {/* Per-workload table */}
+          <div className="rounded-xl border border-white/[0.07] bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
+            <div className="border-b border-white/[0.06] px-6 py-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <Activity className="size-4 text-primary" />
+                Workload Metrics
+              </h2>
+              <span className="text-xs text-muted-foreground/50">{workloads.length} workload{workloads.length !== 1 ? "s" : ""}</span>
             </div>
-            <p className="text-sm text-muted-foreground/50">No metrics yet</p>
-            <p className="text-xs text-muted-foreground/30 max-w-xs">
-              Start a workload and metrics will appear here within 30 seconds.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/[0.05] text-xs text-muted-foreground/50">
-                  <th className="px-6 py-3 text-left font-medium">Workload</th>
-                  <th className="px-4 py-3 text-right font-medium">CPU (cores)</th>
-                  <th className="px-4 py-3 text-right font-medium">Memory</th>
-                  <th className="px-4 py-3 text-right font-medium">Net In</th>
-                  <th className="px-4 py-3 text-right font-medium">Net Out</th>
-                  <th className="px-4 py-3 text-right font-medium">Disk R</th>
-                  <th className="px-4 py-3 text-right font-medium">Disk W</th>
-                  <th className="px-4 py-3 text-right font-medium">Updated</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.04]">
-                {workloads.map((w) => {
-                  const cpuM = w.cpu_limit_millicores > 0 ? Math.min(w.cpu_millicores, w.cpu_limit_millicores) : w.cpu_millicores;
-                  const memLimitMB = w.memory_limit_bytes > 0 ? w.memory_limit_bytes / (1024 * 1024) : Infinity;
-                  const memMB = w.memory_limit_bytes > 0 ? Math.min(w.memory_mb, memLimitMB) : w.memory_mb;
-                  return (
-                  <tr key={w.workload_id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-6 py-3 font-mono text-xs text-foreground/60">
-                      {w.workload_id.slice(0, 8)}…
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {cpuCores(cpuM)}
-                      <span className="text-muted-foreground/40 ml-1 text-xs">cores</span>
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {(() => { const m = memDisplay(memMB); return <>{m.value} <span className="text-muted-foreground/40 text-xs">{m.unit}</span></>; })()}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {fmt(w.network_in_kbps)} <span className="text-muted-foreground/40 text-xs">KB/s</span>
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {fmt(w.network_out_kbps)} <span className="text-muted-foreground/40 text-xs">KB/s</span>
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {fmt(w.disk_read_kbps)} <span className="text-muted-foreground/40 text-xs">KB/s</span>
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {fmt(w.disk_write_kbps)} <span className="text-muted-foreground/40 text-xs">KB/s</span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-xs text-muted-foreground/40">
-                      {new Date(w.recorded_at).toLocaleTimeString()}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/[0.05] text-xs text-muted-foreground/50">
+                    <th className="px-6 py-3 text-left font-medium">Workload</th>
+                    <th className="px-4 py-3 text-right font-medium">CPU (cores)</th>
+                    <th className="px-4 py-3 text-right font-medium">Memory</th>
+                    <th className="px-4 py-3 text-right font-medium">Net In</th>
+                    <th className="px-4 py-3 text-right font-medium">Net Out</th>
+                    <th className="px-4 py-3 text-right font-medium">Disk R</th>
+                    <th className="px-4 py-3 text-right font-medium">Disk W</th>
+                    <th className="px-4 py-3 text-right font-medium">Updated</th>
                   </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-white/[0.04]">
+                  {workloads.map((w) => {
+                    const cpuM = w.cpu_limit_millicores > 0 ? Math.min(w.cpu_millicores, w.cpu_limit_millicores) : w.cpu_millicores;
+                    const memLimitMB = w.memory_limit_bytes > 0 ? w.memory_limit_bytes / (1024 * 1024) : Infinity;
+                    const memMB = w.memory_limit_bytes > 0 ? Math.min(w.memory_mb, memLimitMB) : w.memory_mb;
+                    return (
+                      <tr key={w.workload_id} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="px-6 py-3 text-xs text-foreground/60">
+                          {w.workload_name || w.workload_id.slice(0, 8) + "…"}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {cpuCores(cpuM)}
+                          <span className="text-muted-foreground/40 ml-1 text-xs">cores</span>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {(() => { const m = memDisplay(memMB); return <>{m.value} <span className="text-muted-foreground/40 text-xs">{m.unit}</span></>; })()}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {fmt(w.network_in_kbps)} <span className="text-muted-foreground/40 text-xs">KB/s</span>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {fmt(w.network_out_kbps)} <span className="text-muted-foreground/40 text-xs">KB/s</span>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {fmt(w.disk_read_kbps)} <span className="text-muted-foreground/40 text-xs">KB/s</span>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {fmt(w.disk_write_kbps)} <span className="text-muted-foreground/40 text-xs">KB/s</span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-xs text-muted-foreground/40">
+                          {new Date(w.recorded_at).toLocaleTimeString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }

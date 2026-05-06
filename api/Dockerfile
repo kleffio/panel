@@ -10,8 +10,13 @@ WORKDIR /build
 # are fetched from the module proxy using their published versions.
 COPY go.mod go.sum go.work go.work.sum ./
 COPY packages/go.mod packages/
+# Copy local plugin-sdk-go so the go.mod replace directive (../../plugins/plugin-sdk-go)
+# resolves correctly inside Docker (/build/../../plugins/plugin-sdk-go = /plugins/plugin-sdk-go).
+COPY --from=plugin-sdk-go go.mod go.sum /plugins/plugin-sdk-go/
 
 RUN GOWORK=off go mod download
+
+COPY --from=plugin-sdk-go . /plugins/plugin-sdk-go/
 
 # Copy full source and build.
 COPY . .

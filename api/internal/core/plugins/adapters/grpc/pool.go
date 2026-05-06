@@ -119,8 +119,8 @@ func (p *Pool) HealthClient(id string) (pluginsv1.PluginHealthClient, error) {
 	return pluginsv1.NewPluginHealthClient(conn), nil
 }
 
-// MiddlewareClient returns an APIMiddlewareClient for the given plugin ID.
-func (p *Pool) MiddlewareClient(id string) (pluginsv1.APIMiddlewareClient, error) {
+// MiddlewareClient returns a PluginMiddlewareClient for the given plugin ID.
+func (p *Pool) MiddlewareClient(id string) (pluginsv1.PluginMiddlewareClient, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -128,11 +128,11 @@ func (p *Pool) MiddlewareClient(id string) (pluginsv1.APIMiddlewareClient, error
 	if !ok {
 		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
 	}
-	return pluginsv1.NewAPIMiddlewareClient(conn), nil
+	return pluginsv1.NewPluginMiddlewareClient(conn), nil
 }
 
-// UIClient returns a UIManifestServiceClient for the given plugin ID.
-func (p *Pool) UIClient(id string) (pluginsv1.UIManifestServiceClient, error) {
+// UIClient returns a PluginUIClient for the given plugin ID.
+func (p *Pool) UIClient(id string) (pluginsv1.PluginUIClient, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -140,11 +140,11 @@ func (p *Pool) UIClient(id string) (pluginsv1.UIManifestServiceClient, error) {
 	if !ok {
 		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
 	}
-	return pluginsv1.NewUIManifestServiceClient(conn), nil
+	return pluginsv1.NewPluginUIClient(conn), nil
 }
 
-// APIRoutesClient returns an APIRoutesClient for the given plugin ID.
-func (p *Pool) APIRoutesClient(id string) (pluginsv1.APIRoutesClient, error) {
+// APIRoutesClient returns a PluginHTTPClient for the given plugin ID.
+func (p *Pool) APIRoutesClient(id string) (pluginsv1.PluginHTTPClient, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -152,7 +152,51 @@ func (p *Pool) APIRoutesClient(id string) (pluginsv1.APIRoutesClient, error) {
 	if !ok {
 		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
 	}
-	return pluginsv1.NewAPIRoutesClient(conn), nil
+	return pluginsv1.NewPluginHTTPClient(conn), nil
+}
+
+// MonitoringFrameworkClient returns a MonitoringFrameworkClient for the given plugin ID.
+func (p *Pool) MonitoringFrameworkClient(id string) (pluginsv1.MonitoringFrameworkClient, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	conn, ok := p.conns[id]
+	if !ok {
+		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
+	}
+	return pluginsv1.NewMonitoringFrameworkClient(conn), nil
+}
+
+// MonitoringSourceClient returns a MonitoringSourceClient for the given plugin ID.
+func (p *Pool) MonitoringSourceClient(id string) (pluginsv1.MonitoringSourceClient, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	conn, ok := p.conns[id]
+	if !ok {
+		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
+	}
+	return pluginsv1.NewMonitoringSourceClient(conn), nil
+}
+
+// MonitoringLogsClient returns a MonitoringLogsClient for the given plugin ID.
+func (p *Pool) MonitoringLogsClient(id string) (pluginsv1.MonitoringLogsClient, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	conn, ok := p.conns[id]
+	if !ok {
+		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
+	}
+	return pluginsv1.NewMonitoringLogsClient(conn), nil
+}
+
+// MonitoringTracesClient returns a MonitoringTracesClient for the given plugin ID.
+func (p *Pool) MonitoringTracesClient(id string) (pluginsv1.MonitoringTracesClient, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	conn, ok := p.conns[id]
+	if !ok {
+		return nil, fmt.Errorf("grpc pool: no connection for plugin %q", id)
+	}
+	return pluginsv1.NewMonitoringTracesClient(conn), nil
 }
 
 // HasConnection reports whether a live connection exists for id.

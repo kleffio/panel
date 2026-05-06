@@ -41,7 +41,10 @@ import (
 	projectshttp "github.com/kleffio/platform/internal/core/projects/adapters/http"
 	projectspersistence "github.com/kleffio/platform/internal/core/projects/adapters/persistence"
 	logshttp "github.com/kleffio/platform/internal/core/logs/adapters/http"
+	logsdomain "github.com/kleffio/platform/internal/core/logs/domain"
 	logspersistence "github.com/kleffio/platform/internal/core/logs/adapters/persistence"
+	logsrouting "github.com/kleffio/platform/internal/core/logs/adapters/routing"
+	pluginsv1 "github.com/kleffio/plugin-sdk-go/v1"
 	usagehttp "github.com/kleffio/platform/internal/core/usage/adapters/http"
 	usagepersistence "github.com/kleffio/platform/internal/core/usage/adapters/persistence"
 	workloadshttp "github.com/kleffio/platform/internal/core/workloads/adapters/http"
@@ -174,6 +177,8 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 	provisionHandler := workloadcmd.NewProvisionWorkloadHandler(workloadsStore, projectsStore, queuePublisher, catalogStore, logger)
 	workloadAction := workloadcmd.NewWorkloadActionHandler(workloadsStore, projectsStore, queuePublisher, logger)
 
+	metricsSink := pluginapplication.NewMetricsSinkAdapter(pluginMgr)
+
 	return &Container{
 		Config:        cfg,
 		Logger:        logger,
@@ -189,11 +194,34 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 		OrganizationsHandler: organizationshttp.NewHandler(orgStore, notificationSvc, logger),
 		DeploymentsHandler:   deploymentshttp.NewHandler(createDeployment, serverAction, deploymentStore, cfg.SecretKey, logger),
 		ProjectsHandler:      projectshttp.NewHandler(projectsStore, orgStore, notificationSvc, logger),
-		WorkloadsHandler:     workloadshttp.NewHandler(projectsStore, orgStore, workloadsStore, provisionHandler, workloadAction, bus, logger),
+		WorkloadsHandler:     workloadshttp.NewHandler(projectsStore, orgStore, workloadsStore, usagepersistence.NewPostgresUsageStore(db), metricsSink, provisionHandler, workloadAction, bus, logger),
 		NodesHandler:         nodeshttp.NewHandler(nodeStore, logger),
 		BillingHandler:       billinghttp.NewHandler(logger),
 		UsageHandler:         usagehttp.NewHandler(usagepersistence.NewPostgresUsageStore(db), logger),
-		LogsHandler:          logshttp.NewHandler(logspersistence.NewPostgresLogStore(db), logger),
+		LogsHandler: logshttp.NewHandler(logsrouting.NewStore(
+			logspersistence.NewPostgresLogStore(db),
+			func(ctx context.Context) string {
+				summaries, err := pluginMgr.GetActivePluginsByCapability(ctx, "monitoring.logs")
+				if err != nil || len(summaries) == 0 {
+					return ""
+				}
+				return summaries[0].QueryURL
+			},
+			func(lines []*logsdomain.LogLine) {
+				ctx := context.Background()
+				for _, l := range lines {
+					if err := pluginMgr.IngestWorkloadLog(ctx, &pluginsv1.LogEntry{
+						WorkloadID: l.WorkloadID,
+						ProjectID:  l.ProjectID,
+						Timestamp:  l.Ts.UnixNano(),
+						Message:    l.Line,
+						Level:      l.Stream,
+					}); err != nil {
+						logger.Warn("log forward to plugin failed", "error", err, "workload_id", l.WorkloadID)
+					}
+				}
+			},
+		), logger),
 		AuditHandler:         audithttp.NewHandler(logger),
 		AdminHandler:         adminhttp.NewHandler(logger),
 		PluginsHandler:       pluginhttp.NewHandler(pluginMgr, dbRegistry, logger),

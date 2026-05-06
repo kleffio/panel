@@ -47,7 +47,9 @@ type Job struct {
 // WorkloadSpec mirrors the daemon's ports.WorkloadSpec for JSON compatibility.
 type WorkloadSpec struct {
 	OwnerID          string            `json:"owner_id"`
+	OwnerUsername    string            `json:"owner_username,omitempty"`
 	ServerID         string            `json:"server_id"`
+	ServerName       string            `json:"server_name,omitempty"`
 	BlueprintID      string            `json:"blueprint_id"`
 	ProjectID        string            `json:"project_id"`
 	ProjectSlug      string            `json:"project_slug"`

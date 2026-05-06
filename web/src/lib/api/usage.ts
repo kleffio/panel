@@ -2,6 +2,7 @@ import { get } from "./request";
 
 export interface WorkloadMetricsDTO {
   workload_id: string;
+  workload_name?: string;
   project_id: string;
   cpu_millicores: number;
   memory_mb: number;
@@ -18,4 +19,8 @@ export function getProjectMetrics(projectID: string) {
   return get<{ workloads: WorkloadMetricsDTO[] }>(
     `/api/v1/usage/metrics?project_id=${encodeURIComponent(projectID)}`
   );
+}
+
+export function getAllMetrics() {
+  return get<{ workloads: WorkloadMetricsDTO[] }>(`/api/v1/admin/usage/metrics`);
 }

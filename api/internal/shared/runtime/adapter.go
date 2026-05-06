@@ -50,6 +50,9 @@ type ContainerSpec struct {
 	// Image is the fully qualified Docker image reference.
 	Image string
 
+	// Entrypoint overrides the container's default ENTRYPOINT (optional).
+	Entrypoint []string
+
 	// Command overrides the container's default CMD (optional).
 	Command []string
 
@@ -78,12 +81,17 @@ type ContainerSpec struct {
 
 	// RestartPolicy controls container restart behaviour.
 	RestartPolicy RestartPolicy
+
+	// Privileged grants the container extended host privileges (e.g. for cAdvisor cgroup access).
+	Privileged bool
 }
 
-// VolumeMount maps a named Docker volume to a path inside the container.
+// VolumeMount maps a named Docker volume or host path to a path inside the container.
 type VolumeMount struct {
-	Name   string // Docker volume name (created automatically if absent)
-	Target string // Absolute path inside the container
+	Name     string // Docker volume name (created automatically if absent). Empty when HostPath is set.
+	Target   string // Absolute path inside the container
+	HostPath string // If non-empty, bind-mount this host path instead of a named volume
+	ReadOnly bool   // Mount as read-only
 }
 
 // PortMapping maps a container port to an optional host port.

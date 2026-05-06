@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Puzzle, Users, ScrollText } from "lucide-react";
+import { LayoutDashboard, Puzzle, Users, ScrollText, Activity } from "lucide-react";
 import { cn } from "@kleffio/ui";
 import { SidebarUserFooter } from "./SidebarUserFooter";
 
 const ADMIN_NAV = [
-  { href: "/admin",         label: "Dashboard",  icon: LayoutDashboard },
-  { href: "/admin/plugins", label: "Plugins",    icon: Puzzle },
-  { href: "/admin/members", label: "Members",    icon: Users },
-  { href: "/admin/audit",   label: "Audit Log",  icon: ScrollText },
+  { href: "/admin",             label: "Dashboard",      icon: LayoutDashboard },
+  { href: "/admin/plugins",     label: "Plugins",        icon: Puzzle },
+  { href: "/admin/monitoring",  label: "Infrastructure", icon: Activity },
+  { href: "/admin/members",     label: "Members",        icon: Users },
+  { href: "/admin/audit",       label: "Audit Log",      icon: ScrollText },
 ];
 
 export function AdminSidebar() {

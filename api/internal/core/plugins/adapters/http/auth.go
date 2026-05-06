@@ -317,12 +317,12 @@ func normaliseSession(s *pluginsv1.Session) sessionDTO {
 		return v
 	}
 	return sessionDTO{
-		ID:         s.Id,
-		IPAddress:  s.IpAddress,
-		UserAgent:  s.UserAgent,
-		StartedAt:  toSeconds(s.CreatedAt),
-		LastAccess: toSeconds(s.LastAccess),
-		Current:    s.Current,
+		ID:         s.GetId(),
+		IPAddress:  s.GetIpAddress(),
+		UserAgent:  s.GetUserAgent(),
+		StartedAt:  toSeconds(s.GetCreatedAt()),
+		LastAccess: toSeconds(s.GetLastAccess()),
+		Current:    s.GetCurrent(),
 	}
 }
 

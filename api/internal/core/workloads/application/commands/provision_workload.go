@@ -25,6 +25,7 @@ type ProvisionWorkloadCommand struct {
 	OrganizationID string
 	ProjectID      string
 	OwnerID        string
+	OwnerUsername  string
 	ServerName     string
 	BlueprintID    string
 	Image          string
@@ -190,7 +191,9 @@ func (h *ProvisionWorkloadHandler) Handle(ctx context.Context, cmd ProvisionWork
 
 	spec := ports.WorkloadSpec{
 		OwnerID:          cmd.OwnerID,
+		OwnerUsername:    cmd.OwnerUsername,
 		ServerID:         workloadID,
+		ServerName:       serverName,
 		BlueprintID:      cmd.BlueprintID,
 		ProjectID:        project.ID,
 		ProjectSlug:      project.Slug,

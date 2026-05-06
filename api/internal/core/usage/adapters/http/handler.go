@@ -25,6 +25,24 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get(basePath+"/metrics", h.getMetrics)
 }
 
+func (h *Handler) RegisterAdminRoutes(r chi.Router) {
+	r.Get("/api/v1/admin/usage/metrics", h.getAllMetrics)
+}
+
+// getAllMetrics returns the latest per-workload metrics snapshot across all projects (admin only).
+func (h *Handler) getAllMetrics(w http.ResponseWriter, r *http.Request) {
+	metrics, err := h.repo.ListLatestAll(r.Context())
+	if err != nil {
+		h.logger.Error("list all metrics", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch metrics"})
+		return
+	}
+	if metrics == nil {
+		metrics = []*usagedomain.WorkloadMetrics{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"workloads": metrics})
+}
+
 // getMetrics returns the latest per-workload metrics snapshot for a project.
 // Query param: project_id (required)
 func (h *Handler) getMetrics(w http.ResponseWriter, r *http.Request) {
