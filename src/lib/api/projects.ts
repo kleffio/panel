@@ -77,6 +77,12 @@ export function listWorkloads(projectID: string) {
   );
 }
 
+export function getWorkload(projectID: string, workloadID: string) {
+  return get<WorkloadDTO>(
+    `/api/v1/projects/${encodeURIComponent(projectID)}/workloads/${encodeURIComponent(workloadID)}`
+  );
+}
+
 export function provisionWorkload(
   projectID: string,
   payload: {

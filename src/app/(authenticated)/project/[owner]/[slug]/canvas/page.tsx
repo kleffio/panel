@@ -6,7 +6,7 @@ import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvi
 import { ProjectArchitecturePage } from "@/features/projects/pages/ProjectArchitecturePage";
 
 export default function ProjectWorkspacePage() {
-  const { slug } = useParams<{ owner: string; slug: string }>();
+  const { owner, slug } = useParams<{ owner: string; slug: string }>();
   const { projects, setCurrentProjectID } = useCurrentProject();
 
   const project = projects.find((p) => p.slug === slug);
@@ -26,7 +26,7 @@ export default function ProjectWorkspacePage() {
       </div>
 
       <div className="relative z-10 h-full">
-        <ProjectArchitecturePage projectID={project.id} />
+        <ProjectArchitecturePage projectID={project.id} owner={owner} slug={slug} />
       </div>
     </div>
   );

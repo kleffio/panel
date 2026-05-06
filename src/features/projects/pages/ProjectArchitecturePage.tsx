@@ -136,6 +136,8 @@ function buildNode(
   workload: WorkloadDTO,
   position: { x: number; y: number },
   isDeleting: boolean,
+  owner: string,
+  slug: string,
 ): InfrastructureNode {
   const displayName = workload.name || workload.id;
   const kind = inferNodeKind(workload.image, workload.blueprint_id);
@@ -148,6 +150,7 @@ function buildNode(
     id: workload.id,
     name: displayName,
     subtitle: workload.image,
+    route: `/project/${owner}/${slug}/servers/${workload.id}`,
     description:
       workload.error_message ||
       `Runtime workload ${displayName} (${workload.state}).`,
@@ -182,7 +185,15 @@ function buildNode(
   };
 }
 
-export function ProjectArchitecturePage({ projectID }: { projectID: string }) {
+export function ProjectArchitecturePage({
+  projectID,
+  owner,
+  slug,
+}: {
+  projectID: string;
+  owner: string;
+  slug: string;
+}) {
   const [projectName, setProjectName] = React.useState("Project");
   const [nodes, setNodes] = React.useState<InfrastructureNode[]>([]);
   const [edges, setEdges] = React.useState<InfrastructureEdge[]>([]);
@@ -275,6 +286,8 @@ export function ProjectArchitecturePage({ projectID }: { projectID: string }) {
           workload,
           resolvedPositions.get(workload.id) ?? fallbackPosition(0),
           deletingSet.has(workload.id),
+          owner,
+          slug,
         ),
       );
       const workloadIDs = new Set(nextNodes.map((node) => node.id));
@@ -309,7 +322,7 @@ export function ProjectArchitecturePage({ projectID }: { projectID: string }) {
         setIsLoading(false);
       }
     }
-  }, [projectID]);
+  }, [projectID, owner, slug]);
 
   React.useEffect(() => {
     deletingNodeIDsRef.current = deletingNodeIDs;

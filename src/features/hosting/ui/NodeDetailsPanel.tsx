@@ -17,192 +17,10 @@ import type { InfrastructureNode, NodeAction } from "@/features/hosting/model/ty
 import { getStatusMeta } from "@/features/hosting/lib/infrastructure-graph";
 import { Button } from "@kleffio/ui";
 import { Sheet, SheetContent } from "@kleffio/ui";
-import { getProjectMetrics, type WorkloadMetricsDTO } from "@/lib/api/usage";
-import { getWorkloadLogs, type LogLineDTO } from "@/lib/api/logs";
 import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
+import { LogViewer } from "@/features/hosting/ui/LogViewer";
+import { WorkloadMetricsTab } from "@/features/hosting/ui/MetricWidgets";
 
-// ── Log viewer ─────────────────────────────────────────────────────────────────
-
-const LOG_POLL_MS = 5_000;
-
-function streamColor(stream: "stdout" | "stderr" | string) {
-  return stream === "stderr" ? "text-red-400/80" : "text-white/70";
-}
-
-function LogViewer({ node }: { node: InfrastructureNode }) {
-  const { currentProjectID } = useCurrentProject();
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const [lines, setLines] = useState<LogLineDTO[]>([]);
-  const [loading, setLoading] = useState(true);
-  const autoScroll = useRef(true);
-
-  useEffect(() => {
-    if (!currentProjectID) return;
-    let cancelled = false;
-    setLoading(true);
-    setLines([]);
-    autoScroll.current = true;
-
-    const fetch = () => {
-      getWorkloadLogs(currentProjectID, node.id).then((res) => {
-        if (cancelled) return;
-        setLines(res.lines ?? []);
-        setLoading(false);
-      }).catch(() => { if (!cancelled) setLoading(false); });
-    };
-
-    fetch();
-    const id = setInterval(fetch, LOG_POLL_MS);
-    return () => { cancelled = true; clearInterval(id); };
-  }, [node.id, currentProjectID]);
-
-  useEffect(() => {
-    if (autoScroll.current) {
-      bottomRef.current?.scrollIntoView({ behavior: "instant" });
-    }
-  }, [lines]);
-
-  return (
-    <div
-      className="h-full overflow-y-auto bg-[#0a0c10] font-mono text-[11px] leading-5"
-      onScroll={(e) => {
-        const el = e.currentTarget;
-        autoScroll.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-      }}
-    >
-      <div className="p-4 pb-6">
-        {loading && (
-          <p className="text-white/25 animate-pulse">Loading logs…</p>
-        )}
-        {!loading && lines.length === 0 && (
-          <p className="text-white/25">No logs yet. Logs appear within ~5 seconds of output.</p>
-        )}
-        {lines.map((l) => (
-          <div key={l.id} className="flex gap-3 py-[1px]">
-            <span className="w-16 shrink-0 select-none text-white/25">
-              {new Date(l.ts).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-            </span>
-            <span className={streamColor(l.stream)}>{l.line}</span>
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-    </div>
-  );
-}
-
-// ── Metric bar ─────────────────────────────────────────────────────────────────
-
-function MetricBar({ label, pct, primary, secondary }: { label: string; pct: number; primary: string; secondary?: string }) {
-  const clampedPct = Math.min(100, Math.max(0, pct));
-  const color = clampedPct > 80 ? "bg-red-500" : clampedPct > 60 ? "bg-amber-400" : "bg-emerald-400";
-  return (
-    <div className="space-y-1.5 rounded-[0.35rem] border border-white/8 bg-white/[0.03] p-3">
-      <div className="flex items-center justify-between text-[11px]">
-        <span className="uppercase tracking-wide text-white/40">{label}</span>
-        <span className="font-medium text-white/70">{primary}</span>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-[0.2rem] bg-white/8">
-        <div className={`h-full rounded-[0.2rem] ${color} transition-all duration-700`} style={{ width: `${clampedPct}%` }} />
-      </div>
-      {secondary && <p className="text-[11px] text-white/35">{secondary}</p>}
-    </div>
-  );
-}
-
-function StatRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between py-2 text-[11px]">
-      <span className="uppercase tracking-wide text-white/40">{label}</span>
-      <span className="font-medium tabular-nums text-white/70">{value}</span>
-    </div>
-  );
-}
-
-// ── Live metrics fetcher ────────────────────────────────────────────────────────
-
-function fmtMemory(mb: number): { primary: string; secondary: string } {
-  if (mb >= 1000) {
-    return { primary: `${(mb / 1024).toFixed(2)} GB`, secondary: `${mb} MB` };
-  }
-  return { primary: `${mb} MB`, secondary: `${(mb / 1024).toFixed(2)} GB` };
-}
-
-function WorkloadMetricsTab({
-  workloadId,
-  cpuLimitMillicores,
-  memoryLimitBytes,
-}: {
-  workloadId: string;
-  cpuLimitMillicores?: number;
-  memoryLimitBytes?: number;
-}) {
-  const { currentProjectID } = useCurrentProject();
-  const [data, setData] = useState<WorkloadMetricsDTO | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    if (!currentProjectID) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(false);
-    getProjectMetrics(currentProjectID)
-      .then((res) => {
-        if (cancelled) return;
-        const found = res.workloads?.find((w) => w.workload_id === workloadId) ?? null;
-        setData(found);
-      })
-      .catch(() => { if (!cancelled) setError(true); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [workloadId, currentProjectID]);
-
-  if (loading) {
-    return <p className="text-[11px] text-white/40 p-5">Loading metrics…</p>;
-  }
-  if (error || !data) {
-    return <p className="text-[11px] text-white/40 p-5">No metrics available yet. Start the workload and wait up to 30 s.</p>;
-  }
-
-  const fmt = (n: number, d = 1) => n.toFixed(d);
-  const cpuLimitM = (data.cpu_limit_millicores > 0 ? data.cpu_limit_millicores : cpuLimitMillicores) ?? 1000;
-  const memLimitMB = data.memory_limit_bytes > 0
-    ? data.memory_limit_bytes / (1024 * 1024)
-    : memoryLimitBytes ? memoryLimitBytes / (1024 * 1024) : 2048;
-  const cpuM = Math.min(data.cpu_millicores, cpuLimitM);
-  const memMB = Math.min(data.memory_mb, memLimitMB);
-  const cpuPct = (cpuM / cpuLimitM) * 100;
-  const memPct = (memMB / memLimitMB) * 100;
-  const memDisplay = fmtMemory(memMB);
-  const memLimitDisplay = fmtMemory(memLimitMB);
-
-  return (
-    <div className="space-y-3 p-5">
-      <MetricBar
-        label="CPU"
-        pct={cpuPct}
-        primary={`${fmt(cpuM / 1000, 2)} cores`}
-        secondary={`${fmt(cpuM / 1000, 2)} / ${fmt(cpuLimitM / 1000, 2)} cores`}
-      />
-      <MetricBar
-        label="Memory"
-        pct={memPct}
-        primary={memDisplay.primary}
-        secondary={`${memDisplay.secondary} / ${memLimitDisplay.primary}`}
-      />
-      <div className="rounded-[0.35rem] border border-white/8 bg-white/[0.03] px-3 divide-y divide-white/8">
-        <StatRow label="Net In"    value={`${fmt(data.network_in_kbps)} KB/s`} />
-        <StatRow label="Net Out"   value={`${fmt(data.network_out_kbps)} KB/s`} />
-        <StatRow label="Disk Read" value={`${fmt(data.disk_read_kbps)} KB/s`} />
-        <StatRow label="Disk Write" value={`${fmt(data.disk_write_kbps)} KB/s`} />
-      </div>
-      <p className="text-[10px] text-white/25">
-        Last update: {new Date(data.recorded_at).toLocaleTimeString()}
-      </p>
-    </div>
-  );
-}
 
 // ── Tabs ───────────────────────────────────────────────────────────────────────
 
@@ -232,6 +50,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
   onAction: (nodeId: string, action: NodeAction) => void;
   relatedNodes: InfrastructureNode[];
 }) {
+  const { currentProjectID } = useCurrentProject();
   const [tab, setTab] = useState<Tab>("logs");
   const [isSheetOpen, setIsSheetOpen] = useState(open);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -371,7 +190,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                     transition={{ duration: 0.17, ease: [0.22, 1, 0.36, 1] }}
                     className="h-full"
                   >
-                    <LogViewer node={node} />
+                    <LogViewer workloadId={node.id} projectID={currentProjectID ?? ""} />
                   </motion.div>
                 ) : null}
 
@@ -386,6 +205,7 @@ export const NodeDetailsPanel = memo(function NodeDetailsPanel({
                   >
                     <WorkloadMetricsTab
                       workloadId={node.id}
+                      projectID={currentProjectID ?? ""}
                       cpuLimitMillicores={node.cpuLimitMillicores}
                       memoryLimitBytes={node.memoryLimitBytes}
                     />
