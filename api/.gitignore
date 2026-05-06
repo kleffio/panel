@@ -1,0 +1,17 @@
+# Build output
+bin/
+*.exe
+*.out
+
+# Test artifacts
+*.test
+coverage.out
+coverage.html
+
+# Dependency vendor
+vendor/
+
+# Hot reload (air)
+tmp/
+
+plugins.local.json

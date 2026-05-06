@@ -1,0 +1,180 @@
+package ports
+
+import (
+	"context"
+
+	pluginsv1 "github.com/kleffio/plugin-sdk-go/v1"
+	"github.com/kleffio/platform/internal/core/plugins/domain"
+)
+
+// PluginManager owns the full lifecycle of installed plugins.
+// It is the single authoritative source for gRPC connections and runtime state.
+type PluginManager interface {
+	// Install deploys the plugin container, persists its config, and opens the
+	// gRPC connection.
+	Install(ctx context.Context, manifest *domain.CatalogManifest, config map[string]string) (*domain.Plugin, error)
+
+	// Remove stops the container, removes the DB record, and closes the gRPC connection.
+	Remove(ctx context.Context, pluginID string) error
+
+	// Enable starts the container and re-opens the gRPC connection.
+	Enable(ctx context.Context, pluginID string) error
+
+	// Disable stops the container and closes the gRPC connection (config preserved).
+	Disable(ctx context.Context, pluginID string) error
+
+	// Reconfigure restarts the container with updated env vars and persists the new config.
+	Reconfigure(ctx context.Context, pluginID string, config map[string]string) error
+
+	// GetPlugin returns the persisted plugin record with its current in-memory status.
+	GetPlugin(ctx context.Context, pluginID string) (*domain.Plugin, error)
+
+	// ListPlugins returns all installed plugins with their current statuses.
+	ListPlugins(ctx context.Context) ([]*domain.Plugin, error)
+
+	// ── Identity (auth) ───────────────────────────────────────────────────────
+
+	// SetActiveIDP designates a plugin as the active identity provider.
+	SetActiveIDP(ctx context.Context, pluginID string) error
+
+	// GetActiveIDPID returns the ID of the currently active IDP plugin, or "" if none.
+	GetActiveIDPID() string
+
+	// Login authenticates a user via the active IDP plugin.
+	// Returns ErrNoIDP if no active IDP is configured.
+	Login(ctx context.Context, username, password string) (*pluginsv1.TokenSet, error)
+
+	// Register creates a new user via the active IDP plugin.
+	// Returns ErrNoIDP if no active IDP is configured.
+	Register(ctx context.Context, req *pluginsv1.RegisterRequest) (string, error)
+
+	// ValidateToken verifies a bearer token via the active IDP plugin.
+	// Used by RequireAuth middleware on every authenticated request.
+	ValidateToken(ctx context.Context, token string) (*pluginsv1.TokenClaims, error)
+
+	// GetOIDCConfig returns the OIDC discovery config from the active IDP plugin.
+	// Returns nil, nil when no IDP is active.
+	GetOIDCConfig(ctx context.Context) (*pluginsv1.OIDCConfig, error)
+
+	// RefreshToken exchanges a refresh token for a new token set via the active IDP plugin.
+	// Returns ErrNoIDP if no active IDP is configured.
+	RefreshToken(ctx context.Context, refreshToken string) (*pluginsv1.TokenSet, error)
+
+	// ChangePassword verifies the current password and sets a new one via the active IDP plugin.
+	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
+
+	// ListSessions returns all active sessions for a user via the active IDP plugin.
+	ListSessions(ctx context.Context, userID, currentSessionID string) ([]*pluginsv1.Session, error)
+
+	// RevokeSession terminates a specific session via the active IDP plugin.
+	RevokeSession(ctx context.Context, userID, sessionID string) error
+
+	// RevokeAllSessions terminates every session for a user except the current one.
+	// currentSessionID is the session that should be preserved.
+	RevokeAllSessions(ctx context.Context, userID, currentSessionID string) error
+
+	// HasIdentityProvider reports whether at least one active plugin declared
+	// the CapabilityIdentityProvider capability.
+	HasIdentityProvider() bool
+
+	// IDPReady reports whether the active IDP plugin has completed capability
+	// discovery and is ready to serve auth requests. Use this to gate the
+	// frontend login page while the plugin container is starting up.
+	IDPReady() bool
+
+	// ── Plugin middleware (api.middleware capability) ──────────────────────────
+
+	// RunMiddleware calls OnRequest on every plugin that declared CapabilityAPIMiddleware.
+	// Returns a non-nil error if any plugin denies the request.
+	RunMiddleware(ctx context.Context, userID string, roles []string, method, path string) error
+
+	// ── UI aggregation (ui.manifest capability) ───────────────────────────────
+
+	// GetUIManifests aggregates UI contributions from all active plugins.
+	GetUIManifests(ctx context.Context) ([]*pluginsv1.UIManifest, error)
+
+	// ── Plugin-owned HTTP routes (api.routes capability) ──────────────────────
+
+	// MatchPluginRoute checks whether any plugin owns the given method+path.
+	MatchPluginRoute(method, path string) (pluginID string, public bool, ok bool)
+
+	// HandlePluginRoute forwards an HTTP request to the given plugin via gRPC.
+	HandlePluginRoute(ctx context.Context, pluginID string, req *pluginsv1.HandleHTTPRequest) (*pluginsv1.HandleHTTPResponse, error)
+
+	// ── Observability ────────────────────────────────────────────────────────────
+
+	// GetMetricsBackendURL returns the PromQL-compatible query URL of the active
+	// monitoring.metrics plugin's time-series backend (e.g. VictoriaMetrics).
+	// Returns ("", nil) when no monitoring plugin is installed.
+	GetMetricsBackendURL(ctx context.Context) (string, error)
+
+	// GetLogsBackendURL returns the LogQL-compatible query URL of the active
+	// monitoring.logs plugin's log store (e.g. Loki).
+	// Returns ("", nil) when no logs plugin is installed.
+	GetLogsBackendURL(ctx context.Context) (string, error)
+
+	// GetScrapeTargets aggregates scrape endpoints from all active monitoring.source
+	// plugins. Used to build the Prometheus HTTP SD response.
+	GetScrapeTargets(ctx context.Context) ([]*pluginsv1.ScrapeTarget, error)
+
+	// GetActivePluginsByCapability returns a summary of all active plugins that
+	// declare the given capability. Collector plugins use this to discover backends.
+	GetActivePluginsByCapability(ctx context.Context, capability string) ([]domain.PluginSummary, error)
+
+	// GetMonitoringOutputs returns one entry for each running plugin that declares
+	// an Output block in its manifest. Collector plugins call /api/v1/monitoring/alloy-config
+	// to get a full River config built from these outputs — no collector changes needed
+	// when new backends are installed.
+	GetMonitoringOutputs(ctx context.Context) ([]domain.MonitoringOutput, error)
+
+	// GetAlertmanagerReceivers returns one entry per running plugin that declares an
+	// AlertmanagerReceiver block, with ${ENV_VAR} placeholders substituted from the
+	// plugin's stored config and secrets. Alertmanager polls this to build its config.
+	GetAlertmanagerReceivers(ctx context.Context) ([]domain.AlertmanagerReceiverInstance, error)
+
+	// IngestWorkloadLog forwards a log entry to the active monitoring.logs plugin.
+	// Non-fatal: silently drops if no logs plugin is installed.
+	IngestWorkloadLog(ctx context.Context, entry *pluginsv1.LogEntry) error
+
+	// IngestWorkloadSpan forwards a trace span to the active monitoring.traces plugin.
+	// Non-fatal: silently drops if no traces plugin is installed.
+	IngestWorkloadSpan(ctx context.Context, span *pluginsv1.Span) error
+
+	// GetPluginInternalFrontendURL returns the internal (Docker-network) URL of
+	// the plugin's frontend JS bundle, or "" if the plugin has no frontend.
+	GetPluginInternalFrontendURL(ctx context.Context, pluginID string) (string, error)
+
+	// ── Registry management ───────────────────────────────────────────────────
+
+	// ListRegistries returns all configured plugin registry sources.
+	ListRegistries(ctx context.Context) ([]*domain.PluginRegistryConfig, error)
+
+	// AddRegistry adds a new registry source and attempts an initial catalog sync.
+	// The new registry is enabled by default.
+	AddRegistry(ctx context.Context, name, url string) (*domain.PluginRegistryConfig, error)
+
+	// DeleteRegistry removes a registry and its cached catalog.
+	DeleteRegistry(ctx context.Context, id string) error
+
+	// ToggleRegistry enables or disables a registry.
+	// Disabled registries don't contribute plugins to the catalog.
+	ToggleRegistry(ctx context.Context, id string, enabled bool) error
+
+	// RefreshRegistry re-fetches the catalog for the given registry.
+	// Returns domain.CooldownError if the registry is still within its cooldown window.
+	RefreshRegistry(ctx context.Context, id string) error
+
+	// ── Conflict resolution ───────────────────────────────────────────────
+
+	// ListConflicts returns all plugin IDs that appear in multiple enabled registries.
+	ListConflicts(ctx context.Context) ([]domain.PluginConflict, error)
+
+	// ResolveConflict sets the admin's preferred registry for a conflicting plugin.
+	ResolveConflict(ctx context.Context, pluginID, registryID string) error
+
+	// ResetConflictPreference removes the admin's preference for a plugin (revert to auto).
+	ResetConflictPreference(ctx context.Context, pluginID string) error
+
+	// ListRegistryPreferences returns all saved per-plugin registry preferences.
+	ListRegistryPreferences(ctx context.Context) ([]*domain.RegistryPreference, error)
+}
