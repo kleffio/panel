@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Upload, Trash2 } from "lucide-react";
+import { useViewMode } from "@/lib/hooks/useViewMode";
 import { useAuth } from "@/features/auth";
 import {
   Avatar,
@@ -56,6 +57,7 @@ export function AccountProfilePage() {
   const auth = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { mode: viewMode, setViewMode } = useViewMode();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: PROFILE_KEY,
@@ -175,6 +177,37 @@ export function AccountProfilePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Interface mode */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Interface</CardTitle>
+          <CardDescription>Choose how you experience the platform.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              {(["simplified", "advanced"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setViewMode(m)}
+                  className={`rounded-lg border px-4 py-2 text-sm font-medium capitalize transition-colors ${
+                    viewMode === m
+                      ? "border-primary bg-primary/[0.1] text-primary"
+                      : "border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:bg-white/[0.06]"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Simplified shows just your servers. Advanced gives full project and canvas access.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Danger zone */}
       <Card className="border-destructive/30">

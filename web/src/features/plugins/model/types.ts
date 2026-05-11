@@ -9,11 +9,12 @@ export const TYPE_LABELS: Record<string, string> = {
 export type PluginTier = "infra" | "project" | "user";
 
 export const PLUGIN_TIER: Record<string, PluginTier> = {
-  idp:     "infra",
-  infra:   "infra",
-  ui:      "project",
-  project: "project",
-  user:    "user",
+  idp:          "infra",
+  infra:        "infra",
+  observability:"infra",
+  ui:           "project",
+  project:      "project",
+  user:         "user",
 };
 
 export const TIER_META: Record<PluginTier, { label: string; description: string; adminOnly: boolean }> = {

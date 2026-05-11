@@ -83,6 +83,28 @@ export function getWorkload(projectID: string, workloadID: string) {
   );
 }
 
+export function restartWorkload(projectID: string, workloadID: string) {
+  return post<void, undefined>(
+    `/api/v1/projects/${encodeURIComponent(projectID)}/workloads/${encodeURIComponent(workloadID)}/restart`,
+    undefined
+  );
+}
+
+export function startWorkload(projectID: string, workloadID: string) {
+  return post<void, undefined>(
+    `/api/v1/projects/${encodeURIComponent(projectID)}/workloads/${encodeURIComponent(workloadID)}/start`,
+    undefined
+  );
+}
+
+export function stopWorkload(projectID: string, workloadID: string) {
+  return post<void, undefined>(
+    `/api/v1/projects/${encodeURIComponent(projectID)}/workloads/${encodeURIComponent(workloadID)}/stop`,
+    undefined
+  );
+}
+
+
 export function provisionWorkload(
   projectID: string,
   payload: {

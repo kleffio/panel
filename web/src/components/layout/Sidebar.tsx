@@ -17,6 +17,7 @@ import {
   Activity,
   Users,
   ArrowLeft,
+  Server,
 } from "lucide-react";
 import {
   cn,
@@ -40,6 +41,7 @@ import { useBackendPlugins } from "@/features/plugins/model/use-backend-plugins"
 import { useCurrentProject } from "@/features/projects/model/CurrentProjectProvider";
 import { createProject } from "@/lib/api/projects";
 import { SidebarUserFooter } from "./SidebarUserFooter";
+import { useViewMode } from "@/lib/hooks/useViewMode";
 
 function slugify(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -188,6 +190,8 @@ export function Sidebar() {
   const { navItems: backendNavItems } = useBackendPlugins();
   const { projects, currentProjectID, setCurrentProjectID } = useCurrentProject();
 
+  const { isSimplified } = useViewMode();
+
   const [newProjectOpen, setNewProjectOpen] = React.useState(false);
   const [newProjectName, setNewProjectName] = React.useState("");
   const [newProjectLoading, setNewProjectLoading] = React.useState(false);
@@ -215,6 +219,36 @@ export function Sidebar() {
     } finally {
       setNewProjectLoading(false);
     }
+  }
+
+  if (isSimplified) {
+    return (
+      <aside className="flex h-full w-56 flex-col bg-sidebar border-r border-sidebar-border">
+        {/* Brand mark */}
+        <div className="px-4 pt-4 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/15 ring-1 ring-primary/25 shadow-[0_0_12px_oklch(0.80_0.17_90_/_0.15)]">
+              <span className="text-sm font-black text-primary leading-none">K</span>
+            </div>
+            <span className="text-sm font-semibold text-sidebar-foreground">kleff</span>
+          </div>
+        </div>
+
+        <div className="mx-2 mb-2 h-px bg-sidebar-border" />
+
+        <nav className="flex-1 px-2 pb-2 overflow-y-auto">
+          <NavItem
+            href="/account"
+            label="My Servers"
+            icon={Server}
+            pathname={pathname}
+          />
+        </nav>
+
+        <PluginSlot name="topbar.right" />
+        <SidebarUserFooter workspaceHref="/account" />
+      </aside>
+    );
   }
 
   return (

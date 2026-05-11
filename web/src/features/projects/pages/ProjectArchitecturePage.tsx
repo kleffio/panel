@@ -293,15 +293,16 @@ export function ProjectArchitecturePage({
         );
       }
 
-      const nextNodes = workloads.map((workload) =>
-        buildNode(
+      const nextNodes = workloads.map((workload) => ({
+        ...buildNode(
           workload,
           resolvedPositions.get(workload.id) ?? fallbackPosition(0),
           deletingSet.has(workload.id),
           owner,
           slug,
         ),
-      );
+        route: owner && slug ? `/project/${owner}/${slug}/servers/${workload.id}` : undefined,
+      }));
       const workloadIDs = new Set(nextNodes.map((node) => node.id));
       const nextEdges: InfrastructureEdge[] = (connectionsResponse.connections ?? [])
         .filter(
