@@ -17,11 +17,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <PersonalHubShell>{children}</PersonalHubShell>;
   }
 
-  const isFullBleed = pathname.endsWith("/canvas");
+  const isFullBleed  = pathname.endsWith("/canvas") || pathname.includes("/servers/");
+  const isServerPage = pathname.includes("/servers/");
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar />
+      {!isServerPage && <Sidebar />}
       <main className={isFullBleed ? "flex-1 overflow-hidden" : "flex-1 overflow-y-auto px-6 py-6"}>
         {children}
       </main>

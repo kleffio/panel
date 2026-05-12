@@ -35,6 +35,7 @@ import { Spinner } from "@/components/ui/Spinner";
 
 import { getMyProfile, updateMyProfile, uploadAvatar } from "@/lib/api/profiles";
 import type { ThemePreference, UpdateProfilePayload } from "@/types/user";
+import { useViewMode } from "@/lib/hooks/useViewMode";
 
 // ─── Query key ───────────────────────────────────────────────────────────────
 
@@ -68,6 +69,7 @@ function ProfileSkeleton() {
 function ProfileCard() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { mode: viewMode, setViewMode } = useViewMode();
 
   // ── Fetch profile ────────────────────────────────────────────────────────
   // On first call the backend lazily creates the profile for this Kratos
@@ -234,6 +236,30 @@ function ProfileCard() {
             </Select>
             <p className="text-xs text-muted-foreground">
               Controls the panel colour scheme for your account only.
+            </p>
+          </div>
+
+          {/* ── View mode ───────────────────────────────────────────────── */}
+          <div className="space-y-1.5">
+            <Label>Interface</Label>
+            <div className="flex gap-2">
+              {(["simplified", "advanced"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setViewMode(m)}
+                  className={`rounded-lg border px-4 py-2 text-sm font-medium capitalize transition-colors ${
+                    viewMode === m
+                      ? "border-primary bg-primary/[0.1] text-primary"
+                      : "border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:bg-white/[0.06]"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Simplified hides projects and shows just your servers. Advanced gives full control.
             </p>
           </div>
 

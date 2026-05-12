@@ -12,6 +12,7 @@ export default async function AdminPage() {
     <>
       <PluginSlot name="admin.top" />
       <AdminDashboard initialData={initialData} />
+      <PluginSlot name="admin.monitoring" />
       <AdminPluginSections />
       <PluginSlot name="admin.bottom" />
     </>

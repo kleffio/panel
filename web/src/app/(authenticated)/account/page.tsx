@@ -1,8 +1,12 @@
-import type { Metadata } from "next";
-import { AccountHomePage } from "@/features/dashboard/pages/AccountHomePage";
+"use client";
 
-export const metadata: Metadata = { title: "Account Home" };
+import { AccountHomePage } from "@/features/dashboard/pages/AccountHomePage";
+import { SimpleServersPage } from "@/features/hosting/pages/SimpleServersPage";
+import { useViewMode } from "@/lib/hooks/useViewMode";
 
 export default function AccountPage() {
+  const { isSimplified } = useViewMode();
+
+  if (isSimplified) return <SimpleServersPage />;
   return <AccountHomePage />;
 }

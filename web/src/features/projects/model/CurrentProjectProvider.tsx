@@ -4,6 +4,7 @@ import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth";
 import { listProjects, type ProjectDTO } from "@/lib/api";
+import { useViewMode } from "@/lib/hooks/useViewMode";
 
 type CurrentProjectContextValue = {
   projects: ProjectDTO[];
@@ -27,6 +28,7 @@ export function CurrentProjectProvider({ children }: { children: React.ReactNode
   const router = useRouter();
   const pathname = usePathname();
   const auth = useAuth();
+  const { isSimplified } = useViewMode();
 
   const username = (auth.user?.profile?.preferred_username as string | undefined)
     ?? (auth.user?.profile?.sub as string | undefined)
@@ -75,15 +77,19 @@ export function CurrentProjectProvider({ children }: { children: React.ReactNode
     return () => { cancelled = true; };
   }, [refreshProjects]);
 
-  // Auto-navigate to the default project when landing on a bare/root path.
+  // Auto-navigate when landing on a bare/root path.
   React.useEffect(() => {
     if (isLoading || projects.length === 0) return;
     const isProjectScoped = NO_NAV_PREFIXES.some((prefix) => pathname.startsWith(prefix));
     if (!isProjectScoped) {
-      const proj = projects.find((p) => p.is_default) ?? projects[0];
-      router.replace(`/project/${username}/${proj.slug}`);
+      if (isSimplified) {
+        router.replace("/account/servers");
+      } else {
+        const proj = projects.find((p) => p.is_default) ?? projects[0];
+        router.replace(`/project/${username}/${proj.slug}`);
+      }
     }
-  }, [isLoading, projects, pathname, username, router]);
+  }, [isLoading, projects, pathname, username, router, isSimplified]);
 
   // Persist slug when currentProjectID changes.
   React.useEffect(() => {

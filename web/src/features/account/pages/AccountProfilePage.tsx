@@ -15,6 +15,7 @@ import {
   User,
 } from "lucide-react";
 import { useAuth, clearStoredSession, broadcastSignout } from "@/features/auth";
+import { useViewMode } from "@/lib/hooks/useViewMode";
 import { useBackendPlugins } from "@/features/plugins/model/use-backend-plugins";
 import {
   changePassword,
@@ -431,6 +432,7 @@ export function AccountProfilePage() {
   const auth = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { mode: viewMode, setViewMode } = useViewMode();
   const { profileSections } = useBackendPlugins();
 
   const { data, isLoading } = useQuery({
@@ -641,6 +643,36 @@ export function AccountProfilePage() {
             </CardContent>
           </GlassCard>
         )}
+      </div>
+
+      <div className="space-y-4">
+        <SectionLabel>Interface</SectionLabel>
+        <GlassCard>
+          <CardContent className="p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-white/90">View mode</p>
+                <p className="mt-1 text-xs text-white/50">Simplified shows just your servers. Advanced gives full project and canvas access.</p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                {(["simplified", "advanced"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setViewMode(m)}
+                    className={`rounded-lg border px-4 py-2 text-sm font-medium capitalize transition-colors ${
+                      viewMode === m
+                        ? "border-primary bg-primary/[0.1] text-primary"
+                        : "border-white/[0.08] bg-white/[0.03] text-white/50 hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </GlassCard>
       </div>
 
       <div className="space-y-4">

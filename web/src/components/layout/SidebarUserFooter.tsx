@@ -78,7 +78,7 @@ export function SidebarUserFooter({ workspaceHref = "/" }: { workspaceHref?: str
             <LayoutGrid className="size-4" />
             Workspace
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => router.push("/account")}>
+          <DropdownMenuItem onClick={() => router.push("/account/profile")}>
             <Settings className="size-4" />
             <span className="flex-1">Account</span>
             {hasUnread && (

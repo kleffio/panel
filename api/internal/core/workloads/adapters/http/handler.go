@@ -53,6 +53,7 @@ func NewHandler(projects projectports.ProjectRepository, orgs orgports.Organizat
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get(projectBasePath, h.list)
 	r.Post(projectBasePath, h.provisionWorkload)
+	r.Get(projectBasePath+"/{id}", h.getForProject)
 	r.Post(projectBasePath+"/{id}/start", h.start)
 	r.Post(projectBasePath+"/{id}/stop", h.stop)
 	r.Post(projectBasePath+"/{id}/restart", h.restart)
@@ -183,6 +184,26 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 	orgID := h.callerOrganizationID(r)
 	if orgID != "" && workload.OrganizationID != orgID {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden: workload does not belong to caller organization"})
+		return
+	}
+	writeJSON(w, http.StatusOK, workload)
+}
+
+func (h *Handler) getForProject(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	id := chi.URLParam(r, "id")
+	orgID := h.callerOrganizationID(r)
+	if _, err := h.ensureProjectAccess(r, projectID, orgID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "project not found"})
+			return
+		}
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		return
+	}
+	workload, err := h.repo.FindByID(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "workload not found"})
 		return
 	}
 	writeJSON(w, http.StatusOK, workload)
