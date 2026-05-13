@@ -139,6 +139,18 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 		logger.Info("crate registry synced")
 	}
 
+	go func() {
+		ticker := time.NewTicker(time.Duration(cfg.CrateSyncInterval) * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := crateRegistry.Sync(context.Background(), catalogStore); err != nil {
+				logger.Warn("crate registry hourly sync warning", "error", err)
+			} else {
+				logger.Info("crate registry hourly sync complete")
+			}
+		}
+	}()
+
 	deploymentStore := deploymentspersistence.NewPostgresDeploymentStore(db)
 	enqueuer, err := buildEnqueuer(cfg)
 	if err != nil {

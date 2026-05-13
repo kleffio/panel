@@ -113,7 +113,7 @@ func (r *CrateRegistry) Sync(ctx context.Context, store ports.CatalogRepository)
 			// Optionally fetch entrypoint.sh — not all variants need a startup script.
 			var startupScript string
 			if scriptData, err := r.fetch(ctx, fmt.Sprintf("%s/%s/%s/entrypoint.sh", pathPrefix, ref.ID, version)); err == nil {
-				startupScript = string(scriptData)
+				startupScript = strings.ReplaceAll(string(scriptData), "\r\n", "\n")
 			}
 
 			if err := store.UpsertBlueprint(ctx, wb.toDomain(wc.RuntimeHints, startupScript)); err != nil {
@@ -274,6 +274,7 @@ type wireBlueprint struct {
 	Name         string                            `json:"name"`
 	Description  string                            `json:"description"`
 	Logo         string                            `json:"logo"`
+	Background   string                            `json:"background"`
 	Version      string                            `json:"version"`
 	Official     bool                              `json:"official"`
 	Image        string                            `json:"image"`
@@ -285,6 +286,7 @@ type wireBlueprint struct {
 	Config       []domain.ConfigField              `json:"config"`
 	Resources    domain.Resources                  `json:"resources"`
 	Extensions   map[string]wireBlueprintExtension `json:"extensions"`
+	Modloader    string                            `json:"modloader"`
 }
 
 type wireConstruct struct {
@@ -364,6 +366,7 @@ func (w wireBlueprint) toDomain(crateHints domain.RuntimeHints, startupScript st
 		Name:          w.Name,
 		Description:   w.Description,
 		Logo:          w.Logo,
+		Background:    w.Background,
 		Version:       w.Version,
 		Official:      w.Official,
 		Image:         w.Image,
@@ -376,6 +379,7 @@ func (w wireBlueprint) toDomain(crateHints domain.RuntimeHints, startupScript st
 		Config:        w.Config,
 		Resources:     w.Resources,
 		Extensions:    bpExts,
+		Modloader:     w.Modloader,
 	}
 }
 
