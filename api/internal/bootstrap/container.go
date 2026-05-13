@@ -140,7 +140,7 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 	}
 
 	go func() {
-		ticker := time.NewTicker(time.Hour)
+		ticker := time.NewTicker(time.Duration(cfg.CrateSyncInterval) * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
 			if err := crateRegistry.Sync(context.Background(), catalogStore); err != nil {
