@@ -16,6 +16,8 @@ services:
     environment:
       API_BASE_URL: http://api:8080
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+      CI: "true"
+      PNPM_CONFIG_CONFIRM_MODULES_PURGE: "false"
     depends_on:
       api:
         condition: service_healthy

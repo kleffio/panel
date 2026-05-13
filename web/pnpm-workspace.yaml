@@ -1,0 +1,7 @@
+packages:
+  - .
+
+allowBuilds:
+  sharp: true
+  tldjs: true
+  unrs-resolver: true

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import * as Dialog from "@radix-ui/react-dialog";
+import { Dialog } from "radix-ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FolderGit2, AlertCircle, X } from "lucide-react";
