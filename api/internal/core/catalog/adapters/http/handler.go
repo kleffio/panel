@@ -24,6 +24,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/v1/crates/{id}", h.getCrate)
 	r.Get("/api/v1/blueprints", h.listBlueprints)
 	r.Get("/api/v1/blueprints/{id}", h.getBlueprint)
+	r.Get("/api/v1/blueprints/{id}/platforms", h.getBlueprintPlatforms)
 	r.Get("/api/v1/constructs", h.listConstructs)
 	r.Get("/api/v1/constructs/{id}", h.getConstruct)
 }
@@ -99,6 +100,30 @@ func (h *Handler) getConstruct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, construct)
+}
+
+// getBlueprintPlatforms returns the mod/plugin platforms available for a blueprint.
+// The response maps each extension type (e.g. "mod", "plugin") to its list of sources.
+func (h *Handler) getBlueprintPlatforms(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	blueprint, err := h.repo.GetBlueprint(r.Context(), id)
+	if err != nil {
+		h.notFound(w, err)
+		return
+	}
+
+	type platformEntry struct {
+		Sources []string `json:"sources"`
+	}
+	platforms := make(map[string]platformEntry, len(blueprint.Extensions))
+	for name, ext := range blueprint.Extensions {
+		if ext.Enabled {
+			platforms[name] = platformEntry{Sources: ext.Sources}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"platforms": platforms, "modloader": blueprint.Modloader})
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────

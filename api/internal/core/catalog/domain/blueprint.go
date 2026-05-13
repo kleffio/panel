@@ -39,6 +39,7 @@ type Blueprint struct {
 	Config       []ConfigField                 `json:"config"`
 	Resources    Resources                     `json:"resources"`
 	Extensions   map[string]BlueprintExtension `json:"extensions"`
+	Modloader    string                        `json:"modloader,omitempty"`
 	CreatedAt    time.Time                     `json:"created_at"`
 	UpdatedAt    time.Time                     `json:"updated_at"`
 }
