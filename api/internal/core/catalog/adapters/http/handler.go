@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kleffio/platform/internal/core/catalog/ports"
@@ -11,12 +12,13 @@ import (
 
 // Handler exposes the catalog (crates, blueprints, constructs) over HTTP.
 type Handler struct {
-	repo   ports.CatalogRepository
-	logger *slog.Logger
+	repo      ports.CatalogRepository
+	imagesDir string
+	logger    *slog.Logger
 }
 
-func NewHandler(repo ports.CatalogRepository, logger *slog.Logger) *Handler {
-	return &Handler{repo: repo, logger: logger}
+func NewHandler(repo ports.CatalogRepository, imagesDir string, logger *slog.Logger) *Handler {
+	return &Handler{repo: repo, imagesDir: imagesDir, logger: logger}
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
@@ -27,6 +29,14 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/api/v1/blueprints/{id}/platforms", h.getBlueprintPlatforms)
 	r.Get("/api/v1/constructs", h.listConstructs)
 	r.Get("/api/v1/constructs/{id}", h.getConstruct)
+
+	if h.imagesDir != "" {
+		fs := http.FileServer(http.Dir(h.imagesDir))
+		r.Get("/api/v1/static/*", func(w http.ResponseWriter, req *http.Request) {
+			req.URL.Path = strings.TrimPrefix(req.URL.Path, "/api/v1/static")
+			fs.ServeHTTP(w, req)
+		})
+	}
 }
 
 func (h *Handler) listCrates(w http.ResponseWriter, r *http.Request) {
