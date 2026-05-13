@@ -27,6 +27,7 @@ type Blueprint struct {
 	Name         string                        `json:"name"`
 	Description  string                        `json:"description"`
 	Logo         string                        `json:"logo"`
+	Background   string                        `json:"background,omitempty"`
 	Version      string                        `json:"version"`
 	Official     bool                          `json:"official"`
 	Image        string                        `json:"image"`

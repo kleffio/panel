@@ -274,6 +274,7 @@ type wireBlueprint struct {
 	Name         string                            `json:"name"`
 	Description  string                            `json:"description"`
 	Logo         string                            `json:"logo"`
+	Background   string                            `json:"background"`
 	Version      string                            `json:"version"`
 	Official     bool                              `json:"official"`
 	Image        string                            `json:"image"`
@@ -365,6 +366,7 @@ func (w wireBlueprint) toDomain(crateHints domain.RuntimeHints, startupScript st
 		Name:          w.Name,
 		Description:   w.Description,
 		Logo:          w.Logo,
+		Background:    w.Background,
 		Version:       w.Version,
 		Official:      w.Official,
 		Image:         w.Image,

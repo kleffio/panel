@@ -97,7 +97,7 @@ func (s *PostgresCatalogStore) UpsertCrate(ctx context.Context, c *domain.Crate)
 
 func (s *PostgresCatalogStore) ListBlueprints(ctx context.Context, crateID string) ([]*domain.Blueprint, error) {
 	query := `
-		SELECT id, crate_id, construct_id, name, description, logo, version,
+		SELECT id, crate_id, construct_id, name, description, logo, background, version,
 		       official, config, resources, extensions, image, images, env, ports, outputs, runtime_hints, startup_script, modloader, created_at, updated_at
 		FROM blueprints WHERE 1=1`
 	args := []any{}
@@ -128,7 +128,7 @@ func (s *PostgresCatalogStore) ListBlueprints(ctx context.Context, crateID strin
 
 func (s *PostgresCatalogStore) GetBlueprint(ctx context.Context, id string) (*domain.Blueprint, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, crate_id, construct_id, name, description, logo, version,
+		SELECT id, crate_id, construct_id, name, description, logo, background, version,
 		       official, config, resources, extensions, image, images, env, ports, outputs, runtime_hints, startup_script, modloader, created_at, updated_at
 		FROM blueprints WHERE id = $1`, id)
 
@@ -177,14 +177,15 @@ func (s *PostgresCatalogStore) UpsertBlueprint(ctx context.Context, b *domain.Bl
 	}
 
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO blueprints (id, crate_id, construct_id, name, description, logo, version, official, config, resources, extensions, image, images, env, ports, outputs, runtime_hints, startup_script, modloader, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
+		INSERT INTO blueprints (id, crate_id, construct_id, name, description, logo, background, version, official, config, resources, extensions, image, images, env, ports, outputs, runtime_hints, startup_script, modloader, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW())
 		ON CONFLICT (id) DO UPDATE SET
 			crate_id       = EXCLUDED.crate_id,
 			construct_id   = EXCLUDED.construct_id,
 			name           = EXCLUDED.name,
 			description    = EXCLUDED.description,
 			logo           = EXCLUDED.logo,
+			background     = EXCLUDED.background,
 			version        = EXCLUDED.version,
 			official       = EXCLUDED.official,
 			config         = EXCLUDED.config,
@@ -199,7 +200,7 @@ func (s *PostgresCatalogStore) UpsertBlueprint(ctx context.Context, b *domain.Bl
 			startup_script = EXCLUDED.startup_script,
 			modloader      = EXCLUDED.modloader,
 			updated_at     = NOW()`,
-		b.ID, b.CrateID, b.ConstructID, b.Name, b.Description, b.Logo, b.Version, b.Official,
+		b.ID, b.CrateID, b.ConstructID, b.Name, b.Description, b.Logo, b.Background, b.Version, b.Official,
 		configJSON, resourcesJSON, extJSON, b.Image, imagesJSON, envJSON, portsJSON, outputsJSON, hintsJSON, b.StartupScript, b.Modloader,
 	)
 	return err
@@ -335,7 +336,7 @@ func scanBlueprint(s scanner) (*domain.Blueprint, error) {
 	)
 
 	err := s.Scan(
-		&b.ID, &b.CrateID, &b.ConstructID, &b.Name, &b.Description, &b.Logo,
+		&b.ID, &b.CrateID, &b.ConstructID, &b.Name, &b.Description, &b.Logo, &b.Background,
 		&b.Version, &b.Official,
 		&configJSON, &resourcesJSON, &extensionsJSON,
 		&b.Image, &imagesJSON, &envJSON, &portsJSON, &outputsJSON, &hintsJSON, &b.StartupScript,
