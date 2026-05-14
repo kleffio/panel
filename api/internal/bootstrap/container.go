@@ -132,7 +132,7 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 
 	// Sync crates, blueprints, and constructs from the remote crate registry.
 	// Non-fatal: if the registry is unreachable on startup, existing DB data is used.
-	crateRegistry := catalogregistry.New(cfg.CrateRegistryURL)
+	crateRegistry := catalogregistry.New(cfg.CrateRegistryURL, cfg.ImagesDir)
 	if err := crateRegistry.Sync(context.Background(), catalogStore); err != nil {
 		logger.Warn("crate registry sync warning", "error", err)
 	} else {
@@ -202,7 +202,7 @@ func NewContainer(cfg *Config, logger *slog.Logger) (*Container, error) {
 
 		AuthHandler:          pluginhttp.NewAuthHandler(pluginMgr, logger),
 		SetupHandler:         pluginhttp.NewSetupHandler(pluginMgr, dbRegistry, logger),
-		CatalogHandler:       cataloghttp.NewHandler(catalogStore, logger),
+		CatalogHandler:       cataloghttp.NewHandler(catalogStore, cfg.ImagesDir, logger),
 		OrganizationsHandler: organizationshttp.NewHandler(orgStore, notificationSvc, logger),
 		DeploymentsHandler:   deploymentshttp.NewHandler(createDeployment, serverAction, deploymentStore, cfg.SecretKey, logger),
 		ProjectsHandler:      projectshttp.NewHandler(projectsStore, orgStore, notificationSvc, logger),
