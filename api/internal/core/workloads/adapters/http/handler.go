@@ -40,14 +40,15 @@ type Handler struct {
 	metricsSink ports.MetricsSink
 	provision   *commands.ProvisionWorkloadHandler
 	action      *commands.WorkloadActionHandler
+	publisher   queue.Publisher
 	bus         *events.Bus
 	logger      *slog.Logger
 }
 
 var orgSlugCleaner = regexp.MustCompile(`[^a-z0-9-]+`)
 
-func NewHandler(projects projectports.ProjectRepository, orgs orgports.OrganizationRepository, repo ports.Repository, usageRepo usageports.UsageRepository, metricsSink ports.MetricsSink, provision *commands.ProvisionWorkloadHandler, action *commands.WorkloadActionHandler, bus *events.Bus, logger *slog.Logger) *Handler {
-	return &Handler{projects: projects, orgs: orgs, repo: repo, usageRepo: usageRepo, metricsSink: metricsSink, provision: provision, action: action, bus: bus, logger: logger}
+func NewHandler(projects projectports.ProjectRepository, orgs orgports.OrganizationRepository, repo ports.Repository, usageRepo usageports.UsageRepository, metricsSink ports.MetricsSink, provision *commands.ProvisionWorkloadHandler, action *commands.WorkloadActionHandler, publisher queue.Publisher, bus *events.Bus, logger *slog.Logger) *Handler {
+	return &Handler{projects: projects, orgs: orgs, repo: repo, usageRepo: usageRepo, metricsSink: metricsSink, provision: provision, action: action, publisher: publisher, bus: bus, logger: logger}
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
@@ -58,6 +59,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post(projectBasePath+"/{id}/stop", h.stop)
 	r.Post(projectBasePath+"/{id}/restart", h.restart)
 	r.Delete(projectBasePath+"/{id}", h.delete)
+	r.Post(projectBasePath+"/{id}/mods/install", h.installMod)
+	r.Post(projectBasePath+"/{id}/mods/uninstall", h.uninstallMod)
 	r.Get(workloadBasePath+"/{id}", h.get)
 }
 
@@ -347,6 +350,94 @@ func (h *Handler) updateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+}
+
+func (h *Handler) installMod(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	workloadID := chi.URLParam(r, "id")
+	orgID := h.callerOrganizationID(r)
+	if _, err := h.ensureProjectAccess(r, projectID, orgID); err != nil {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		return
+	}
+	var req struct {
+		DownloadURL string `json:"download_url"`
+		FileName    string `json:"file_name"`
+		ContentType string `json:"content_type"`
+		StoragePath string `json:"storage_path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
+		return
+	}
+	if req.DownloadURL == "" || req.FileName == "" || req.ContentType == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "download_url, file_name, and content_type are required"})
+		return
+	}
+	if req.StoragePath == "" {
+		req.StoragePath = "/data"
+	}
+	payload := queue.ModInstallPayload{
+		ServerID:    workloadID,
+		ProjectID:   projectID,
+		DownloadURL: req.DownloadURL,
+		FileName:    req.FileName,
+		ContentType: req.ContentType,
+		StoragePath: req.StoragePath,
+	}
+	job, err := queue.NewJob(queue.JobTypeModInstall, workloadID, payload, 3)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to build job"})
+		return
+	}
+	if err := h.publisher.Enqueue(r.Context(), job); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted", "job_id": job.JobID})
+}
+
+func (h *Handler) uninstallMod(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectID")
+	workloadID := chi.URLParam(r, "id")
+	orgID := h.callerOrganizationID(r)
+	if _, err := h.ensureProjectAccess(r, projectID, orgID); err != nil {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		return
+	}
+	var req struct {
+		FileName    string `json:"file_name"`
+		ContentType string `json:"content_type"`
+		StoragePath string `json:"storage_path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
+		return
+	}
+	if req.FileName == "" || req.ContentType == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "file_name and content_type are required"})
+		return
+	}
+	if req.StoragePath == "" {
+		req.StoragePath = "/data"
+	}
+	payload := queue.ModUninstallPayload{
+		ServerID:    workloadID,
+		ProjectID:   projectID,
+		FileName:    req.FileName,
+		ContentType: req.ContentType,
+		StoragePath: req.StoragePath,
+	}
+	job, err := queue.NewJob(queue.JobTypeModUninstall, workloadID, payload, 3)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to build job"})
+		return
+	}
+	if err := h.publisher.Enqueue(r.Context(), job); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted", "job_id": job.JobID})
 }
 
 func (h *Handler) start(w http.ResponseWriter, r *http.Request) {
